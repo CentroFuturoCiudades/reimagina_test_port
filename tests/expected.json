@@ -1,0 +1,178 @@
+{
+  "revision": "cf17664d169116a2760741ea92737abf9b9ad212",
+  "source": "pipelines/indicators/built-form/src/built_form/__init__.py",
+  "lots": {
+    "lot-house": {
+      "cos": 0.5,
+      "num_levels": 2.0,
+      "cus": 1.0,
+      "area": 200.0,
+      "unit_size_m2": 200.0,
+      "num_housing_units": 1,
+      "population": 3,
+      "density": 5000.0
+    },
+    "lot-shed": {
+      "cos": 0.05,
+      "num_levels": 1.0,
+      "cus": 0.05,
+      "area": 300.0,
+      "unit_size_m2": null,
+      "num_housing_units": 0,
+      "population": 0,
+      "density": 0.0
+    },
+    "lot-flats": {
+      "cos": 0.7,
+      "num_levels": 4.0,
+      "cus": 2.8,
+      "area": 800.0,
+      "unit_size_m2": 70.0,
+      "num_housing_units": 32,
+      "population": 90,
+      "density": 40000.0
+    },
+    "lot-half_empty": {
+      "cos": 0.8,
+      "num_levels": 4.0,
+      "cus": 3.2,
+      "area": 700.0,
+      "unit_size_m2": 70.0,
+      "num_housing_units": 32,
+      "population": 45,
+      "density": 45714.28571428571
+    },
+    "lot-shop": {
+      "cos": 1.0,
+      "num_levels": 1.0,
+      "cus": 1.0,
+      "area": 100.0,
+      "unit_size_m2": null,
+      "num_housing_units": 0,
+      "population": 0,
+      "density": 0.0
+    },
+    "lot-unknown": {
+      "cos": 0.0,
+      "num_levels": 0.0,
+      "cus": 0.0,
+      "area": 100.0,
+      "unit_size_m2": null,
+      "num_housing_units": null,
+      "population": null,
+      "density": null
+    },
+    "lot-threshold": {
+      "cos": 0.5,
+      "num_levels": 2.0,
+      "cus": 1.0,
+      "area": 20.0,
+      "unit_size_m2": null,
+      "num_housing_units": 0,
+      "population": 0,
+      "density": 0.0
+    },
+    "lot-zero_occupancy": {
+      "cos": 0.7,
+      "num_levels": 4.0,
+      "cus": 2.8,
+      "area": 800.0,
+      "unit_size_m2": 70.0,
+      "num_housing_units": 32,
+      "population": 0,
+      "density": 40000.0
+    },
+    "lot-zero_area": {
+      "cos": 0.5,
+      "num_levels": 2.0,
+      "cus": 1.0,
+      "area": 0.0,
+      "unit_size_m2": null,
+      "num_housing_units": 0,
+      "population": 0,
+      "density": null
+    },
+    "lot-missing": {
+      "cos": null,
+      "num_levels": null,
+      "cus": null,
+      "area": null,
+      "unit_size_m2": null,
+      "num_housing_units": null,
+      "population": null,
+      "density": null
+    },
+    "lot-ties": {
+      "cos": 1.0,
+      "num_levels": 1.0,
+      "cus": 1.0,
+      "area": 175.0,
+      "unit_size_m2": 70.0,
+      "num_housing_units": 2,
+      "population": 6,
+      "density": 11428.571428571428
+    },
+    "lot-mixed": {
+      "cos": 0.7,
+      "num_levels": 4.0,
+      "cus": 2.8,
+      "area": 800.0,
+      "unit_size_m2": 70.0,
+      "num_housing_units": 32,
+      "population": 90,
+      "density": 40000.0
+    },
+    "lot-orphan": {
+      "cos": 0.5,
+      "num_levels": 2.0,
+      "cus": 1.0,
+      "area": 200.0,
+      "unit_size_m2": 200.0,
+      "num_housing_units": 1,
+      "population": 3,
+      "density": 5000.0
+    },
+    "lot-no_parent": {
+      "cos": 0.5,
+      "num_levels": 2.0,
+      "cus": 1.0,
+      "area": 200.0,
+      "unit_size_m2": 200.0,
+      "num_housing_units": 1,
+      "population": 3,
+      "density": 5000.0
+    }
+  },
+  "blocks": {
+    "block-z": {
+      "num_housing_units": 96,
+      "population": 135,
+      "area": 2700.0,
+      "num_levels": 2.6,
+      "unit_size_m2": 70.0,
+      "cos": 0.6277777777777778,
+      "cus": 2.4944444444444445,
+      "density": 36923.07692307692
+    },
+    "block-a": {
+      "num_housing_units": 35,
+      "population": 99,
+      "area": 1295.0,
+      "num_levels": 2.0,
+      "unit_size_m2": 113.33333333333333,
+      "cos": 0.7297297297297297,
+      "cus": 2.111969111969112,
+      "density": 27027.027027027027
+    },
+    "block-empty": {
+      "num_housing_units": null,
+      "population": null,
+      "area": null,
+      "num_levels": null,
+      "unit_size_m2": null,
+      "cos": null,
+      "cus": null,
+      "density": null
+    }
+  }
+}

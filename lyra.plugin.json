@@ -1,0 +1,501 @@
+{
+  "factory": "reimagina_test_port.plugin:create_plugin",
+  "nodes": [
+    {
+      "description": "Return lot indicators and their block aggregates.",
+      "inputs": {
+        "blocks": {
+          "arguments": {},
+          "output": "reimagina_prepared_blocks"
+        },
+        "lots": {
+          "arguments": {},
+          "output": "reimagina_lot_indicators"
+        }
+      },
+      "name": "reimagina_built_form",
+      "outputs": {
+        "reimagina_built_form_blocks": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "cos",
+              "name": "cos",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "num levels",
+              "name": "num_levels",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "cus",
+              "name": "cus",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "area",
+              "name": "area",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "unit size m2",
+              "name": "unit_size_m2",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "num housing units",
+              "name": "num_housing_units",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "population",
+              "name": "population",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Housing density in homes per square kilometre.",
+              "name": "density",
+              "nullable": true,
+              "type": "number",
+              "unit": "count/km2"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        },
+        "reimagina_built_form_lots": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "cos",
+              "name": "cos",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "num levels",
+              "name": "num_levels",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "cus",
+              "name": "cus",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "area",
+              "name": "area",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "unit size m2",
+              "name": "unit_size_m2",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "num housing units",
+              "name": "num_housing_units",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "population",
+              "name": "population",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Housing density in homes per square kilometre.",
+              "name": "density",
+              "nullable": true,
+              "type": "number",
+              "unit": "count/km2"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "SnapshotParameters": {
+            "additionalProperties": false,
+            "description": "Select an explicit prepared snapshot beneath the configured root.",
+            "properties": {
+              "snapshot": {
+                "description": "Prepared snapshot identifier; synthetic selects the bundled example.",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+                "title": "Snapshot",
+                "type": "string"
+              }
+            },
+            "required": [
+              "snapshot"
+            ],
+            "title": "SnapshotParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/SnapshotParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_built_form_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "Calculate built-form indicators for every prepared lot.",
+      "inputs": {
+        "lots": {
+          "arguments": {},
+          "output": "reimagina_prepared_lots"
+        }
+      },
+      "name": "reimagina_lot_built_form",
+      "outputs": {
+        "reimagina_lot_indicators": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "cos",
+              "name": "cos",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "num levels",
+              "name": "num_levels",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "cus",
+              "name": "cus",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "area",
+              "name": "area",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "unit size m2",
+              "name": "unit_size_m2",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "num housing units",
+              "name": "num_housing_units",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "population",
+              "name": "population",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Housing density in homes per square kilometre.",
+              "name": "density",
+              "nullable": true,
+              "type": "number",
+              "unit": "count/km2"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "SnapshotParameters": {
+            "additionalProperties": false,
+            "description": "Select an explicit prepared snapshot beneath the configured root.",
+            "properties": {
+              "snapshot": {
+                "description": "Prepared snapshot identifier; synthetic selects the bundled example.",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+                "title": "Snapshot",
+                "type": "string"
+              }
+            },
+            "required": [
+              "snapshot"
+            ],
+            "title": "SnapshotParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/SnapshotParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_lot_built_form_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "Acquire prepared lot and block GeoParquet tables.",
+      "inputs": {},
+      "name": "reimagina_prepared_snapshot",
+      "outputs": {
+        "reimagina_prepared_blocks": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        },
+        "reimagina_prepared_lots": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "cos",
+              "name": "cos",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "num levels",
+              "name": "num_levels",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "area",
+              "name": "area",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "land use",
+              "name": "land_use",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "unit size m2",
+              "name": "unit_size_m2",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "people per household",
+              "name": "people_per_household",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "occupancy rate",
+              "name": "occupancy_rate",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "SnapshotParameters": {
+            "additionalProperties": false,
+            "description": "Select an explicit prepared snapshot beneath the configured root.",
+            "properties": {
+              "snapshot": {
+                "description": "Prepared snapshot identifier; synthetic selects the bundled example.",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+                "title": "Snapshot",
+                "type": "string"
+              }
+            },
+            "required": [
+              "snapshot"
+            ],
+            "title": "SnapshotParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/SnapshotParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_prepared_snapshot_request",
+        "type": "object"
+      },
+      "role": "dataset",
+      "spatial_inputs": {}
+    }
+  ],
+  "plugin": {
+    "name": "reimagina-test-port",
+    "version": "0.1.0"
+  }
+}

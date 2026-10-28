@@ -1,0 +1,47 @@
+[project]
+name = "reimagina-test-port"
+version = "0.1.0"
+description = "Reimagina built-form indicators for Lyra"
+readme = "README.md"
+authors = [{ name = "RodolfoFigueroa", email = "rodolfo@daku.moe" }]
+requires-python = ">=3.13"
+dependencies = [
+    "geopandas>=1.2.0",
+    "lyra-api",
+    "lyra-sdk",
+    "lyra-utils",
+    "numpy>=2.5.4",
+    "pandas>=3.1.0",
+    "pyarrow",
+    "pydantic",
+]
+
+[project.scripts]
+reimagina-test-port = "reimagina_test_port:main"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "shapely",
+    "coverage>=7.17.0",
+    "pytest>=9.2.0",
+    "ruff>=0.17.3",
+    "ty>=0.0.93",
+    "ipykernel>=7.4.0",
+]
+
+
+[tool.lyra]
+factory = "reimagina_test_port.plugin:create_plugin"
+
+[tool.uv.sources]
+lyra-sdk = { git = "https://github.com/RodolfoFigueroa/lyra", subdirectory = "packages/lyra_sdk" }
+lyra-api = { git = "https://github.com/RodolfoFigueroa/lyra", subdirectory = "packages/lyra_api" }
+lyra-utils = { git = "https://github.com/RodolfoFigueroa/lyra", subdirectory = "packages/lyra_utils" }
+
+[tool.uv.build-backend]
+data = { data = "data" }
+source-include = ["lyra.plugin.json", "docs/**", "tests/**", "scripts/**", "examples/**"]
