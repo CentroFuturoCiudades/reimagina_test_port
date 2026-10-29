@@ -7,7 +7,7 @@ data lake. The bundled snapshot datasets feed the same metrics offline
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import geopandas as gpd
 import pandas as pd
@@ -664,6 +664,112 @@ def scenario_write(
     )
 
 
+class BaselineParameters(MetricParameters):
+    """City whose baseline is built from the data lake."""
+
+    city: Literal["mexicali"] = Field(description="City preset.")
+
+
+def baseline_declaration(*, blocks: bool) -> TableOutput:
+    """Identity, element attributes and EPSG:4326 geometry."""
+    identity = declaration(source=True, blocks=True).columns
+    if blocks:
+        attributes = [
+            column("vivtot", "number", Unit.COUNT, "Census dwellings of the block."),
+            column(
+                "people_per_household",
+                "number",
+                Unit.COUNT,
+                "Census average occupants per inhabited dwelling.",
+            ),
+        ]
+    else:
+        units = {"people_per_household": Unit.COUNT, "occupancy_rate": Unit.RATIO}
+        attributes = [
+            column(
+                key,
+                "string" if key in TEXT_ATTRIBUTES else "number",
+                None if key in TEXT_ATTRIBUTES else (units | UNITS)[key],
+                key.replace("_", " "),
+            )
+            for key in BASELINE_LOT_ATTRIBUTES
+        ]
+    return TableOutput(columns=[*identity, *attributes], geometry="geometry")
+
+
+TEXT_ATTRIBUTES = {"land_use", "amenity_type", "commerce_type"}
+BASELINE_LOT_ATTRIBUTES = [
+    "land_use",
+    "cos",
+    "num_levels",
+    "area",
+    "unit_size_m2",
+    "people_per_household",
+    "occupancy_rate",
+    "amenity_type",
+    "commerce_type",
+]
+
+
+@dataset(
+    name="reimagina_baseline",
+    description=(
+        "Build a city's baseline lots and blocks from the CFC data lake with "
+        "exe_reimagina's rules: INEGI blocks and census, cadastral lots, "
+        "normativa, Open Buildings heights and amenity POIs. Blocks are keyed by "
+        "CVEGEO; lots by their cadastral key."
+    ),
+    outputs={
+        "reimagina_baseline_lots": baseline_declaration(blocks=False),
+        "reimagina_baseline_blocks": baseline_declaration(blocks=True),
+    },
+)
+def baseline_dataset(
+    parameters: BaselineParameters, context: DatasetContext
+) -> dict[str, gpd.GeoDataFrame]:
+    """Download the sources into the job's scratch folder and build the tables."""
+    # rasterio only where the baseline is built.
+    from reimagina_test_port import baseline
+    from reimagina_test_port.cities import CITIES
+
+    def progress(stage: str, current: int, total: int) -> None:
+        context.report_progress(stage=stage, current=current, total=total)
+
+    result = baseline.build(CITIES[parameters.city], context.temp_dir, progress)
+    context.logger.info("Cadastral keys: %s", result["report"])
+    return {
+        "reimagina_baseline_lots": result["lots"],
+        "reimagina_baseline_blocks": result["blocks"],
+    }
+
+
+@metric(
+    name="reimagina_baseline_elements",
+    description=(
+        "Return a city's baseline lots and blocks as built from the data lake "
+        "(reimagina_baseline). Nothing is written to Reimagina's database."
+    ),
+    inputs={
+        "lots": Dependency("reimagina_baseline_lots"),
+        "blocks": Dependency("reimagina_baseline_blocks"),
+    },
+    outputs={
+        "reimagina_baseline_elements_lots": baseline_declaration(blocks=False),
+        "reimagina_baseline_elements_blocks": baseline_declaration(blocks=True),
+    },
+)
+def baseline_elements(
+    parameters: BaselineParameters,
+    lots: gpd.GeoDataFrame,
+    blocks: gpd.GeoDataFrame,
+) -> dict[str, gpd.GeoDataFrame]:
+    """The dataset's tables."""
+    return {
+        "reimagina_baseline_elements_lots": lots,
+        "reimagina_baseline_elements_blocks": blocks,
+    }
+
+
 def create_plugin() -> PluginDefinition:
     """Production graph over Reimagina scenarios; registers without connecting."""
     return PluginDefinition(
@@ -683,6 +789,8 @@ def create_plugin() -> PluginDefinition:
                 "reimagina_road_network_edges",
             ),
             scenario_write,
+            baseline_dataset,
+            baseline_elements,
         ]
     )
 

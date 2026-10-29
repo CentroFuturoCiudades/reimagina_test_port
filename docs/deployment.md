@@ -28,7 +28,11 @@ The Dockerfile:
   no base package is upgraded or replaced (only new ones, such as `pyarrow`,
   are added);
 - runs `uv pip check`;
-- imports the plugin and loads its installed manifest.
+- imports the plugin, loads its installed manifest and imports the
+  accessibility and baseline modules (pandana, rasterio).
+
+It also installs `libexpat1`, which rasterio's wheel needs and the base image
+lacks.
 
 uv and the source tree are mounted only during the build. Override the base
 with `--build-arg LYRA_IMAGE=...`. For Azure, build for `linux/amd64` and push
@@ -50,7 +54,8 @@ through it, so that role needs `INSERT`, `UPDATE` and `DELETE` on
 database; the other metrics only read. TLS is required unless the DSN sets
 `sslmode`. All metrics route to the `interactive` queue.
 
-Accessibility downloads the project's road network from the CFC data lake
+Accessibility and the baseline read the CFC data lake (the road network; the
+cadastre, census, blocks, normativa, POIs and height tiles)
 (`az://`, account `cfcetlsadls`) with `DefaultAzureCredential`: give the
 worker a managed identity with read access, or set `AZURE_CLIENT_ID`,
 `AZURE_TENANT_ID` and `AZURE_CLIENT_SECRET`. Optional: `ACCESS_CRS` forces the

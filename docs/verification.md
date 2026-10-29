@@ -26,6 +26,11 @@ used. The test guard must remain enabled. No distribution smoke checks are neede
 which were checked equal (max abs diff 4e-12) to reimagina-lyra's
 `compute_accessibility_by_element` on the same inputs.
 
+`tests/test_ingestion.py` is reimagina-lyra's test suite for the copied
+`prep`, `footprints` and `elements`. `tests/test_baseline.py` checks the
+cadastral key rules and builds a tiny city from local copies of the lake
+sources, including a height tile.
+
 ## PostGIS tests
 
 `tests/test_scenario_db.py` runs the scenario, POI and road network datasets and

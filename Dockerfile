@@ -9,6 +9,10 @@ FROM ${UV_IMAGE} AS uv
 
 FROM ${LYRA_IMAGE}
 ENV UV_LINK_MODE=copy UV_PYTHON=/app/.venv/bin/python
+# rasterio's wheel (baseline) links libexpat, which the base image lacks.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libexpat1 \
+    && rm -rf /var/lib/apt/lists/*
 # Fija los paquetes de la imagen base para que el plugin no los actualice.
 # uv y el código fuente se montan solo durante el build; no quedan en la imagen.
 RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
@@ -20,4 +24,5 @@ RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
     && uv pip check \
     && rm /tmp/base-constraints.txt
 RUN python -c "import reimagina_test_port.plugin" \
-    && python -c "from lyra.sdk.plugin_loader import load_plugin_manifest; load_plugin_manifest('reimagina-test-port')"
+    && python -c "from lyra.sdk.plugin_loader import load_plugin_manifest; load_plugin_manifest('reimagina-test-port')" \
+    && python -c "import reimagina_test_port.accessibility, reimagina_test_port.baseline"

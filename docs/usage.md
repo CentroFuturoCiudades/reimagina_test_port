@@ -60,7 +60,9 @@ converts geometry to EPSG:4326.
 ## Public interfaces
 
 The plugin exposes `reimagina_lot_built_form`, `reimagina_built_form`,
-`reimagina_accessibility` and, deployed only, `reimagina_scenario_write`, which
+`reimagina_accessibility`, `reimagina_baseline_elements` (`{"city": "mexicali"}`:
+a city's baseline lots and blocks from the data lake, not written) and,
+deployed only, `reimagina_scenario_write`, which
 computes both and writes them to Reimagina's database (`dry_run` and
 `job_run_id` are optional; see [design](design.md#writer)).
 Deployed, they read a Reimagina scenario (a fork falls back to its baseline; see

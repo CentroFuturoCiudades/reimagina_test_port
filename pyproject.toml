@@ -18,6 +18,7 @@ dependencies = [
     "psycopg[binary]>=3.3.4",
     "pyarrow",
     "pydantic",
+    "rasterio>=1.4.4",
     "tables>=3.10",
 ]
 
@@ -42,11 +43,14 @@ dev = [
 
 
 [tool.ruff]
-# Copied unchanged from reimagina-lyra (exe_reimagina / CFC accessibility); keep diffable.
+# Copied unchanged from reimagina-lyra (exe_reimagina, CFC accessibility); keep diffable.
 extend-exclude = [
     "src/reimagina_test_port/accessibility_metrics.py",
     "src/reimagina_test_port/accessibility_fastpath.py",
     "src/reimagina_test_port/vocabulary.py",
+    "src/reimagina_test_port/prep.py",
+    "src/reimagina_test_port/footprints.py",
+    "src/reimagina_test_port/elements.py",
 ]
 
 [tool.pytest.ini_options]

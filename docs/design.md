@@ -11,7 +11,9 @@ built-form tables and on two more datasets: `reimagina_scenario_pois` (present
 elements with an `amenity_type`) and `reimagina_road_network` (the project's road
 network as node and edge tables). `reimagina_scenario_write` is the final node:
 it depends on all four built-form and accessibility tables and writes them to
-Reimagina's database. `create_plugin()` registers this graph.
+Reimagina's database. `reimagina_baseline_elements` returns a city's baseline
+lots and blocks built from the data lake by the `reimagina_baseline` dataset;
+nothing is written. `create_plugin()` registers this graph.
 
 `create_snapshot_plugin()` registers the same metrics over
 `reimagina_prepared_snapshot` and `reimagina_prepared_accessibility` instead,
@@ -100,6 +102,33 @@ and `computed_at`, so writing the same scenario again changes nothing.
 and counts the changes, then rolls the transaction back. The result is one row:
 `elements`, `values_written`, `values_cleared`, `dry_run`.
 
+## Baseline from the data lake
+
+Adapted from reimagina-lyra `ingestion/pipeline.build_elements`, with the same
+sources (CFC lake, `DefaultAzureCredential`): INEGI 2024 urban blocks and the
+2020 census, the IMIP cadastre, the zoning normativa, Open Buildings 2.5D
+heights and the accessibility POIs. `prep.py`, `footprints.py` and
+`elements.py` are copied unchanged (excluded from ruff): blocks join census by
+CVEGEO; lots get area, normativa (containing polygon, else nearest within 3 m)
+and the block of their nearest representative point; heights give `cos`,
+`num_levels` and built-up area; POIs and zoning give `land_use`,
+`amenity_type`, `commerce_type` and the multifamily `unit_size_m2`.
+
+Ids use exe_reimagina's namespace. A block is `uuid5(NS, "block:<cvegeo>")`,
+unchanged. A lot is `uuid5(NS, "<city>:lot:<key>")` (`city` is the preset key,
+e.g. `mexicali`), where the key joins the city's cadastral `key_columns`
+(Mexicali: `Numdel`, `Colonia`, `Manzana`, `Lote`, `Fraccion`), stripped, with
+"-" and trailing dashes removed; empty is `sin_clave`. Exact copies (same key
+and geometry) are dropped, and lots still sharing a key get `#2`, `#3`...
+ordered by representative point (x, then y) in the city's metric CRS. The
+cadastral row number is never used, so re-exporting the shapefile keeps the
+ids. The key is the lot's `source_record_ref`.
+
+This changes the ids of the Mexicali baseline already loaded, which used the
+row number (`uuid5(NS, "lot:<row>")`): all 388,023 lot ids differ (16 exact
+copies drop out, leaving 388,007), and lot rows of its forks would refer to
+ids no longer in the baseline. The baseline is not migrated here.
+
 ## Arithmetic
 
 Source: Reimagina `dev` commit `cf17664d169116a2760741ea92737abf9b9ad212`,
@@ -130,5 +159,6 @@ is generated, never edited manually. Regenerate it after declaration changes.
 Lyra dependencies come from GitHub and their resolved revisions are in `uv.lock`.
 The SDK must provide `LocalRunner`. `psycopg` matches the version in the Lyra
 image. Accessibility adds `pandana`, `tables`, `networkx`, `adlfs` and
-`azure-identity`; pandana is imported only when accessibility runs. This project has no `lyra-app` dependency and does not import server
+`azure-identity`, and the baseline adds `rasterio`; both are imported only when
+those nodes run. This project has no `lyra-app` dependency and does not import server
 internals. Deployment is described in [deployment](deployment.md).

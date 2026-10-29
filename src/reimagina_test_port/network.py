@@ -5,32 +5,14 @@ a local path. Lake access uses ``DefaultAzureCredential``: the worker's managed
 identity, or ``az login`` locally.
 """
 
-import shutil
 from pathlib import Path
 
 import pandas as pd
 from pandana.loaders.pandash5 import open_hdf_store
 
-ACCOUNT_NAME = "cfcetlsadls"
+from reimagina_test_port.lake import download
 
-
-def download(uri: str, directory: Path) -> Path:
-    """Copy an ``az://`` or local file into ``directory``."""
-    target = directory / uri.rsplit("/", 1)[-1]
-    directory.mkdir(parents=True, exist_ok=True)
-    partial = target.with_name(f".{target.name}.part")
-    if uri.startswith("az://"):
-        import fsspec
-        from azure.identity import DefaultAzureCredential
-
-        filesystem = fsspec.filesystem(
-            "az", account_name=ACCOUNT_NAME, credential=DefaultAzureCredential()
-        )
-        filesystem.get(uri, str(partial))
-    else:
-        shutil.copyfile(uri, partial)
-    partial.replace(target)
-    return target
+__all__ = ["download", "read_network"]
 
 
 def read_network(path: Path) -> dict[str, pd.DataFrame]:
