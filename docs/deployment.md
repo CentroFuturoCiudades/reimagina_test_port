@@ -84,3 +84,26 @@ curl localhost:5219/jobs/<job_id> -H "Authorization: Bearer $LYRA_AGENT_API_KEY"
 `REIMAGINA_LYRA_IMAGE` selects the image (local tag or registry). The
 deployed plugin has no snapshot dataset; snapshots run offline only (see
 [usage](usage.md)).
+
+## CI/CD (dev)
+
+`.github/workflows/deploy-dev.yml`:
+
+- On pull requests to `dev`: ruff, `lyra-plugin check-manifest` and the whole
+  test suite, with PostGIS as a service (`REIMAGINA_TEST_DSN`).
+- On push to `dev` (and manually): the same checks, then builds the image for
+  `linux/amd64`, pushes `reimagina-lyra:<sha>` and `reimagina-lyra:dev` to the
+  ACR and, when `LYRA_APP_NAME` is set, updates the app's `worker` and then
+  its `api` container.
+
+Azure access is OIDC through the GitHub Environment `dev`: secrets
+`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`; variables
+`RESOURCE_GROUP`, `ACR_NAME`, `LYRA_APP_NAME`.
+
+Lyra runs as one Container App with three containers on `localhost`: `api`
+(internal ingress), `worker` (queue `interactive`) and `redis`, as in
+`deploy/compose.yml`. The app, its Managed Identity on the data lake and the
+deploy identity are Terraform in reimagina_urbano_api (`infra/modules/lyra`,
+`infra/envs/dev`). There `lyra.toml` arrives as the `LYRA_TOML` secret, which
+the image's entrypoint (`docker/entrypoint.sh`) writes to
+`/lyra_data/config/lyra.toml`; Compose mounts the file instead.
