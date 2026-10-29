@@ -22,10 +22,15 @@ checks that each call reads fresh data while sharing acquisition within its grap
 downloads use fake HTTP responses. No database, Redis, cloud, or Lyra instance is
 used. The test guard must remain enabled. No distribution smoke checks are needed.
 
+`tests/expected_accessibility.json` freezes the synthetic accessibility results,
+which were checked equal (max abs diff 4e-12) to reimagina-lyra's
+`compute_accessibility_by_element` on the same inputs.
+
 ## PostGIS tests
 
-`tests/test_scenario_db.py` runs the scenario dataset and the full graph against
-PostGIS with a minimal copy of the API's EAV schema. It is skipped unless
+`tests/test_scenario_db.py` runs the scenario, POI and road network datasets and
+the full graph (built-form and accessibility) against PostGIS with a minimal copy
+of the API's EAV schema. It is skipped unless
 `REIMAGINA_TEST_DSN` is set; each test creates and drops its own database.
 
 ```sh

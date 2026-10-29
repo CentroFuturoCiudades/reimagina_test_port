@@ -47,6 +47,12 @@ plugin reads Reimagina's database through its own `REIMAGINA_POSTGRES_DSN`
 secret, which only the worker receives. TLS is required unless the DSN sets
 `sslmode`. All metrics route to the `interactive` queue.
 
+Accessibility downloads the project's road network from the CFC data lake
+(`az://`, account `cfcetlsadls`) with `DefaultAzureCredential`: give the
+worker a managed identity with read access, or set `AZURE_CLIENT_ID`,
+`AZURE_TENANT_ID` and `AZURE_CLIENT_SECRET`. Optional: `ACCESS_CRS` forces the
+network's CRS; `ACCESSIBILITY_FASTPATH=0` uses the original, slower model code.
+
 ```sh
 cd deploy
 cp .env.example .env   # set both API keys and REIMAGINA_POSTGRES_DSN

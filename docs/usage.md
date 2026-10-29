@@ -35,7 +35,10 @@ and does not require an installed shared-data manifest.
 
 `REIMAGINA_SNAPSHOT_ROOT` overrides the bundled data root. Each snapshot is a
 subdirectory containing `lot.parquet` and `block.parquet`, matching Reimagina's
-prepared element exports. The snapshot parameter is required, and accepts letters,
+prepared element exports. Accessibility also reads `poi.parquet` (`id`,
+`amenity_type`, `capacity`, geometry) and `network_nodes.parquet` /
+`network_edges.parquet` (`id, x, y` and `from, to, distance, two_way`, in the
+blocks' UTM zone). The snapshot parameter is required, and accepts letters,
 digits, hyphens, and underscores (starting with a letter or digit). Missing files
 fail explicitly; there is no fallback to synthetic data.
 
@@ -48,14 +51,16 @@ null. Extra input columns are not propagated. Areas are supplied square metres;
 the plugin does not infer area from geometry or repair geometries.
 
 The bundled `synthetic` snapshot contains invented geometries in EPSG:32611 and
-14 calculation cases with three blocks. It is not real city data; polygon sizes
+14 calculation cases with three blocks, plus a 50 m grid network and five POIs
+(one of an unknown type), from `scripts/generate_accessibility_fixture.py`. It is not real city data; polygon sizes
 are illustrative and do not define the supplied areas. Custom snapshots can use
 any declared CRS. Native graph outputs retain it; SDK public serialization
 converts geometry to EPSG:4326.
 
 ## Public interfaces
 
-The plugin exposes `reimagina_lot_built_form` and `reimagina_built_form`.
+The plugin exposes `reimagina_lot_built_form`, `reimagina_built_form` and
+`reimagina_accessibility`.
 Deployed, they read a Reimagina scenario (a fork falls back to its baseline; see
 [design](design.md#scenario-source)). The combined metric's submission body is:
 
@@ -78,6 +83,12 @@ and the following nullable numerical columns:
 | `num_housing_units`, `population` | count (homes and residents respectively) |
 | `area`, `unit_size_m2` | m2 |
 | `density` | viv/ha (homes per hectare; declared without a Lyra unit) |
+
+`reimagina_accessibility` returns `reimagina_accessibility_lots` and
+`reimagina_accessibility_blocks` with `id`, `parent_id`, `source_record_ref`,
+geometry, `minutes` (min), `farthest_amenity`, and `accessibility_<amenity>`
+(score 0-1) and `distance_to_<amenity>` (min) for the 13 amenity types. See
+[design](design.md#accessibility).
 
 The Python client's submission, polling, table decoding, descriptor, and download
 interfaces are demonstrated in `tests/test_client.py` with fully mocked HTTP
