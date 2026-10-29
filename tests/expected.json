@@ -10,7 +10,7 @@
       "unit_size_m2": 200.0,
       "num_housing_units": 1,
       "population": 3,
-      "density": 5000.0
+      "density": 50.0
     },
     "lot-shed": {
       "cos": 0.05,
@@ -30,7 +30,7 @@
       "unit_size_m2": 70.0,
       "num_housing_units": 32,
       "population": 90,
-      "density": 40000.0
+      "density": 400.0
     },
     "lot-half_empty": {
       "cos": 0.8,
@@ -40,7 +40,7 @@
       "unit_size_m2": 70.0,
       "num_housing_units": 32,
       "population": 45,
-      "density": 45714.28571428571
+      "density": 457.1428571428571
     },
     "lot-shop": {
       "cos": 1.0,
@@ -80,7 +80,7 @@
       "unit_size_m2": 70.0,
       "num_housing_units": 32,
       "population": 0,
-      "density": 40000.0
+      "density": 400.0
     },
     "lot-zero_area": {
       "cos": 0.5,
@@ -110,7 +110,7 @@
       "unit_size_m2": 70.0,
       "num_housing_units": 2,
       "population": 6,
-      "density": 11428.571428571428
+      "density": 114.28571428571428
     },
     "lot-mixed": {
       "cos": 0.7,
@@ -120,7 +120,7 @@
       "unit_size_m2": 70.0,
       "num_housing_units": 32,
       "population": 90,
-      "density": 40000.0
+      "density": 400.0
     },
     "lot-orphan": {
       "cos": 0.5,
@@ -130,7 +130,7 @@
       "unit_size_m2": 200.0,
       "num_housing_units": 1,
       "population": 3,
-      "density": 5000.0
+      "density": 50.0
     },
     "lot-no_parent": {
       "cos": 0.5,
@@ -140,7 +140,7 @@
       "unit_size_m2": 200.0,
       "num_housing_units": 1,
       "population": 3,
-      "density": 5000.0
+      "density": 50.0
     }
   },
   "blocks": {
@@ -152,7 +152,7 @@
       "unit_size_m2": 70.0,
       "cos": 0.6277777777777778,
       "cus": 2.4944444444444445,
-      "density": 36923.07692307692
+      "density": 369.2307692307692
     },
     "block-a": {
       "num_housing_units": 35,
@@ -162,7 +162,7 @@
       "unit_size_m2": 113.33333333333333,
       "cos": 0.7297297297297297,
       "cus": 2.111969111969112,
-      "density": 27027.027027027027
+      "density": 270.27027027027026
     },
     "block-empty": {
       "num_housing_units": null,

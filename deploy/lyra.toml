@@ -1,5 +1,6 @@
 # Config de Lyra para reimagina-lyra. Se monta en /lyra_data/config/lyra.toml.
-# Sin [database] ni [earth_engine]: el plugin solo lee snapshots GeoParquet.
+# Sin [database] ni [earth_engine]: el plugin lee la BD de Reimagina con su
+# propio DSN (REIMAGINA_POSTGRES_DSN en el worker).
 # Las API keys llegan por variables de entorno (ver .env.example).
 schema_version = 4
 

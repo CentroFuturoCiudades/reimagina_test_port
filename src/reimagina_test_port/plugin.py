@@ -1,4 +1,8 @@
-"""Snapshot acquisition and the public built-form dependency graph."""
+"""Scenario and snapshot acquisition and the public built-form dependency graph.
+
+Production reads a Reimagina scenario from Postgres. The bundled snapshot dataset
+feeds the same metrics offline (``create_snapshot_plugin``).
+"""
 
 import os
 from pathlib import Path
@@ -19,6 +23,7 @@ from lyra.sdk import (
 from lyra.sdk.errors import MetricInputError
 from pydantic import Field
 
+from reimagina_test_port import scenario
 from reimagina_test_port.calculation import block_indicators, lot_indicators
 
 IDENTITY = ["id", "parent_id", "source_record_ref"]
@@ -39,8 +44,10 @@ UNITS = {
     "unit_size_m2": Unit.SQUARE_METRE,
     "num_housing_units": Unit.COUNT,
     "population": Unit.COUNT,
-    "density": Unit.COUNT_PER_SQUARE_KILOMETRE,
+    # viv/ha, as indicator_catalog; Lyra has no count/ha unit.
+    "density": None,
 }
+NUMERIC_ATTRIBUTES = [key for key in ATTRIBUTES if key != "land_use"]
 
 
 def declaration(*, source: bool = False, blocks: bool = False) -> TableOutput:
@@ -77,7 +84,7 @@ def declaration(*, source: bool = False, blocks: bool = False) -> TableOutput:
     else:
         for key, unit in UNITS.items():
             description = (
-                "Housing density in homes per square kilometre."
+                "Housing density in homes per hectare (viv/ha)."
                 if key == "density"
                 else key.replace("_", " ")
             )
@@ -160,6 +167,49 @@ def result_frame(source: gpd.GeoDataFrame, values: list[dict]) -> gpd.GeoDataFra
     return result
 
 
+class ScenarioParameters(MetricParameters):
+    """Select a Reimagina scenario; forks fall back to their baseline."""
+
+    scenario_id: str = Field(
+        pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+        description="Reimagina scenario UUID.",
+    )
+
+
+def scenario_error(message: str) -> MetricInputError:
+    """Attach source-node and parameter context to scenario failures."""
+    return MetricInputError("reimagina_scenario", "parameters.scenario_id", message)
+
+
+def read_scenario(scenario_id: str) -> dict[str, gpd.GeoDataFrame]:
+    """Read effective lots and blocks in the snapshot table contract."""
+    try:
+        tables = scenario.read_scenario(scenario_id, ATTRIBUTES)
+    except scenario.ScenarioNotFoundError as exc:
+        raise scenario_error(str(exc)) from exc
+    if tables["lot"].empty and tables["block"].empty:
+        raise scenario_error(f"No block or lot elements for scenario {scenario_id!r}")
+    lots = tables["lot"]
+    lots[NUMERIC_ATTRIBUTES] = lots[NUMERIC_ATTRIBUTES].astype("float64")
+    return {
+        "reimagina_scenario_lots": lots,
+        "reimagina_scenario_blocks": tables["block"],
+    }
+
+
+@dataset(
+    name="reimagina_scenario",
+    description="Acquire a scenario's effective lots and blocks from Reimagina.",
+    outputs={
+        "reimagina_scenario_lots": declaration(source=True),
+        "reimagina_scenario_blocks": declaration(source=True, blocks=True),
+    },
+)
+def scenario_dataset(parameters: ScenarioParameters) -> dict[str, gpd.GeoDataFrame]:
+    """Acquire both tables once per graph invocation."""
+    return read_scenario(parameters.scenario_id)
+
+
 @dataset(
     name="reimagina_prepared_snapshot",
     description="Acquire prepared lot and block GeoParquet tables.",
@@ -173,41 +223,18 @@ def prepared_snapshot(parameters: SnapshotParameters) -> dict[str, gpd.GeoDataFr
     return read_snapshot(parameters.snapshot)
 
 
-@metric(
-    name="reimagina_lot_built_form",
-    description="Calculate built-form indicators for every prepared lot.",
-    inputs={"lots": Dependency("reimagina_prepared_lots")},
-    outputs={"reimagina_lot_indicators": declaration()},
-)
-def lot_built_form(
-    parameters: SnapshotParameters, lots: gpd.GeoDataFrame
-) -> gpd.GeoDataFrame:
-    """Preserve source arithmetic and publish housing density in homes/km²."""
+def lot_built_form(lots: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Lot indicators; density in viv/ha as indicator_catalog."""
     values = [
         lot_indicators(plain_record(row)) for row in lots[ATTRIBUTES].to_dict("records")
     ]
-    for value in values:
-        if value["density"] is not None:
-            value["density"] *= 100
     return result_frame(lots, values)
 
 
-@metric(
-    name="reimagina_built_form",
-    description="Return lot indicators and their block aggregates.",
-    inputs={
-        "lots": Dependency("reimagina_lot_indicators"),
-        "blocks": Dependency("reimagina_prepared_blocks"),
-    },
-    outputs={
-        "reimagina_built_form_lots": declaration(),
-        "reimagina_built_form_blocks": declaration(),
-    },
-)
 def built_form(
-    parameters: SnapshotParameters, lots: gpd.GeoDataFrame, blocks: gpd.GeoDataFrame
+    lots: gpd.GeoDataFrame, blocks: gpd.GeoDataFrame
 ) -> dict[str, gpd.GeoDataFrame]:
-    """Aggregate upstream values without recalculating lots or converting density."""
+    """Aggregate upstream lot values into their blocks."""
     children: dict[str, list[dict]] = {}
     for row in lots[["parent_id", *UNITS]].to_dict("records"):
         record = plain_record(row)
@@ -221,6 +248,66 @@ def built_form(
     }
 
 
+def built_form_metrics(
+    parameters_type: type[MetricParameters], lots_output: str, blocks_output: str
+) -> list:
+    """Built-form metrics over one source's lot and block outputs."""
+
+    def lot_handler(parameters, lots: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+        return lot_built_form(lots)
+
+    def block_handler(
+        parameters, lots: gpd.GeoDataFrame, blocks: gpd.GeoDataFrame
+    ) -> dict[str, gpd.GeoDataFrame]:
+        return built_form(lots, blocks)
+
+    lot_handler.__annotations__["parameters"] = parameters_type
+    block_handler.__annotations__["parameters"] = parameters_type
+    return [
+        metric(
+            name="reimagina_lot_built_form",
+            description="Calculate built-form indicators for every lot.",
+            inputs={"lots": Dependency(lots_output)},
+            outputs={"reimagina_lot_indicators": declaration()},
+        )(lot_handler),
+        metric(
+            name="reimagina_built_form",
+            description="Return lot indicators and their block aggregates.",
+            inputs={
+                "lots": Dependency("reimagina_lot_indicators"),
+                "blocks": Dependency(blocks_output),
+            },
+            outputs={
+                "reimagina_built_form_lots": declaration(),
+                "reimagina_built_form_blocks": declaration(),
+            },
+        )(block_handler),
+    ]
+
+
 def create_plugin() -> PluginDefinition:
-    """Register declarations without reading snapshots or contacting services."""
-    return PluginDefinition(nodes=[prepared_snapshot, lot_built_form, built_form])
+    """Production graph over Reimagina scenarios; registers without connecting."""
+    return PluginDefinition(
+        nodes=[
+            scenario_dataset,
+            *built_form_metrics(
+                ScenarioParameters,
+                "reimagina_scenario_lots",
+                "reimagina_scenario_blocks",
+            ),
+        ]
+    )
+
+
+def create_snapshot_plugin() -> PluginDefinition:
+    """The same metrics over bundled or prepared snapshots, for offline runs."""
+    return PluginDefinition(
+        nodes=[
+            prepared_snapshot,
+            *built_form_metrics(
+                SnapshotParameters,
+                "reimagina_prepared_lots",
+                "reimagina_prepared_blocks",
+            ),
+        ]
+    )

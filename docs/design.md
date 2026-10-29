@@ -2,14 +2,36 @@
 
 ## Graph
 
-`reimagina_prepared_snapshot` is an internal dataset producing prepared lots and
-blocks. `reimagina_lot_built_form` depends on its lot output and computes all lot
-indicators. `reimagina_built_form` depends on that metric's result and on the
-source block output, aggregates lots by parent ID, and returns both tables.
+`reimagina_scenario` is an internal dataset producing a Reimagina scenario's
+effective lots and blocks from Postgres. `reimagina_lot_built_form` depends on
+its lot output and computes all lot indicators. `reimagina_built_form` depends on
+that metric's result and on the source block output, aggregates lots by parent
+ID, and returns both tables. `create_plugin()` registers this graph.
 
-All nodes share the explicit snapshot parameter. Lyra memoizes the dataset within
+`create_snapshot_plugin()` registers the same metrics over
+`reimagina_prepared_snapshot` instead, which reads prepared GeoParquet files.
+It is for offline tests and examples; it is not in the manifest or the image.
+
+## Scenario source
+
+Ported from reimagina-lyra `store.py`, following the API's effective-state rules.
+A fork stores only what differs from its baseline (`scenarios.parent_scenario_id`).
+An element is present when the scenario has a live `element_state` row, or has
+no row and the baseline has a live one; a scenario row with `deleted_at` hides it.
+Geometry and `parent_element_id` come from that state row, falling back to
+`elements.parent_element_id`. Elements with `elements.deleted_at` are excluded.
+Each attribute comes from the scenario's row when it exists, even if all-NULL
+(which hides the baseline value), else from the baseline's. Values are decoded by
+`attribute_catalog.value_type` as exe_reimagina's `eav` module does. Geometry is
+EPSG:4326.
+
+The worker connects with `REIMAGINA_POSTGRES_DSN`, not Lyra's `[database]`.
+TLS is required unless the DSN sets `sslmode`. An unknown scenario or one
+without lots and blocks fails as an input error on `parameters.scenario_id`.
+
+All nodes share the source's explicit parameter (`scenario_id` or `snapshot`). Lyra memoizes the dataset within
 one invocation, so the two branches share one acquisition. Separate jobs read
-fresh snapshots. Imports and the factory perform no acquisition. Snapshot files
+fresh data. Imports and the factory perform no acquisition. Snapshot files
 should remain unchanged throughout an invocation; this pilot does not provide
 atomic multi-file ingestion, persistent caching, or content-addressed provenance.
 
@@ -40,10 +62,10 @@ counts and areas are summed; floors and dwelling sizes are averaged; COS, CUS,
 and density are weighted by lot area. Block area is the sum of lot areas, not
 block polygon area. Missing occupancy defaults to one; zero occupancy remains zero.
 
-The original lot calculation returns homes/ha. The lot adapter multiplies density
-by 100 exactly once. The block calculation consumes homes/km2 and does not convert
-again. Metadata declares the SDK's `count/km2` unit. Changing metadata alone would
-not perform this conversion.
+Density is published in homes per hectare (viv/ha), as the original calculation
+returns it and as Reimagina's `indicator_catalog` defines it; there is no unit
+conversion. Lyra's unit vocabulary has no count/ha, so the column declares no
+unit and its description states viv/ha.
 
 ## Packaging and dependencies
 
@@ -53,6 +75,6 @@ the SDK generator and stages identical bytes under
 is generated, never edited manually. Regenerate it after declaration changes.
 
 Lyra dependencies come from GitHub and their resolved revisions are in `uv.lock`.
-The SDK must provide `LocalRunner` and `Unit.COUNT_PER_SQUARE_KILOMETRE`. This project has no
-`lyra-app` dependency and does not import server internals. No MCP integration or
-deployment configuration is included.
+The SDK must provide `LocalRunner`. `psycopg` matches the version in the Lyra
+image. This project has no `lyra-app` dependency and does not import server
+internals. Deployment is described in [deployment](deployment.md).
