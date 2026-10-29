@@ -22,6 +22,7 @@ CRS = "EPSG:4326"
 _TABLES = {
     name: sql.Identifier(SCHEMA, name)
     for name in (
+        "projects",
         "scenarios",
         "elements",
         "element_state",
@@ -81,6 +82,34 @@ _ATTRIBUTES_QUERY = sql.SQL(
     """
 ).format(**_TABLES)
 
+# Accessibility destinations: present elements whose effective amenity_type is set.
+_POIS_QUERY = sql.SQL(
+    _STATES
+    + """,
+    amenity AS (
+        SELECT DISTINCT ON (v.element_id) v.element_id, v.value_text
+        FROM {element_state_attribute_value} v
+        JOIN {attribute_catalog} ac ON ac.id = v.attribute_id
+        WHERE v.scenario_id IN (%(scenario)s::uuid, %(baseline)s::uuid)
+          AND ac.key = 'amenity_type'
+        ORDER BY v.element_id, (v.scenario_id = %(scenario)s::uuid) DESC
+    )
+    SELECT st.element_id::text AS id, a.value_text AS amenity_type,
+           NULL::double precision AS capacity, ST_AsBinary(st.geometry) AS geometry
+    FROM states st
+    JOIN {elements} e ON e.id = st.element_id
+    JOIN amenity a ON a.element_id = st.element_id
+    WHERE e.deleted_at IS NULL AND COALESCE(a.value_text, '') <> ''
+    ORDER BY 1
+    """
+).format(**_TABLES)
+
+_ROAD_NETWORK_QUERY = sql.SQL(
+    "SELECT NULLIF(p.road_network_uri, '') FROM {scenarios} s "
+    "JOIN {projects} p ON p.id = s.project_id "
+    "WHERE s.id = %s::uuid AND s.deleted_at IS NULL"
+).format(**_TABLES)
+
 _BASELINE_QUERY = sql.SQL(
     "SELECT parent_scenario_id::text FROM {scenarios} "
     "WHERE id = %s::uuid AND deleted_at IS NULL"
@@ -116,15 +145,50 @@ def decode_value(value_type: str, num: Any, text: Any, js: Any) -> Any:
     raise ValueError(msg)
 
 
+def _baseline_id(cur: psycopg.Cursor, scenario_id: str) -> str | None:
+    cur.execute(_BASELINE_QUERY, (scenario_id,))
+    row = cur.fetchone()
+    if row is None:
+        msg = f"Scenario {scenario_id!r} does not exist."
+        raise ScenarioNotFoundError(msg)
+    return row[0]
+
+
+def _geometry(values: pd.Series) -> gpd.GeoSeries:
+    return gpd.GeoSeries.from_wkb(values.map(bytes, na_action="ignore"), crs=CRS)
+
+
+def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
+    """Present elements with an ``amenity_type``: id, amenity_type, capacity, geometry."""
+    with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
+        baseline = _baseline_id(cur, scenario_id)
+        cur.execute(_POIS_QUERY, {"scenario": scenario_id, "baseline": baseline})
+        frame = pd.DataFrame(
+            cur.fetchall(), columns=["id", "amenity_type", "capacity", "geometry"]
+        )
+    frame["capacity"] = frame["capacity"].astype("float64")
+    return gpd.GeoDataFrame(
+        frame.drop(columns="geometry"), geometry=_geometry(frame["geometry"]), crs=CRS
+    )
+
+
+def read_road_network_uri(scenario_id: str) -> str | None:
+    """The scenario's ``projects.road_network_uri``, or None when it is empty."""
+    with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
+        _baseline_id(cur, scenario_id)
+        cur.execute(_ROAD_NETWORK_QUERY, (scenario_id,))
+        row = cur.fetchone()
+    return None if row is None else row[0]
+
+
 def read_scenario(scenario_id: str, keys: list[str]) -> dict[str, gpd.GeoDataFrame]:
     """Return effective ``lot`` and ``block`` tables with attribute ``keys`` as columns."""
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
-        cur.execute(_BASELINE_QUERY, (scenario_id,))
-        row = cur.fetchone()
-        if row is None:
-            msg = f"Scenario {scenario_id!r} does not exist."
-            raise ScenarioNotFoundError(msg)
-        params = {"scenario": scenario_id, "baseline": row[0], "keys": keys}
+        params = {
+            "scenario": scenario_id,
+            "baseline": _baseline_id(cur, scenario_id),
+            "keys": keys,
+        }
         cur.execute(_ELEMENTS_QUERY, params)
         elements = pd.DataFrame(
             cur.fetchall(),
@@ -148,8 +212,7 @@ def read_scenario(scenario_id: str, keys: list[str]) -> dict[str, gpd.GeoDataFra
                 table[key] = pd.Series(
                     [value.get(key) for value in values], dtype=object
                 )
-        geometry = gpd.GeoSeries.from_wkb(
-            frame["geometry"].map(bytes, na_action="ignore"), crs=CRS
+        result[kind] = gpd.GeoDataFrame(
+            table, geometry=_geometry(frame["geometry"]), crs=CRS
         )
-        result[kind] = gpd.GeoDataFrame(table, geometry=geometry, crs=CRS)
     return result

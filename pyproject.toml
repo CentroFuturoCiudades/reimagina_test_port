@@ -6,14 +6,19 @@ readme = "README.md"
 authors = [{ name = "RodolfoFigueroa", email = "rodolfo@daku.moe" }]
 requires-python = ">=3.11"
 dependencies = [
+    "adlfs>=2026.8.0",
+    "azure-identity>=1.27.0",
     "geopandas>=1.1.4",
     "lyra-sdk",
     "lyra-utils",
+    "networkx>=3.6.1",
     "numpy>=2.4.6",
+    "pandana>=0.8",
     "pandas>=3.0.5",
     "psycopg[binary]>=3.3.4",
     "pyarrow",
     "pydantic",
+    "tables>=3.10",
 ]
 
 [project.scripts]
@@ -35,6 +40,14 @@ dev = [
     "ipykernel>=7.4.0",
 ]
 
+
+[tool.ruff]
+# Copied unchanged from reimagina-lyra (exe_reimagina / CFC accessibility); keep diffable.
+extend-exclude = [
+    "src/reimagina_test_port/accessibility_metrics.py",
+    "src/reimagina_test_port/accessibility_fastpath.py",
+    "src/reimagina_test_port/vocabulary.py",
+]
 
 [tool.pytest.ini_options]
 markers = ["postgis: needs REIMAGINA_TEST_DSN (PostGIS in a container, see docs/verification.md)"]

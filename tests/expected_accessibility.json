@@ -1,0 +1,189 @@
+{
+  "source": "Port output for the synthetic snapshot, checked equal (max abs diff 4e-12) to reimagina-lyra accessibility.compute_accessibility_by_element on the same inputs.",
+  "lots": {
+    "lot-house": {
+      "minutes": 5.713388347648318,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.4444444444444444,
+      "accessibility_primary_school": 0.8290598290598291,
+      "accessibility_clinic": 0.9273504273504274,
+      "accessibility_pharmacy": 0.47863247863247865,
+      "distance_to_park": 5.713388347648318,
+      "distance_to_primary_school": 3.037645329190164,
+      "distance_to_clinic": 1.3383883476483185,
+      "distance_to_pharmacy": 5.088388347648318
+    },
+    "lot-shed": {
+      "minutes": 4.463388347648318,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.6111111111111112,
+      "accessibility_primary_school": 0.6452991452991453,
+      "accessibility_clinic": 0.7264957264957265,
+      "accessibility_pharmacy": 0.6452991452991453,
+      "distance_to_park": 4.463388347648318,
+      "distance_to_primary_school": 4.287645329190165,
+      "distance_to_clinic": 2.5883883476483187,
+      "distance_to_pharmacy": 3.838388347648319
+    },
+    "lot-flats": {
+      "minutes": 5.713388347648318,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.4444444444444444,
+      "accessibility_primary_school": 0.8290598290598291,
+      "accessibility_clinic": 0.9273504273504274,
+      "accessibility_pharmacy": 0.47863247863247865,
+      "distance_to_park": 5.713388347648318,
+      "distance_to_primary_school": 3.037645329190164,
+      "distance_to_clinic": 1.3383883476483185,
+      "distance_to_pharmacy": 5.088388347648318
+    },
+    "lot-half_empty": {
+      "minutes": 4.463388347648318,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.6111111111111112,
+      "accessibility_primary_school": 0.6452991452991453,
+      "accessibility_clinic": 0.7264957264957265,
+      "accessibility_pharmacy": 0.6452991452991453,
+      "distance_to_park": 4.463388347648318,
+      "distance_to_primary_school": 4.287645329190165,
+      "distance_to_clinic": 2.5883883476483187,
+      "distance_to_pharmacy": 3.838388347648319
+    },
+    "lot-shop": {
+      "minutes": 5.713388347648318,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.4444444444444444,
+      "accessibility_primary_school": 0.8290598290598291,
+      "accessibility_clinic": 0.9273504273504274,
+      "accessibility_pharmacy": 0.47863247863247865,
+      "distance_to_park": 5.713388347648318,
+      "distance_to_primary_school": 3.037645329190164,
+      "distance_to_clinic": 1.3383883476483185,
+      "distance_to_pharmacy": 5.088388347648318
+    },
+    "lot-unknown": {
+      "minutes": 4.463388347648318,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.6111111111111112,
+      "accessibility_primary_school": 0.6452991452991453,
+      "accessibility_clinic": 0.7264957264957265,
+      "accessibility_pharmacy": 0.6452991452991453,
+      "distance_to_park": 4.463388347648318,
+      "distance_to_primary_school": 4.287645329190165,
+      "distance_to_clinic": 2.5883883476483187,
+      "distance_to_pharmacy": 3.838388347648319
+    },
+    "lot-threshold": {
+      "minutes": 5.713388347648318,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.4444444444444444,
+      "accessibility_primary_school": 0.8290598290598291,
+      "accessibility_clinic": 0.9273504273504274,
+      "accessibility_pharmacy": 0.47863247863247865,
+      "distance_to_park": 5.713388347648318,
+      "distance_to_primary_school": 3.037645329190164,
+      "distance_to_clinic": 1.3383883476483185,
+      "distance_to_pharmacy": 5.088388347648318
+    },
+    "lot-zero_occupancy": {
+      "minutes": 4.463388347648318,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.6111111111111112,
+      "accessibility_primary_school": 0.6452991452991453,
+      "accessibility_clinic": 0.7264957264957265,
+      "accessibility_pharmacy": 0.6452991452991453,
+      "distance_to_park": 4.463388347648318,
+      "distance_to_primary_school": 4.287645329190165,
+      "distance_to_clinic": 2.5883883476483187,
+      "distance_to_pharmacy": 3.838388347648319
+    },
+    "lot-zero_area": {
+      "minutes": 5.713388347648318,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.4444444444444444,
+      "accessibility_primary_school": 0.8290598290598291,
+      "accessibility_clinic": 0.9273504273504274,
+      "accessibility_pharmacy": 0.47863247863247865,
+      "distance_to_park": 5.713388347648318,
+      "distance_to_primary_school": 3.037645329190164,
+      "distance_to_clinic": 1.3383883476483185,
+      "distance_to_pharmacy": 5.088388347648318
+    },
+    "lot-missing": {
+      "minutes": 4.463388347648318,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.6111111111111112,
+      "accessibility_primary_school": 0.6452991452991453,
+      "accessibility_clinic": 0.7264957264957265,
+      "accessibility_pharmacy": 0.6452991452991453,
+      "distance_to_park": 4.463388347648318,
+      "distance_to_primary_school": 4.287645329190165,
+      "distance_to_clinic": 2.5883883476483187,
+      "distance_to_pharmacy": 3.838388347648319
+    },
+    "lot-ties": {
+      "minutes": 5.713388347648318,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.4444444444444444,
+      "accessibility_primary_school": 0.8290598290598291,
+      "accessibility_clinic": 0.9273504273504274,
+      "accessibility_pharmacy": 0.47863247863247865,
+      "distance_to_park": 5.713388347648318,
+      "distance_to_primary_school": 3.037645329190164,
+      "distance_to_clinic": 1.3383883476483185,
+      "distance_to_pharmacy": 5.088388347648318
+    },
+    "lot-mixed": {
+      "minutes": 4.463388347648318,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.6111111111111112,
+      "accessibility_primary_school": 0.6452991452991453,
+      "accessibility_clinic": 0.7264957264957265,
+      "accessibility_pharmacy": 0.6452991452991453,
+      "distance_to_park": 4.463388347648318,
+      "distance_to_primary_school": 4.287645329190165,
+      "distance_to_clinic": 2.5883883476483187,
+      "distance_to_pharmacy": 3.838388347648319
+    },
+    "lot-orphan": {},
+    "lot-no_parent": {}
+  },
+  "blocks": {
+    "block-z": {
+      "minutes": 4.463388347648318,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.6111111111111112,
+      "accessibility_primary_school": 0.6452991452991453,
+      "accessibility_clinic": 0.7264957264957265,
+      "accessibility_pharmacy": 0.6452991452991453,
+      "distance_to_park": 4.463388347648318,
+      "distance_to_primary_school": 4.287645329190165,
+      "distance_to_clinic": 2.5883883476483187,
+      "distance_to_pharmacy": 3.838388347648319
+    },
+    "block-a": {
+      "minutes": 5.713388347648318,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.4444444444444444,
+      "accessibility_primary_school": 0.8290598290598291,
+      "accessibility_clinic": 0.9273504273504274,
+      "accessibility_pharmacy": 0.47863247863247865,
+      "distance_to_park": 5.713388347648318,
+      "distance_to_primary_school": 3.037645329190164,
+      "distance_to_clinic": 1.3383883476483185,
+      "distance_to_pharmacy": 5.088388347648318
+    },
+    "block-empty": {
+      "minutes": 6.96338834764832,
+      "farthest_amenity": "park",
+      "accessibility_park": 0.2905982905982906,
+      "accessibility_primary_school": 0.9487179487179487,
+      "accessibility_clinic": 0.7264957264957265,
+      "accessibility_pharmacy": 0.3247863247863248,
+      "distance_to_park": 6.96338834764832,
+      "distance_to_primary_school": 1.787645329190164,
+      "distance_to_clinic": 2.5883883476483187,
+      "distance_to_pharmacy": 6.338388347648319
+    }
+  }
+}

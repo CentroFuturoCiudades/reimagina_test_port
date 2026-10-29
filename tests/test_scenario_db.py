@@ -1,4 +1,4 @@
-"""The scenario dataset against PostGIS with a minimal copy of the EAV schema.
+"""Scenario, POI and road network datasets against PostGIS (minimal EAV schema).
 
 REIMAGINA_TEST_DSN points to a server where the user may create databases; each
 test creates and drops its own. See docs/verification.md for the container.
@@ -8,19 +8,23 @@ import os
 from collections.abc import Iterator
 from uuid import uuid4
 
+import geopandas as gpd
+import numpy as np
 import pandas as pd
 import psycopg
 import pytest
 from lyra.sdk import GraphExecutionError, LocalRunner
 from lyra.sdk.errors import MetricInputError
 from psycopg import conninfo, sql
+from shapely.geometry import box
 
-from reimagina_test_port import plugin, scenario
+from reimagina_test_port import accessibility, plugin, scenario
 
 pytestmark = pytest.mark.postgis
 
 BASELINE = "10000000-0000-0000-0000-000000000000"
 FORK = "20000000-0000-0000-0000-000000000000"
+PROJECT = "30000000-0000-0000-0000-000000000000"
 BLOCK = "a0000000-0000-0000-0000-000000000001"
 BLOCK_2 = "a0000000-0000-0000-0000-000000000002"
 HOUSE = "b0000000-0000-0000-0000-000000000001"
@@ -38,8 +42,10 @@ CREATE SCHEMA reimagina_urbano;
 SET search_path = reimagina_urbano, public;
 CREATE TYPE element_type AS ENUM ('block', 'lot', 'building', 'tree');
 CREATE TYPE attribute_value_type AS ENUM ('number', 'integer', 'text', 'enum', 'json');
+CREATE TABLE projects (id uuid PRIMARY KEY, road_network_uri text);
 CREATE TABLE scenarios (
     id uuid PRIMARY KEY,
+    project_id uuid REFERENCES projects (id),
     parent_scenario_id uuid REFERENCES scenarios (id),
     deleted_at timestamptz
 );
@@ -80,7 +86,7 @@ INSERT INTO attribute_catalog (element_type, key, value_type) VALUES
     ('lot', 'land_use', 'enum'), ('lot', 'cos', 'number'),
     ('lot', 'num_levels', 'integer'), ('lot', 'area', 'number'),
     ('lot', 'unit_size_m2', 'number'), ('lot', 'people_per_household', 'number'),
-    ('lot', 'occupancy_rate', 'number');
+    ('lot', 'occupancy_rate', 'number'), ('lot', 'amenity_type', 'enum');
 """
 
 HOUSE_ATTRS = {
@@ -103,7 +109,31 @@ FLATS_ATTRS = {
 
 
 @pytest.fixture
-def dsn(monkeypatch) -> Iterator[str]:
+def network_uri(tmp_path) -> str:
+    """A 20 m grid H5 over the test geometries, in their UTM zone."""
+    corner = gpd.GeoSeries([box(-0.0005, -0.0005, 0.0015, 0.0015)], crs=4326)
+    xmin, ymin, xmax, ymax = corner.to_crs(corner.estimate_utm_crs()).total_bounds
+    xs, ys = np.arange(xmin, xmax, 20), np.arange(ymin, ymax, 20)
+    ids = np.arange(len(xs) * len(ys))
+    side = len(xs)
+    right = ids[(ids % side) < side - 1]
+    up = ids[ids < side * (len(ys) - 1)]
+    nodes = pd.DataFrame({"id": ids, "x": xs[ids % side], "y": ys[ids // side]})
+    edges = pd.DataFrame(
+        {
+            "from": np.concatenate([right, up]),
+            "to": np.concatenate([right + 1, up + side]),
+            "distance": 20.0,
+            "two_way": True,
+        }
+    )
+    path = tmp_path / "net.h5"
+    accessibility.build_network(nodes, edges).save_hdf5(str(path))
+    return str(path)
+
+
+@pytest.fixture
+def dsn(monkeypatch, network_uri) -> Iterator[str]:
     admin_dsn = os.environ.get("REIMAGINA_TEST_DSN")
     if not admin_dsn:
         pytest.skip("REIMAGINA_TEST_DSN is not set")
@@ -114,7 +144,7 @@ def dsn(monkeypatch) -> Iterator[str]:
     try:
         with psycopg.connect(test_dsn) as conn:
             conn.execute(SCHEMA_DDL)
-            seed(conn)
+            seed(conn, network_uri)
         monkeypatch.setenv(scenario.DSN_ENV_VAR, test_dsn)
         yield test_dsn
     finally:
@@ -146,11 +176,16 @@ def set_attrs(conn, scenario_id, element_id, attrs):
         )
 
 
-def seed(conn) -> None:
+def seed(conn, network_uri: str) -> None:
     """Baseline with two blocks and four lots; a fork that edits it."""
     conn.execute("SET search_path = reimagina_urbano, public")
-    conn.execute("INSERT INTO scenarios VALUES (%s, NULL, NULL)", (BASELINE,))
-    conn.execute("INSERT INTO scenarios VALUES (%s, %s, NULL)", (FORK, BASELINE))
+    conn.execute("INSERT INTO projects VALUES (%s, %s)", (PROJECT, network_uri))
+    conn.execute(
+        "INSERT INTO scenarios VALUES (%s, %s, NULL, NULL)", (BASELINE, PROJECT)
+    )
+    conn.execute(
+        "INSERT INTO scenarios VALUES (%s, %s, %s, NULL)", (FORK, PROJECT, BASELINE)
+    )
     for block in (BLOCK, BLOCK_2):
         conn.execute(
             "INSERT INTO elements VALUES (%s, NULL, 'block', %s, NULL)",
@@ -169,13 +204,17 @@ def seed(conn) -> None:
         )
         add_state(conn, BASELINE, lot)
         set_attrs(conn, BASELINE, lot, attrs)
+    # Amenities: the flats hold a clinic, GONE a pharmacy.
+    set_attrs(conn, BASELINE, FLATS, {"amenity_type": "clinic"})
+    set_attrs(conn, BASELINE, GONE, {"amenity_type": "pharmacy"})
     # Fork: the shop becomes a house; the flats get an all-NULL unit size row; the
     # house moves to the second block with a new geometry; GONE is deleted; NEW is
     # a lot that exists only in the fork.
     add_state(conn, FORK, SHOP)
     set_attrs(conn, FORK, SHOP, {"land_use": "single_family", "num_levels": 2})
+    set_attrs(conn, FORK, SHOP, {"amenity_type": "park"})
     add_state(conn, FORK, FLATS)
-    set_attrs(conn, FORK, FLATS, {"unit_size_m2": None})
+    set_attrs(conn, FORK, FLATS, {"unit_size_m2": None, "amenity_type": None})
     add_state(conn, FORK, HOUSE, wkt=SMALL, parent=BLOCK_2)
     add_state(conn, FORK, GONE, deleted=True)
     conn.execute(
@@ -291,3 +330,49 @@ def test_missing_dsn(monkeypatch):
 def test_dsn_requires_tls_by_default(monkeypatch, dsn_value, expected):
     monkeypatch.setenv(scenario.DSN_ENV_VAR, dsn_value)
     assert scenario.resolve_dsn() == expected
+
+
+def test_pois_fall_back_to_baseline(dsn):
+    baseline = scenario.read_pois(BASELINE).set_index("id")
+    assert baseline["amenity_type"].to_dict() == {FLATS: "clinic", GONE: "pharmacy"}
+    assert baseline.crs == "EPSG:4326"
+    # Fork: SHOP gains a park, the flats' clinic is hidden by an all-NULL row and
+    # GONE is deleted.
+    fork = scenario.read_pois(FORK).set_index("id")
+    assert fork["amenity_type"].to_dict() == {SHOP: "park"}
+    assert fork["capacity"].isna().all()
+
+
+def test_road_network_uri(dsn, network_uri):
+    assert scenario.read_road_network_uri(FORK) == network_uri
+    with psycopg.connect(dsn) as conn:
+        conn.execute("UPDATE reimagina_urbano.projects SET road_network_uri = ''")
+    assert scenario.read_road_network_uri(BASELINE) is None
+    runner = LocalRunner.from_definitions(
+        {"reimagina-test-port": plugin.create_plugin()}
+    )
+    with pytest.raises(GraphExecutionError) as failure:
+        runner.run("reimagina_accessibility", {"parameters": {"scenario_id": BASELINE}})
+    assert isinstance(failure.value.__cause__, MetricInputError)
+    assert failure.value.node == "reimagina_road_network"
+
+
+def test_fork_accessibility(dsn):
+    runner = LocalRunner.from_definitions(
+        {"reimagina-test-port": plugin.create_plugin()}
+    )
+    results = runner.run(
+        "reimagina_accessibility", {"parameters": {"scenario_id": FORK}}
+    )
+    blocks = by_id(results["reimagina_accessibility_blocks"])
+    lots = by_id(results["reimagina_accessibility_lots"])
+    assert set(blocks) == {BLOCK, BLOCK_2}
+    for block in blocks.values():
+        # Only the fork's park is a destination.
+        assert block["farthest_amenity"] == "park"
+        assert block["minutes"] == block["distance_to_park"]
+        assert pd.isna(block["distance_to_clinic"])
+        assert pd.isna(block["distance_to_pharmacy"])
+    assert lots[HOUSE]["parent_id"] == BLOCK_2
+    assert lots[HOUSE]["distance_to_park"] == blocks[BLOCK_2]["distance_to_park"]
+    assert lots[SHOP]["distance_to_park"] == blocks[BLOCK]["distance_to_park"]

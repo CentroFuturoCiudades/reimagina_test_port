@@ -2,6 +2,515 @@
   "factory": "reimagina_test_port.plugin:create_plugin",
   "nodes": [
     {
+      "description": "Walking accessibility per block, inherited by its lots (exe_reimagina model job). Blocks are origins weighted by the scenario's modelled population; destinations are elements with an amenity_type. Up to five nearest destinations per amenity within 10 km on the road network at 4.8 km/h. Null means none is reachable.",
+      "inputs": {
+        "blocks": {
+          "arguments": {},
+          "output": "reimagina_built_form_blocks"
+        },
+        "edges": {
+          "arguments": {},
+          "output": "reimagina_road_network_edges"
+        },
+        "lots": {
+          "arguments": {},
+          "output": "reimagina_built_form_lots"
+        },
+        "nodes": {
+          "arguments": {},
+          "output": "reimagina_road_network_nodes"
+        },
+        "pois": {
+          "arguments": {},
+          "output": "reimagina_scenario_pois"
+        }
+      },
+      "name": "reimagina_accessibility",
+      "outputs": {
+        "reimagina_accessibility_blocks": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest amenity of the slowest reachable type.",
+              "name": "minutes",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Slowest reachable amenity type.",
+              "name": "farthest_amenity",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Gravity score for park, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_park",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for daycare, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_daycare",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for preschool, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_preschool",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for primary_school, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_primary_school",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for secondary_school, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_secondary_school",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for high_school, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_high_school",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for university, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_university",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for hospital, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_hospital",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for clinic, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_clinic",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for pharmacy, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_pharmacy",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for cinema, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_cinema",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for gym, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_gym",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for recreation, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Walking minutes to the nearest park.",
+              "name": "distance_to_park",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest daycare.",
+              "name": "distance_to_daycare",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest preschool.",
+              "name": "distance_to_preschool",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest primary_school.",
+              "name": "distance_to_primary_school",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest secondary_school.",
+              "name": "distance_to_secondary_school",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest high_school.",
+              "name": "distance_to_high_school",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest university.",
+              "name": "distance_to_university",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest hospital.",
+              "name": "distance_to_hospital",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest clinic.",
+              "name": "distance_to_clinic",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest pharmacy.",
+              "name": "distance_to_pharmacy",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest cinema.",
+              "name": "distance_to_cinema",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest gym.",
+              "name": "distance_to_gym",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest recreation.",
+              "name": "distance_to_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        },
+        "reimagina_accessibility_lots": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest amenity of the slowest reachable type.",
+              "name": "minutes",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Slowest reachable amenity type.",
+              "name": "farthest_amenity",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Gravity score for park, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_park",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for daycare, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_daycare",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for preschool, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_preschool",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for primary_school, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_primary_school",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for secondary_school, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_secondary_school",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for high_school, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_high_school",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for university, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_university",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for hospital, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_hospital",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for clinic, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_clinic",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for pharmacy, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_pharmacy",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for cinema, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_cinema",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for gym, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_gym",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for recreation, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Walking minutes to the nearest park.",
+              "name": "distance_to_park",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest daycare.",
+              "name": "distance_to_daycare",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest preschool.",
+              "name": "distance_to_preschool",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest primary_school.",
+              "name": "distance_to_primary_school",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest secondary_school.",
+              "name": "distance_to_secondary_school",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest high_school.",
+              "name": "distance_to_high_school",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest university.",
+              "name": "distance_to_university",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest hospital.",
+              "name": "distance_to_hospital",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest clinic.",
+              "name": "distance_to_clinic",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest pharmacy.",
+              "name": "distance_to_pharmacy",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest cinema.",
+              "name": "distance_to_cinema",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest gym.",
+              "name": "distance_to_gym",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest recreation.",
+              "name": "distance_to_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "ScenarioParameters": {
+            "additionalProperties": false,
+            "description": "Select a Reimagina scenario; forks fall back to their baseline.",
+            "properties": {
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id"
+            ],
+            "title": "ScenarioParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/ScenarioParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_accessibility_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
       "description": "Return lot indicators and their block aggregates.",
       "inputs": {
         "blocks": {
@@ -349,6 +858,109 @@
       "spatial_inputs": {}
     },
     {
+      "description": "Acquire the road network H5 of the scenario's project (projects.road_network_uri) as node and edge tables.",
+      "inputs": {},
+      "name": "reimagina_road_network",
+      "outputs": {
+        "reimagina_road_network_edges": {
+          "columns": [
+            {
+              "description": "Node ID.",
+              "name": "from",
+              "nullable": false,
+              "type": "integer",
+              "unit": null
+            },
+            {
+              "description": "Node ID.",
+              "name": "to",
+              "nullable": false,
+              "type": "integer",
+              "unit": null
+            },
+            {
+              "description": "Edge length (the network's first impedance).",
+              "name": "distance",
+              "nullable": false,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Whether edges are traversable both ways.",
+              "name": "two_way",
+              "nullable": false,
+              "type": "boolean",
+              "unit": null
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        },
+        "reimagina_road_network_nodes": {
+          "columns": [
+            {
+              "description": "Node ID.",
+              "name": "id",
+              "nullable": false,
+              "type": "integer",
+              "unit": null
+            },
+            {
+              "description": "X in the network's CRS.",
+              "name": "x",
+              "nullable": false,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Y in the network's CRS.",
+              "name": "y",
+              "nullable": false,
+              "type": "number",
+              "unit": null
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "ScenarioParameters": {
+            "additionalProperties": false,
+            "description": "Select a Reimagina scenario; forks fall back to their baseline.",
+            "properties": {
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id"
+            ],
+            "title": "ScenarioParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/ScenarioParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_road_network_request",
+        "type": "object"
+      },
+      "role": "dataset",
+      "spatial_inputs": {}
+    },
+    {
       "description": "Acquire a scenario's effective lots and blocks from Reimagina.",
       "inputs": {},
       "name": "reimagina_scenario",
@@ -488,6 +1100,75 @@
           "parameters"
         ],
         "title": "reimagina_scenario_request",
+        "type": "object"
+      },
+      "role": "dataset",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "Acquire a scenario's present elements with an amenity_type.",
+      "inputs": {},
+      "name": "reimagina_scenario_pois",
+      "outputs": {
+        "reimagina_scenario_pois": {
+          "columns": [
+            {
+              "description": "Element ID.",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Amenity type of the element.",
+              "name": "amenity_type",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Capacity; missing counts as one.",
+              "name": "capacity",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "ScenarioParameters": {
+            "additionalProperties": false,
+            "description": "Select a Reimagina scenario; forks fall back to their baseline.",
+            "properties": {
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id"
+            ],
+            "title": "ScenarioParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/ScenarioParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_scenario_pois_request",
         "type": "object"
       },
       "role": "dataset",
