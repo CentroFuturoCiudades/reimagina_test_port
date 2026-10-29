@@ -1,0 +1,35 @@
+# Config de Lyra para reimagina-lyra. Se monta en /lyra_data/config/lyra.toml.
+# Sin [database] ni [earth_engine]: el plugin solo lee snapshots GeoParquet.
+# Las API keys llegan por variables de entorno (ver .env.example).
+schema_version = 4
+
+[api]
+host = "0.0.0.0"
+port = 5219
+# En producción: la URL HTTPS pública.
+public_base_url = "http://localhost:5219"
+forwarded_allow_ips = ["127.0.0.1"]
+
+[redis]
+url = "redis://redis:6379/0"
+
+[logging]
+level = "INFO"
+
+[jobs]
+execution_timeout_seconds = 18000
+progress_min_interval_ms = 1000
+result_retention_seconds = 86400
+
+[mcp]
+enabled = false
+
+[plugins]
+default_queue = "interactive"
+allowed_queues = ["interactive"]
+[[plugins.installed]]
+distribution = "reimagina-test-port"
+
+[workers.interactive]
+queues = ["interactive"]
+concurrency = 2
