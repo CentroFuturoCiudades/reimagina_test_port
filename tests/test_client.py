@@ -20,7 +20,7 @@ from lyra.sdk.results import serialize_outputs
 from lyra.sdk.types import JsonObject
 
 from reimagina_test_port.local import run_snapshot
-from reimagina_test_port.plugin import create_plugin
+from reimagina_test_port.plugin import create_snapshot_plugin
 
 
 @pytest.mark.parametrize("empty", [False, True])
@@ -32,9 +32,9 @@ def test_client_submission_polling_tables_descriptor_download(
     tables = run_snapshot("synthetic")
     if empty:
         tables = {key: table.iloc[:0] for key, table in tables.items()}
-    manifest = create_plugin().manifest(
+    manifest = create_snapshot_plugin().manifest(
         plugin=PluginInfo(name="reimagina-test-port", version="0.1.0"),
-        factory="reimagina_test_port.plugin:create_plugin",
+        factory="reimagina_test_port.plugin:create_snapshot_plugin",
     )
     contract = next(node for node in manifest.nodes if node.name == metric)
     now = datetime.now(UTC)
@@ -120,7 +120,8 @@ def test_client_submission_polling_tables_descriptor_download(
         density = next(
             column for column in output.declaration.columns if column.name == "density"
         )
-        assert density.unit == "count/km2"
+        assert density.unit is None
+        assert "viv/ha" in density.description
     target = tmp_path / "result.json"
     client.results.download(handle.job_id, target)
     assert json.loads(target.read_text()) == payload

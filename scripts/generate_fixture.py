@@ -104,10 +104,6 @@ def main() -> None:
     expected_blocks = {
         key: namespace["block_indicators"](values) for key, values in groups.items()
     }
-    # Original block results are formed before any output unit conversion.
-    for values in [*expected_lots.values(), *expected_blocks.values()]:
-        if values["density"] is not None:
-            values["density"] *= 100
     folder = ROOT / "src/reimagina_test_port/data/synthetic"
     folder.mkdir(parents=True, exist_ok=True)
     gpd.GeoDataFrame(

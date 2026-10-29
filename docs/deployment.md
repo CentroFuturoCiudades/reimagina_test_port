@@ -43,12 +43,13 @@ docker push <ACR>.azurecr.io/reimagina-lyra:<version>
 
 `deploy/` contains a Compose stack (API, `interactive` worker, Redis) and the
 Lyra config. The config has no `[database]` or `[earth_engine]` section: the
-plugin only reads GeoParquet snapshots. All metrics route to the
-`interactive` queue.
+plugin reads Reimagina's database through its own `REIMAGINA_POSTGRES_DSN`
+secret, which only the worker receives. TLS is required unless the DSN sets
+`sslmode`. All metrics route to the `interactive` queue.
 
 ```sh
 cd deploy
-cp .env.example .env   # set both API keys
+cp .env.example .env   # set both API keys and REIMAGINA_POSTGRES_DSN
 docker compose up -d --wait
 ```
 
@@ -58,13 +59,13 @@ Submit a job and poll it:
 curl -X POST localhost:5219/jobs \
   -H "Authorization: Bearer $LYRA_AGENT_API_KEY" \
   -H 'Content-Type: application/json' \
-  -d '{"metric":"reimagina_built_form","input":{"parameters":{"snapshot":"synthetic"}}}'
+  -d '{"metric":"reimagina_built_form","input":{"parameters":{"scenario_id":"<uuid>"}}}'
 curl localhost:5219/jobs/<job_id> -H "Authorization: Bearer $LYRA_AGENT_API_KEY"
 ```
 
-`/jobs/<job_id>/result` returns `reimagina_built_form_lots` (14 rows) and
-`reimagina_built_form_blocks` (3 rows) for the synthetic snapshot.
+`/jobs/<job_id>/result` returns `reimagina_built_form_lots` and
+`reimagina_built_form_blocks` for the scenario's effective lots and blocks.
 
-`REIMAGINA_LYRA_IMAGE` selects the image (local tag or registry). Snapshots
-other than `synthetic` need `REIMAGINA_SNAPSHOT_ROOT` and a mounted data
-directory on the worker (see [usage](usage.md)).
+`REIMAGINA_LYRA_IMAGE` selects the image (local tag or registry). The
+deployed plugin has no snapshot dataset; snapshots run offline only (see
+[usage](usage.md)).

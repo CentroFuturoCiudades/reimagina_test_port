@@ -6,7 +6,7 @@
       "inputs": {
         "blocks": {
           "arguments": {},
-          "output": "reimagina_prepared_blocks"
+          "output": "reimagina_scenario_blocks"
         },
         "lots": {
           "arguments": {},
@@ -88,11 +88,11 @@
               "unit": "count"
             },
             {
-              "description": "Housing density in homes per square kilometre.",
+              "description": "Housing density in homes per hectare (viv/ha).",
               "name": "density",
               "nullable": true,
               "type": "number",
-              "unit": "count/km2"
+              "unit": null
             }
           ],
           "geometry": "geometry",
@@ -171,11 +171,11 @@
               "unit": "count"
             },
             {
-              "description": "Housing density in homes per square kilometre.",
+              "description": "Housing density in homes per hectare (viv/ha).",
               "name": "density",
               "nullable": true,
               "type": "number",
-              "unit": "count/km2"
+              "unit": null
             }
           ],
           "geometry": "geometry",
@@ -184,21 +184,21 @@
       },
       "request_schema": {
         "$defs": {
-          "SnapshotParameters": {
+          "ScenarioParameters": {
             "additionalProperties": false,
-            "description": "Select an explicit prepared snapshot beneath the configured root.",
+            "description": "Select a Reimagina scenario; forks fall back to their baseline.",
             "properties": {
-              "snapshot": {
-                "description": "Prepared snapshot identifier; synthetic selects the bundled example.",
-                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
-                "title": "Snapshot",
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
                 "type": "string"
               }
             },
             "required": [
-              "snapshot"
+              "scenario_id"
             ],
-            "title": "SnapshotParameters",
+            "title": "ScenarioParameters",
             "type": "object"
           }
         },
@@ -206,7 +206,7 @@
         "additionalProperties": false,
         "properties": {
           "parameters": {
-            "$ref": "#/$defs/SnapshotParameters"
+            "$ref": "#/$defs/ScenarioParameters"
           }
         },
         "required": [
@@ -219,11 +219,11 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Calculate built-form indicators for every prepared lot.",
+      "description": "Calculate built-form indicators for every lot.",
       "inputs": {
         "lots": {
           "arguments": {},
-          "output": "reimagina_prepared_lots"
+          "output": "reimagina_scenario_lots"
         }
       },
       "name": "reimagina_lot_built_form",
@@ -301,11 +301,11 @@
               "unit": "count"
             },
             {
-              "description": "Housing density in homes per square kilometre.",
+              "description": "Housing density in homes per hectare (viv/ha).",
               "name": "density",
               "nullable": true,
               "type": "number",
-              "unit": "count/km2"
+              "unit": null
             }
           ],
           "geometry": "geometry",
@@ -314,21 +314,21 @@
       },
       "request_schema": {
         "$defs": {
-          "SnapshotParameters": {
+          "ScenarioParameters": {
             "additionalProperties": false,
-            "description": "Select an explicit prepared snapshot beneath the configured root.",
+            "description": "Select a Reimagina scenario; forks fall back to their baseline.",
             "properties": {
-              "snapshot": {
-                "description": "Prepared snapshot identifier; synthetic selects the bundled example.",
-                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
-                "title": "Snapshot",
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
                 "type": "string"
               }
             },
             "required": [
-              "snapshot"
+              "scenario_id"
             ],
-            "title": "SnapshotParameters",
+            "title": "ScenarioParameters",
             "type": "object"
           }
         },
@@ -336,7 +336,7 @@
         "additionalProperties": false,
         "properties": {
           "parameters": {
-            "$ref": "#/$defs/SnapshotParameters"
+            "$ref": "#/$defs/ScenarioParameters"
           }
         },
         "required": [
@@ -349,11 +349,11 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Acquire prepared lot and block GeoParquet tables.",
+      "description": "Acquire a scenario's effective lots and blocks from Reimagina.",
       "inputs": {},
-      "name": "reimagina_prepared_snapshot",
+      "name": "reimagina_scenario",
       "outputs": {
-        "reimagina_prepared_blocks": {
+        "reimagina_scenario_blocks": {
           "columns": [
             {
               "description": "id",
@@ -380,7 +380,7 @@
           "geometry": "geometry",
           "kind": "table"
         },
-        "reimagina_prepared_lots": {
+        "reimagina_scenario_lots": {
           "columns": [
             {
               "description": "id",
@@ -459,21 +459,21 @@
       },
       "request_schema": {
         "$defs": {
-          "SnapshotParameters": {
+          "ScenarioParameters": {
             "additionalProperties": false,
-            "description": "Select an explicit prepared snapshot beneath the configured root.",
+            "description": "Select a Reimagina scenario; forks fall back to their baseline.",
             "properties": {
-              "snapshot": {
-                "description": "Prepared snapshot identifier; synthetic selects the bundled example.",
-                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
-                "title": "Snapshot",
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
                 "type": "string"
               }
             },
             "required": [
-              "snapshot"
+              "scenario_id"
             ],
-            "title": "SnapshotParameters",
+            "title": "ScenarioParameters",
             "type": "object"
           }
         },
@@ -481,13 +481,13 @@
         "additionalProperties": false,
         "properties": {
           "parameters": {
-            "$ref": "#/$defs/SnapshotParameters"
+            "$ref": "#/$defs/ScenarioParameters"
           }
         },
         "required": [
           "parameters"
         ],
-        "title": "reimagina_prepared_snapshot_request",
+        "title": "reimagina_scenario_request",
         "type": "object"
       },
       "role": "dataset",

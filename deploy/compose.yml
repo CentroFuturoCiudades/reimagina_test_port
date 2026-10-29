@@ -26,6 +26,8 @@ services:
     <<: *app
     stop_grace_period: 5h5m
     command: python -m lyra_app.worker_launcher interactive
+    environment:
+      REIMAGINA_POSTGRES_DSN: ${REIMAGINA_POSTGRES_DSN:?}
   redis:
     image: redis:alpine
 

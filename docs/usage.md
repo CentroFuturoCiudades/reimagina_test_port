@@ -13,9 +13,9 @@ Or construct the SDK runner directly in Python:
 
 ```python
 from lyra.sdk import LocalRunner
-from reimagina_test_port.plugin import create_plugin
+from reimagina_test_port.plugin import create_snapshot_plugin
 
-runner = LocalRunner.from_definitions({"reimagina-test-port": create_plugin()})
+runner = LocalRunner.from_definitions({"reimagina-test-port": create_snapshot_plugin()})
 tables = runner.run("reimagina_built_form", {"parameters": {"snapshot": "synthetic"}})
 lots = tables["reimagina_built_form_lots"]
 blocks = tables["reimagina_built_form_blocks"]
@@ -56,14 +56,17 @@ converts geometry to EPSG:4326.
 ## Public interfaces
 
 The plugin exposes `reimagina_lot_built_form` and `reimagina_built_form`.
-The combined metric's standard submission body is:
+Deployed, they read a Reimagina scenario (a fork falls back to its baseline; see
+[design](design.md#scenario-source)). The combined metric's submission body is:
 
 ```json
 {
   "metric": "reimagina_built_form",
-  "input": {"parameters": {"snapshot": "synthetic"}}
+  "input": {"parameters": {"scenario_id": "<scenario uuid>"}}
 }
 ```
+
+Offline, `create_snapshot_plugin()` takes `{"snapshot": "synthetic"}` instead.
 
 Both combined outputs contain `id`, `parent_id`, `source_record_ref`, geometry,
 and the following nullable numerical columns:
@@ -74,7 +77,7 @@ and the following nullable numerical columns:
 | `num_levels` | count (floors; block values are averages) |
 | `num_housing_units`, `population` | count (homes and residents respectively) |
 | `area`, `unit_size_m2` | m2 |
-| `density` | count/km2 (homes per square kilometre) |
+| `density` | viv/ha (homes per hectare; declared without a Lyra unit) |
 
 The Python client's submission, polling, table decoding, descriptor, and download
 interfaces are demonstrated in `tests/test_client.py` with fully mocked HTTP

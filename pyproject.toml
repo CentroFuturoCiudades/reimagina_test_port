@@ -11,6 +11,7 @@ dependencies = [
     "lyra-utils",
     "numpy>=2.4.6",
     "pandas>=3.0.5",
+    "psycopg[binary]>=3.3.4",
     "pyarrow",
     "pydantic",
 ]
@@ -34,6 +35,9 @@ dev = [
     "ipykernel>=7.4.0",
 ]
 
+
+[tool.pytest.ini_options]
+markers = ["postgis: needs REIMAGINA_TEST_DSN (PostGIS in a container, see docs/verification.md)"]
 
 [tool.lyra]
 factory = "reimagina_test_port.plugin:create_plugin"

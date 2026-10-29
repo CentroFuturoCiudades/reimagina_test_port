@@ -24,7 +24,7 @@ def test_reference_parity_and_shared_acquisition(monkeypatch):
     monkeypatch.setattr(plugin, "read_snapshot", reader)
     monkeypatch.setattr(plugin, "lot_indicators", calculation)
     runner = LocalRunner.from_definitions(
-        {"reimagina-test-port": plugin.create_plugin()}
+        {"reimagina-test-port": plugin.create_snapshot_plugin()}
     )
     for invocation in range(2):
         results = runner.run(
@@ -50,10 +50,9 @@ def test_reference_parity_and_shared_acquisition(monkeypatch):
 def test_handlers_preserve_inputs():
     source = plugin.read_snapshot("synthetic")
     copies = {key: value.copy(deep=True) for key, value in source.items()}
-    parameters = plugin.SnapshotParameters(snapshot="synthetic")
-    lots = plugin.lot_built_form(parameters, source["reimagina_prepared_lots"])
+    lots = plugin.lot_built_form(source["reimagina_prepared_lots"])
     before = lots.copy(deep=True)
-    plugin.built_form(parameters, lots, source["reimagina_prepared_blocks"])
+    plugin.built_form(lots, source["reimagina_prepared_blocks"])
     assert_geodataframe_equal(lots, before)
     for key in source:
         assert_geodataframe_equal(source[key], copies[key])
