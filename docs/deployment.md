@@ -44,7 +44,10 @@ docker push <ACR>.azurecr.io/reimagina-lyra:<version>
 `deploy/` contains a Compose stack (API, `interactive` worker, Redis) and the
 Lyra config. The config has no `[database]` or `[earth_engine]` section: the
 plugin reads Reimagina's database through its own `REIMAGINA_POSTGRES_DSN`
-secret, which only the worker receives. TLS is required unless the DSN sets
+secret, which only the worker receives. `reimagina_scenario_write` writes
+through it, so that role needs `INSERT`, `UPDATE` and `DELETE` on
+`reimagina_urbano.element_state_indicator_value` and `CREATE TEMP` on the
+database; the other metrics only read. TLS is required unless the DSN sets
 `sslmode`. All metrics route to the `interactive` queue.
 
 Accessibility downloads the project's road network from the CFC data lake

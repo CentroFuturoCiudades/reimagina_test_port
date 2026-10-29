@@ -1,4 +1,4 @@
-"""Scenario, POI and road network datasets against PostGIS (minimal EAV schema).
+"""Scenario datasets and the indicator writer against PostGIS (minimal EAV schema).
 
 REIMAGINA_TEST_DSN points to a server where the user may create databases; each
 test creates and drops its own. See docs/verification.md for the container.
@@ -82,6 +82,28 @@ CREATE TABLE element_state_attribute_value (
     FOREIGN KEY (scenario_id, element_id)
         REFERENCES element_state (scenario_id, element_id)
 );
+CREATE TYPE indicator_catalog_status AS ENUM ('active', 'deprecated', 'suspended');
+CREATE TABLE job_run (id uuid PRIMARY KEY);
+CREATE TABLE indicator_catalog (
+    id serial PRIMARY KEY,
+    element_type element_type NOT NULL,
+    key text NOT NULL,
+    value_type attribute_value_type NOT NULL,
+    status indicator_catalog_status NOT NULL DEFAULT 'active',
+    UNIQUE (element_type, key)
+);
+CREATE TABLE element_state_indicator_value (
+    scenario_id uuid NOT NULL REFERENCES scenarios (id),
+    element_id uuid NOT NULL REFERENCES elements (id),
+    indicator_id integer NOT NULL REFERENCES indicator_catalog (id),
+    value_num double precision,
+    value_text text,
+    job_run_id uuid REFERENCES job_run (id),
+    computed_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT NOW(),
+    updated_at timestamptz NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (scenario_id, element_id, indicator_id)
+);
 INSERT INTO attribute_catalog (element_type, key, value_type) VALUES
     ('lot', 'land_use', 'enum'), ('lot', 'cos', 'number'),
     ('lot', 'num_levels', 'integer'), ('lot', 'area', 'number'),
@@ -145,6 +167,7 @@ def dsn(monkeypatch, network_uri) -> Iterator[str]:
         with psycopg.connect(test_dsn) as conn:
             conn.execute(SCHEMA_DDL)
             seed(conn, network_uri)
+            seed_catalog(conn)
         monkeypatch.setenv(scenario.DSN_ENV_VAR, test_dsn)
         yield test_dsn
     finally:
@@ -222,6 +245,36 @@ def seed(conn, network_uri: str) -> None:
     )
     add_state(conn, FORK, NEW)
     set_attrs(conn, FORK, NEW, SHOP_ATTRS)
+
+
+# As dev's indicator_catalog: accessibility_* only for these three amenities.
+CATALOG_SCORES = ["hospital", "recreation", "university"]
+
+
+def seed_catalog(conn) -> None:
+    keys = [
+        *plugin.UNITS,
+        "minutes",
+        *plugin.DISTANCE_KEYS,
+        *(f"accessibility_{amenity}" for amenity in CATALOG_SCORES),
+    ]
+    for element_type in ("lot", "block"):
+        for key in keys:
+            conn.execute(
+                "INSERT INTO reimagina_urbano.indicator_catalog "
+                "(element_type, key, value_type) VALUES (%s, %s, 'number')",
+                (element_type, key),
+            )
+        conn.execute(
+            "INSERT INTO reimagina_urbano.indicator_catalog "
+            "(element_type, key, value_type) VALUES (%s, 'farthest_amenity', 'text')",
+            (element_type,),
+        )
+    # Deprecated keys are never written.
+    conn.execute(
+        "UPDATE reimagina_urbano.indicator_catalog SET status = 'deprecated' "
+        "WHERE key = 'cus'"
+    )
 
 
 def run(scenario_id: str):
@@ -376,3 +429,113 @@ def test_fork_accessibility(dsn):
     assert lots[HOUSE]["parent_id"] == BLOCK_2
     assert lots[HOUSE]["distance_to_park"] == blocks[BLOCK_2]["distance_to_park"]
     assert lots[SHOP]["distance_to_park"] == blocks[BLOCK]["distance_to_park"]
+
+
+def write(scenario_id: str, **options) -> dict:
+    runner = LocalRunner.from_definitions(
+        {"reimagina-test-port": plugin.create_plugin()}
+    )
+    result = runner.run(
+        "reimagina_scenario_write",
+        {"parameters": {"scenario_id": scenario_id, **options}},
+    )
+    return result["reimagina_scenario_write"].iloc[0].to_dict()
+
+
+def stored(dsn: str, scenario_id: str) -> dict:
+    with psycopg.connect(dsn) as conn:
+        rows = conn.execute(
+            "SELECT v.element_id::text, c.key, v.value_num, v.value_text, "
+            "v.job_run_id::text, v.computed_at "
+            "FROM reimagina_urbano.element_state_indicator_value v "
+            "JOIN reimagina_urbano.indicator_catalog c ON c.id = v.indicator_id "
+            "WHERE v.scenario_id = %s",
+            (scenario_id,),
+        ).fetchall()
+    return {(e, k): (num, text, job, at) for e, k, num, text, job, at in rows}
+
+
+def test_write_baseline_is_idempotent(dsn):
+    first = write(BASELINE)
+    assert first["elements"] == 6
+    assert first["values_written"] > 0
+    assert first["values_cleared"] == 0
+    values = stored(dsn, BASELINE)
+    assert values[(HOUSE, "density")][0] == pytest.approx(50)
+    assert values[(BLOCK, "num_housing_units")][0] == 31
+    # Baseline POIs: a clinic and a pharmacy.
+    assert values[(BLOCK, "farthest_amenity")][1] in {"clinic", "pharmacy"}
+    assert values[(HOUSE, "distance_to_clinic")][0] > 0
+    # Outside the active catalog: never written.
+    assert not {key for _, key in values} & {
+        "accessibility_clinic",
+        "accessibility_pharmacy",
+        "cus",
+    }
+    # Null values are not stored in a baseline: the shop has no unit size.
+    assert (SHOP, "unit_size_m2") not in values
+    again = write(BASELINE)
+    assert (again["values_written"], again["values_cleared"]) == (0, 0)
+    assert stored(dsn, BASELINE) == values
+
+
+def test_write_fork_stores_only_differences(dsn):
+    write(BASELINE)
+    baseline = stored(dsn, BASELINE)
+    first = write(FORK)
+    fork = stored(dsn, FORK)
+    assert first["values_written"] == len(fork)
+    for key, (num, text, _, _) in fork.items():
+        if key in baseline:
+            assert (num, text) != baseline[key][:2]
+    # The house kept its attributes: no built-form override.
+    assert (HOUSE, "density") not in fork
+    # The shop became a house: overridden.
+    assert fork[(SHOP, "num_housing_units")][0] == 1
+    # The flats lost their unit size: a NULL row hides the baseline value.
+    assert fork[(FLATS, "num_housing_units")][:2] == (None, None)
+    # GONE is not in the fork: no rows.
+    assert not any(element == GONE for element, _ in fork)
+    again = write(FORK)
+    assert (again["values_written"], again["values_cleared"]) == (0, 0)
+    assert stored(dsn, FORK) == fork
+
+
+def test_write_clears_values_back_to_baseline(dsn):
+    write(BASELINE)
+    write(FORK)
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            "DELETE FROM reimagina_urbano.element_state_attribute_value "
+            "WHERE scenario_id = %s AND element_id = %s",
+            (FORK, SHOP),
+        )
+    result = write(FORK)
+    assert result["values_cleared"] > 0
+    fork = stored(dsn, FORK)
+    assert (SHOP, "num_housing_units") not in fork
+
+
+def test_dry_run_and_job_run(dsn):
+    dry = write(BASELINE, dry_run=True)
+    assert dry["dry_run"]
+    assert dry["values_written"] > 0
+    assert stored(dsn, BASELINE) == {}
+    job = str(uuid4())
+    with psycopg.connect(dsn) as conn:
+        conn.execute("INSERT INTO reimagina_urbano.job_run VALUES (%s)", (job,))
+    write(BASELINE, job_run_id=job)
+    assert {row[2] for row in stored(dsn, BASELINE).values()} == {job}
+    # An unknown job_run is not recorded; unchanged rows keep the old one.
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            "UPDATE reimagina_urbano.element_state_attribute_value "
+            "SET value_num = 3 WHERE scenario_id = %s AND element_id = %s "
+            "AND attribute_id = (SELECT id FROM reimagina_urbano.attribute_catalog "
+            "WHERE key = 'num_levels')",
+            (BASELINE, HOUSE),
+        )
+    write(BASELINE, job_run_id=str(uuid4()))
+    values = stored(dsn, BASELINE)
+    assert values[(HOUSE, "num_levels")][2] is None
+    assert values[(SHOP, "num_levels")][2] == job

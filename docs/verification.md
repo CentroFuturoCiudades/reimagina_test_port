@@ -29,7 +29,8 @@ which were checked equal (max abs diff 4e-12) to reimagina-lyra's
 ## PostGIS tests
 
 `tests/test_scenario_db.py` runs the scenario, POI and road network datasets and
-the full graph (built-form and accessibility) against PostGIS with a minimal copy
+the full graph (built-form, accessibility and the writer: catalog filter, fork
+overrides, clearing, idempotence, dry run, job_run) against PostGIS with a minimal copy
 of the API's EAV schema. It is skipped unless
 `REIMAGINA_TEST_DSN` is set; each test creates and drops its own database.
 
