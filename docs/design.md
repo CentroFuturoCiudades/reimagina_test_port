@@ -9,7 +9,9 @@ that metric's result and on the source block output, aggregates lots by parent
 ID, and returns both tables. `reimagina_accessibility` depends on both
 built-form tables and on two more datasets: `reimagina_scenario_pois` (present
 elements with an `amenity_type`) and `reimagina_road_network` (the project's road
-network as node and edge tables). `create_plugin()` registers this graph.
+network as node and edge tables). `reimagina_scenario_write` is the final node:
+it depends on all four built-form and accessibility tables and writes them to
+Reimagina's database. `create_plugin()` registers this graph.
 
 `create_snapshot_plugin()` registers the same metrics over
 `reimagina_prepared_snapshot` and `reimagina_prepared_accessibility` instead,
@@ -78,6 +80,25 @@ uses minutes ("min"), which Lyra cannot declare, so those columns have no unit.
 the CFC lake, or a local path), downloads it into the job's scratch folder with
 `DefaultAzureCredential`, and returns the pandana H5's nodes and edges (its first
 impedance as `distance`). A project without the URI fails as an input error.
+
+## Writer
+
+Ported from reimagina-lyra `store.write_indicators`. Built-form and
+accessibility values go to `element_state_indicator_value` in one transaction,
+only for keys active in `indicator_catalog` (others, such as the
+`accessibility_<amenity>` keys missing from the catalog, are skipped). Floats
+are rounded to 4 decimals, so a fork compares exactly against its baseline.
+
+A fork stores only values that differ from its baseline (same tolerance as the
+API). Owned keys without a value are sent as NULL, so a fork can hide a
+baseline value and a baseline drops stale ones. Scenario rows that match the
+baseline again, or belong to an element no longer present, are removed. Rows
+whose stored value is unchanged are not rewritten and keep their `job_run_id`
+and `computed_at`, so writing the same scenario again changes nothing.
+
+`job_run_id` is recorded only when that `job_run` exists. `dry_run` computes
+and counts the changes, then rolls the transaction back. The result is one row:
+`elements`, `values_written`, `values_cleared`, `dry_run`.
 
 ## Arithmetic
 
