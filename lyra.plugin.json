@@ -511,6 +511,361 @@
       "spatial_inputs": {}
     },
     {
+      "description": "Build a city's baseline lots and blocks from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights and amenity POIs. Blocks are keyed by CVEGEO; lots by their cadastral key.",
+      "inputs": {},
+      "name": "reimagina_baseline",
+      "outputs": {
+        "reimagina_baseline_blocks": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Census dwellings of the block.",
+              "name": "vivtot",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Census average occupants per inhabited dwelling.",
+              "name": "people_per_household",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        },
+        "reimagina_baseline_lots": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "land use",
+              "name": "land_use",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "cos",
+              "name": "cos",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "num levels",
+              "name": "num_levels",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "area",
+              "name": "area",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "unit size m2",
+              "name": "unit_size_m2",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "people per household",
+              "name": "people_per_household",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "occupancy rate",
+              "name": "occupancy_rate",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "amenity type",
+              "name": "amenity_type",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "commerce type",
+              "name": "commerce_type",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "BaselineParameters": {
+            "additionalProperties": false,
+            "description": "City whose baseline is built from the data lake.",
+            "properties": {
+              "city": {
+                "const": "mexicali",
+                "description": "City preset.",
+                "title": "City",
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "title": "BaselineParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/BaselineParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_baseline_request",
+        "type": "object"
+      },
+      "role": "dataset",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "Return a city's baseline lots and blocks as built from the data lake (reimagina_baseline). Nothing is written to Reimagina's database.",
+      "inputs": {
+        "blocks": {
+          "arguments": {},
+          "output": "reimagina_baseline_blocks"
+        },
+        "lots": {
+          "arguments": {},
+          "output": "reimagina_baseline_lots"
+        }
+      },
+      "name": "reimagina_baseline_elements",
+      "outputs": {
+        "reimagina_baseline_elements_blocks": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Census dwellings of the block.",
+              "name": "vivtot",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Census average occupants per inhabited dwelling.",
+              "name": "people_per_household",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        },
+        "reimagina_baseline_elements_lots": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "land use",
+              "name": "land_use",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "cos",
+              "name": "cos",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "num levels",
+              "name": "num_levels",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "area",
+              "name": "area",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "unit size m2",
+              "name": "unit_size_m2",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "people per household",
+              "name": "people_per_household",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "occupancy rate",
+              "name": "occupancy_rate",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "amenity type",
+              "name": "amenity_type",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "commerce type",
+              "name": "commerce_type",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "BaselineParameters": {
+            "additionalProperties": false,
+            "description": "City whose baseline is built from the data lake.",
+            "properties": {
+              "city": {
+                "const": "mexicali",
+                "description": "City preset.",
+                "title": "City",
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "title": "BaselineParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/BaselineParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_baseline_elements_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
       "description": "Return lot indicators and their block aggregates.",
       "inputs": {
         "blocks": {
