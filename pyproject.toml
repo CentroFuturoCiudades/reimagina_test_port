@@ -4,14 +4,13 @@ version = "0.1.0"
 description = "Reimagina built-form indicators for Lyra"
 readme = "README.md"
 authors = [{ name = "RodolfoFigueroa", email = "rodolfo@daku.moe" }]
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
-    "geopandas>=1.2.0",
-    "lyra-api",
+    "geopandas>=1.1.4",
     "lyra-sdk",
     "lyra-utils",
-    "numpy>=2.5.4",
-    "pandas>=3.1.0",
+    "numpy>=2.4.6",
+    "pandas>=3.0.5",
     "pyarrow",
     "pydantic",
 ]
@@ -25,6 +24,8 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    # Cliente HTTP de Lyra; solo lo usan los tests (no está en la imagen base).
+    "lyra-api",
     "shapely",
     "coverage>=7.17.0",
     "pytest>=9.2.0",
@@ -38,9 +39,10 @@ dev = [
 factory = "reimagina_test_port.plugin:create_plugin"
 
 [tool.uv.sources]
-lyra-sdk = { git = "https://github.com/RodolfoFigueroa/lyra", subdirectory = "packages/lyra_sdk" }
-lyra-api = { git = "https://github.com/RodolfoFigueroa/lyra", subdirectory = "packages/lyra_api" }
-lyra-utils = { git = "https://github.com/RodolfoFigueroa/lyra", subdirectory = "packages/lyra_utils" }
+# Mismo commit que la imagen base ghcr.io/rodolfofigueroa/lyra:0.25.0 (lyra-v0.25.0).
+lyra-sdk = { git = "https://github.com/RodolfoFigueroa/lyra", subdirectory = "packages/lyra_sdk", rev = "2399c8e44ce57fba31ba270e5b421c20affa427a" }
+lyra-api = { git = "https://github.com/RodolfoFigueroa/lyra", subdirectory = "packages/lyra_api", rev = "2399c8e44ce57fba31ba270e5b421c20affa427a" }
+lyra-utils = { git = "https://github.com/RodolfoFigueroa/lyra", subdirectory = "packages/lyra_utils", rev = "2399c8e44ce57fba31ba270e5b421c20affa427a" }
 
 [tool.uv.build-backend]
 data = { data = "data" }

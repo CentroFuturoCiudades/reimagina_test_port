@@ -1,0 +1,33 @@
+# API + worker interactive + Redis con la imagen reimagina-lyra.
+#   cp .env.example .env && docker compose up -d
+x-app: &app
+  image: ${REIMAGINA_LYRA_IMAGE:-reimagina-lyra:0.1.0}
+  volumes:
+    - lyra_data:/lyra_data
+    - ${LYRA_CONFIG_FILE:-./lyra.toml}:/lyra_data/config/lyra.toml:ro
+  depends_on:
+    redis:
+      condition: service_started
+
+services:
+  api:
+    <<: *app
+    environment:
+      LYRA_AGENT_API_KEY: ${LYRA_AGENT_API_KEY:?}
+      LYRA_ADMIN_API_KEY: ${LYRA_ADMIN_API_KEY:?}
+    ports:
+      - "5219:5219"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5219/ready', timeout=2).read()"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  interactive:
+    <<: *app
+    stop_grace_period: 5h5m
+    command: python -m lyra_app.worker_launcher interactive
+  redis:
+    image: redis:alpine
+
+volumes:
+  lyra_data:
