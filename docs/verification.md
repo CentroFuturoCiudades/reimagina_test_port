@@ -35,7 +35,8 @@ sources, including a height tile.
 
 `tests/test_scenario_db.py` runs the scenario, POI and road network datasets and
 the full graph (built-form, accessibility and the writer: catalog filter, fork
-overrides, clearing, idempotence, dry run, job_run) against PostGIS with a minimal copy
+overrides, clearing, idempotence, dry run, job_run, the catalog contract, the
+baseline writer and the one-off fork migration) against PostGIS with a minimal copy
 of the API's EAV schema. It is skipped unless
 `REIMAGINA_TEST_DSN` is set; each test creates and drops its own database.
 

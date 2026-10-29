@@ -13,7 +13,8 @@ network as node and edge tables). `reimagina_scenario_write` is the final node:
 it depends on all four built-form and accessibility tables and writes them to
 Reimagina's database. `reimagina_baseline_elements` returns a city's baseline
 lots and blocks built from the data lake by the `reimagina_baseline` dataset;
-nothing is written. `create_plugin()` registers this graph.
+nothing is written. `reimagina_baseline_write` writes them into a baseline
+scenario. `create_plugin()` registers this graph.
 
 `create_snapshot_plugin()` registers the same metrics over
 `reimagina_prepared_snapshot` and `reimagina_prepared_accessibility` instead,
@@ -127,7 +128,36 @@ ids. The key is the lot's `source_record_ref`.
 This changes the ids of the Mexicali baseline already loaded, which used the
 row number (`uuid5(NS, "lot:<row>")`): all 388,023 lot ids differ (16 exact
 copies drop out, leaving 388,007), and lot rows of its forks would refer to
-ids no longer in the baseline. The baseline is not migrated here.
+ids no longer in the baseline. The loaded baseline is not modified: the new one
+is written to a new baseline scenario of the same project (below), so both can
+be compared.
+
+`num_levels` is an integer in `attribute_catalog`, so the baseline rounds the
+raster's average floors to whole floors, as the API's integer decoding does.
+
+## Baseline writer
+
+`reimagina_baseline_write(city, project_id, scenario_id)` fills an existing
+baseline scenario (created in the API, without forks) in one transaction:
+`elements` (new ids only; an existing element, such as a block shared with
+another baseline, is reused unchanged), `element_state` and
+`element_state_attribute_value`. Running it again replaces the scenario's own
+rows, removing elements no longer present and their indicator values. Then
+`reimagina_scenario_write` computes the baseline's indicators, and after it
+each fork's.
+
+Moving the edits of the old baseline's forks is a one-off migration,
+`scripts/migrate_fork_edits.py SOURCE_FORK TARGET_FORK [--apply]`: each edited
+lot is matched to the new lot with the largest overlap (IoU >= 0.9); blocks and
+fork-only elements keep their id. It rolls back unless `--apply`.
+
+## Catalog contract
+
+The API owns `attribute_catalog` and `indicator_catalog` (alembic). Before
+writing, `contract.check` verifies that every key the plugin writes is active,
+with a compatible value type (number/integer, text/enum) and, for enums with
+`enum_values`, the values it writes. A mismatch fails the job naming what to add,
+instead of skipping keys.
 
 ## Arithmetic
 

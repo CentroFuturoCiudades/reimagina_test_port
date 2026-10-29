@@ -593,7 +593,10 @@ def write_scenario(
     tables: dict[str, gpd.GeoDataFrame],
 ) -> pd.DataFrame:
     """Write built-form and accessibility values in one transaction."""
-    keys = [*UNITS, *ACCESSIBILITY_KEYS]
+    keys = {
+        key: "text" if key == "farthest_amenity" else "number"
+        for key in [*UNITS, *ACCESSIBILITY_KEYS]
+    }
     elements, values = writer.element_values(
         [
             ("lot", tables["built_form_lots"]),
@@ -770,6 +773,91 @@ def baseline_elements(
     }
 
 
+UUID_PATTERN = (
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+class BaselineWriteParameters(BaselineParameters):
+    """Baseline scenario to fill, created beforehand in the API."""
+
+    project_id: str = Field(pattern=UUID_PATTERN, description="Project UUID.")
+    scenario_id: str = Field(
+        pattern=UUID_PATTERN,
+        description="Baseline scenario UUID of the project, without forks.",
+    )
+    dry_run: bool = Field(
+        default=False, description="Compute and count the rows, then roll back."
+    )
+
+
+BASELINE_ATTRIBUTES = {
+    "lot": {
+        key: "text" if key in TEXT_ATTRIBUTES else "number"
+        for key in BASELINE_LOT_ATTRIBUTES
+    },
+    "block": {"vivtot": "number", "people_per_household": "number"},
+}
+BASELINE_WRITE_DECLARATION = TableOutput(
+    columns=[
+        TableColumn(name=name, type="integer", unit=Unit.COUNT, description=description)
+        for name, description in (
+            ("elements", "Blocks and lots written."),
+            ("elements_created", "Elements new to the database."),
+            ("attribute_values", "Attribute values written."),
+            ("elements_removed", "Scenario elements no longer in the baseline."),
+        )
+    ]
+    + [
+        TableColumn(
+            name="dry_run",
+            type="boolean",
+            unit=None,
+            description="Whether the changes were rolled back.",
+        )
+    ]
+)
+
+
+@metric(
+    name="reimagina_baseline_write",
+    description=(
+        "Build a city's baseline from the data lake (reimagina_baseline) and write "
+        "it into an existing baseline scenario of a project: elements, state and "
+        "attribute values, in one transaction. Existing elements are reused "
+        "unchanged; running it again replaces the scenario's rows. Every attribute "
+        "must be active in attribute_catalog. Compute indicators afterwards with "
+        "reimagina_scenario_write."
+    ),
+    inputs={
+        "lots": Dependency("reimagina_baseline_lots"),
+        "blocks": Dependency("reimagina_baseline_blocks"),
+    },
+    outputs={"reimagina_baseline_write": BASELINE_WRITE_DECLARATION},
+)
+def baseline_write(
+    parameters: BaselineWriteParameters,
+    lots: gpd.GeoDataFrame,
+    blocks: gpd.GeoDataFrame,
+) -> pd.DataFrame:
+    """Final node: one summary row."""
+    from reimagina_test_port import baseline_writer
+
+    try:
+        counts = baseline_writer.write_baseline(
+            parameters.project_id,
+            parameters.scenario_id,
+            {"lot": lots, "block": blocks},
+            BASELINE_ATTRIBUTES,
+            dry_run=parameters.dry_run,
+        )
+    except baseline_writer.BaselineScenarioError as exc:
+        raise MetricInputError(
+            "reimagina_baseline_write", "parameters.scenario_id", str(exc)
+        ) from exc
+    return pd.DataFrame([{**counts, "dry_run": parameters.dry_run}])
+
+
 def create_plugin() -> PluginDefinition:
     """Production graph over Reimagina scenarios; registers without connecting."""
     return PluginDefinition(
@@ -791,6 +879,7 @@ def create_plugin() -> PluginDefinition:
             scenario_write,
             baseline_dataset,
             baseline_elements,
+            baseline_write,
         ]
     )
 
