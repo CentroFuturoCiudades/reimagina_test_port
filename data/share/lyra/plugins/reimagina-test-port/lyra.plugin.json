@@ -866,6 +866,118 @@
       "spatial_inputs": {}
     },
     {
+      "description": "Build a city's baseline from the data lake (reimagina_baseline) and write it into an existing baseline scenario of a project: elements, state and attribute values, in one transaction. Existing elements are reused unchanged; running it again replaces the scenario's rows. Every attribute must be active in attribute_catalog. Compute indicators afterwards with reimagina_scenario_write.",
+      "inputs": {
+        "blocks": {
+          "arguments": {},
+          "output": "reimagina_baseline_blocks"
+        },
+        "lots": {
+          "arguments": {},
+          "output": "reimagina_baseline_lots"
+        }
+      },
+      "name": "reimagina_baseline_write",
+      "outputs": {
+        "reimagina_baseline_write": {
+          "columns": [
+            {
+              "description": "Blocks and lots written.",
+              "name": "elements",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Elements new to the database.",
+              "name": "elements_created",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Attribute values written.",
+              "name": "attribute_values",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Scenario elements no longer in the baseline.",
+              "name": "elements_removed",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Whether the changes were rolled back.",
+              "name": "dry_run",
+              "nullable": false,
+              "type": "boolean",
+              "unit": null
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "BaselineWriteParameters": {
+            "additionalProperties": false,
+            "description": "Baseline scenario to fill, created beforehand in the API.",
+            "properties": {
+              "city": {
+                "const": "mexicali",
+                "description": "City preset.",
+                "title": "City",
+                "type": "string"
+              },
+              "dry_run": {
+                "default": false,
+                "description": "Compute and count the rows, then roll back.",
+                "title": "Dry Run",
+                "type": "boolean"
+              },
+              "project_id": {
+                "description": "Project UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Project Id",
+                "type": "string"
+              },
+              "scenario_id": {
+                "description": "Baseline scenario UUID of the project, without forks.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "city",
+              "project_id",
+              "scenario_id"
+            ],
+            "title": "BaselineWriteParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/BaselineWriteParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_baseline_write_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
       "description": "Return lot indicators and their block aggregates.",
       "inputs": {
         "blocks": {

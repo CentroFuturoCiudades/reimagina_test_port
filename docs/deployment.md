@@ -51,7 +51,8 @@ plugin reads Reimagina's database through its own `REIMAGINA_POSTGRES_DSN`
 secret, which only the worker receives. `reimagina_scenario_write` writes
 through it, so that role needs `INSERT`, `UPDATE` and `DELETE` on
 `reimagina_urbano.element_state_indicator_value` and `CREATE TEMP` on the
-database; the other metrics only read. TLS is required unless the DSN sets
+database; `reimagina_baseline_write` also writes `elements`, `element_state` and
+`element_state_attribute_value`. The other metrics only read. TLS is required unless the DSN sets
 `sslmode`. All metrics route to the `interactive` queue.
 
 Accessibility and the baseline read the CFC data lake (the road network; the

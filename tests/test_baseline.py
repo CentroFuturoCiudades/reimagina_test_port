@@ -239,7 +239,9 @@ def test_build(city, tmp_path):
     assert lots.loc["1-B-8-1", "commerce_type"] == "shop"
     # Heights: 5 m everywhere is 2 floors over the whole lot.
     assert lots.loc["1-A-7-1", "cos"] == pytest.approx(1.0)
-    assert lots.loc["1-A-7-1", "num_levels"] == pytest.approx(2.0)
+    # num_levels is an integer attribute: whole floors.
+    assert all(float(v).is_integer() for v in lots["num_levels"].dropna())
+    assert lots.loc["1-A-7-1", "num_levels"] == 2
     assert lots.loc["1-A-7-1", "area"] == pytest.approx(400.0)
     assert lots.loc["1-A-7-1", "occupancy_rate"] == pytest.approx(0.75)
     assert blocks.loc[CVEGEO[0], "people_per_household"] == 3.25

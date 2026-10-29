@@ -120,6 +120,11 @@ def lot_table(
     )
     for key in LOT_ATTRIBUTES:
         frame[key] = [row.get(key) for row in rows]
+    # num_levels is an integer in attribute_catalog: whole floors, rounded as the
+    # API's integer decoding does.
+    frame["num_levels"] = [
+        None if pd.isna(value) else round(value) for value in frame["num_levels"]
+    ]
     return gpd.GeoDataFrame(frame, geometry=lots.geometry.to_numpy(), crs=4326)
 
 

@@ -6,7 +6,7 @@ rewritten, so running it again for the same scenario changes nothing.
 """
 
 import math
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 from uuid import UUID
 
@@ -14,6 +14,7 @@ import pandas as pd
 import psycopg
 from psycopg import sql
 
+from reimagina_test_port import contract
 from reimagina_test_port.scenario import SCHEMA, resolve_dsn
 
 # Decimals persisted, as reimagina-lyra ``base.INDICATOR_DECIMALS``; a fork's values
@@ -24,7 +25,6 @@ _TABLES = {
     name: sql.Identifier(SCHEMA, name)
     for name in (
         "scenarios",
-        "indicator_catalog",
         "element_state_indicator_value",
         "job_run",
     )
@@ -181,16 +181,16 @@ def write_indicators(
     scenario_id: str,
     values: dict[str, dict[str, Any]],
     elements: pd.DataFrame,
-    keys: Sequence[str],
+    keys: Mapping[str, str],
     *,
     job_run_id: str | None = None,
     dry_run: bool = False,
 ) -> tuple[int, int]:
-    """Write the owned ``keys`` of ``elements`` in one transaction.
+    """Write the owned ``keys`` (``{key: kind}``) of ``elements`` in one transaction.
 
-    Only keys active in ``indicator_catalog`` are written. ``job_run_id`` is
-    recorded only when that job_run exists. A dry run computes the changes and
-    rolls them back.
+    Every key must be active in ``indicator_catalog`` for each element type
+    written (``contract.check``). ``job_run_id`` is recorded only when that
+    job_run exists. A dry run computes the changes and rolls them back.
 
     Returns:
         ``(values_written, values_cleared)``.
@@ -217,14 +217,15 @@ def write_indicators(
             )
             if cur.fetchone() is None:
                 job_run_id = None
-        cur.execute(
-            sql.SQL(
-                "SELECT element_type::text, key, id FROM {indicator_catalog} "
-                "WHERE status = 'active' AND key = ANY(%s)"
-            ).format(**_TABLES),
-            (list(keys),),
-        )
-        indicator_ids = {(t, k): i for t, k, i in cur.fetchall()}
+        required = {
+            (element_type, key): kind
+            for element_type in sorted(set(elements["type_slug"]))
+            for key, kind in keys.items()
+        }
+        indicator_ids = {
+            pair: row[0]
+            for pair, row in contract.check(cur, "indicator_catalog", required).items()
+        }
         # JIT costs about a second per query and saves nothing here.
         cur.execute("SET LOCAL jit = off")
         cur.execute(
