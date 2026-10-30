@@ -5,7 +5,9 @@ that differ from its baseline; rows whose stored value is unchanged are not
 rewritten, so running it again for the same scenario changes nothing.
 """
 
+import logging
 import math
+import time
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 from uuid import UUID
@@ -16,6 +18,26 @@ from psycopg import sql
 
 from reimagina_test_port import contract
 from reimagina_test_port.scenario import SCHEMA, resolve_dsn
+
+logger = logging.getLogger(__name__)
+
+
+class _Timer:
+    """Logs each stage's duration (s) and a final summary."""
+
+    def __init__(self, label: str) -> None:
+        self.label, self.stages = label, {}
+        self.start = self.last = time.perf_counter()
+
+    def __call__(self, stage: str) -> None:
+        now = time.perf_counter()
+        self.stages[stage] = round(now - self.last, 2)
+        self.last = now
+
+    def done(self, **counts: int) -> None:
+        total = round(time.perf_counter() - self.start, 2)
+        logger.info("%s: %ss %s %s", self.label, total, self.stages, counts)
+
 
 # Decimals persisted, as reimagina-lyra ``base.INDICATOR_DECIMALS``; a fork's values
 # compare exactly against its baseline's.
@@ -195,6 +217,7 @@ def write_indicators(
     Returns:
         ``(values_written, values_cleared)``.
     """
+    timer = _Timer(f"write_indicators {scenario_id}")
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
         cur.execute(
             sql.SQL(
@@ -226,6 +249,7 @@ def write_indicators(
             pair: row[0]
             for pair, row in contract.check(cur, "indicator_catalog", required).items()
         }
+        timer("catalog")
         # JIT costs about a second per query and saves nothing here.
         cur.execute("SET LOCAL jit = off")
         cur.execute(
@@ -238,8 +262,11 @@ def write_indicators(
             "value_text) FROM STDIN (FORMAT BINARY)"
         ) as copy:
             copy.set_types(["uuid", "int4", "float8", "text"])
+            payload = 0
             for record in payload_records(values, elements, indicator_ids):
                 copy.write_row(record)
+                payload += 1
+        timer("copy")
         # Without stats the planner may pick a nested loop over the value table.
         cur.execute("ANALYZE indicator_payload")
         params = {
@@ -248,15 +275,21 @@ def write_indicators(
             "indicator_ids": sorted(indicator_ids.values()),
             "job_run": job_run_id,
         }
+        timer("analyze")
         cur.execute(_CHANGES_QUERY, params)
         cur.execute("CREATE INDEX ON indicator_change (element_id, indicator_id)")
         cur.execute("ANALYZE indicator_change")
+        timer("compare")
         cur.execute(_DELETE_QUERY, params)
         cleared = cur.rowcount
+        timer("delete")
         cur.execute(_UPSERT_QUERY, params)
         written = cur.rowcount
+        timer("upsert")
         if dry_run:
             conn.rollback()
         else:
             conn.commit()
+        timer("commit")
+    timer.done(payload=payload, written=written, cleared=cleared)
     return written, cleared
