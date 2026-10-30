@@ -5,7 +5,11 @@ data lake. The bundled snapshot datasets feed the same metrics offline
 (``create_snapshot_plugin``).
 """
 
+import logging
 import os
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal
 
@@ -28,6 +32,17 @@ from pydantic import Field
 from reimagina_test_port import network, scenario, writer
 from reimagina_test_port.calculation import block_indicators, lot_indicators
 from reimagina_test_port.vocabulary import AMENITY_TYPES
+
+logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def timed(stage: str) -> Iterator[None]:
+    """Log how long a stage of a job took."""
+    start = time.perf_counter()
+    yield
+    logger.info("%s: %.2fs", stage, time.perf_counter() - start)
+
 
 IDENTITY = ["id", "parent_id", "source_record_ref"]
 ATTRIBUTES = [
@@ -296,7 +311,8 @@ def read_scenario(scenario_id: str) -> dict[str, gpd.GeoDataFrame]:
 )
 def scenario_dataset(parameters: ScenarioParameters) -> dict[str, gpd.GeoDataFrame]:
     """Acquire both tables once per graph invocation."""
-    return read_scenario(parameters.scenario_id)
+    with timed("read scenario"):
+        return read_scenario(parameters.scenario_id)
 
 
 @dataset(
@@ -343,12 +359,14 @@ def built_form_metrics(
     """Built-form metrics over one source's lot and block outputs."""
 
     def lot_handler(parameters, lots: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-        return lot_built_form(lots)
+        with timed("lot built-form"):
+            return lot_built_form(lots)
 
     def block_handler(
         parameters, lots: gpd.GeoDataFrame, blocks: gpd.GeoDataFrame
     ) -> dict[str, gpd.GeoDataFrame]:
-        return built_form(lots, blocks)
+        with timed("block built-form"):
+            return built_form(lots, blocks)
 
     lot_handler.__annotations__["parameters"] = parameters_type
     block_handler.__annotations__["parameters"] = parameters_type
@@ -416,7 +434,8 @@ def prepared_accessibility(parameters: SnapshotParameters) -> dict[str, pd.DataF
 def scenario_pois(parameters: ScenarioParameters) -> gpd.GeoDataFrame:
     """Destinations of the accessibility model, with baseline fallback."""
     try:
-        return scenario.read_pois(parameters.scenario_id)
+        with timed("read pois"):
+            return scenario.read_pois(parameters.scenario_id)
     except scenario.ScenarioNotFoundError as exc:
         raise MetricInputError(
             "reimagina_scenario_pois", "parameters.scenario_id", str(exc)
@@ -452,7 +471,8 @@ def road_network(
         raise error(
             f"The project of scenario {parameters.scenario_id} has no road_network_uri."
         )
-    tables = network.read_network(network.download(uri, context.temp_dir))
+    with timed("road network"):
+        tables = network.read_network(network.download(uri, context.temp_dir))
     return {
         "reimagina_road_network_nodes": tables["nodes"],
         "reimagina_road_network_edges": tables["edges"],
@@ -485,8 +505,9 @@ def accessibility_tables(
     # pandana only where accessibility runs.
     from reimagina_test_port import accessibility
 
-    graph = accessibility.build_network(nodes, edges)
-    by_block = accessibility.accessibility_by_block(blocks, pois, graph)
+    with timed("accessibility"):
+        graph = accessibility.build_network(nodes, edges)
+        by_block = accessibility.accessibility_by_block(blocks, pois, graph)
     return {
         "reimagina_accessibility_lots": accessibility_frame(
             lots, accessibility.inherit_to_lots(lots, by_block)
@@ -597,15 +618,16 @@ def write_scenario(
         key: "text" if key == "farthest_amenity" else "number"
         for key in [*UNITS, *ACCESSIBILITY_KEYS]
     }
-    elements, values = writer.element_values(
-        [
-            ("lot", tables["built_form_lots"]),
-            ("lot", tables["accessibility_lots"]),
-            ("block", tables["built_form_blocks"]),
-            ("block", tables["accessibility_blocks"]),
-        ],
-        keys,
-    )
+    with timed("prepare values"):
+        elements, values = writer.element_values(
+            [
+                ("lot", tables["built_form_lots"]),
+                ("lot", tables["accessibility_lots"]),
+                ("block", tables["built_form_blocks"]),
+                ("block", tables["accessibility_blocks"]),
+            ],
+            keys,
+        )
     try:
         written, cleared = writer.write_indicators(
             parameters.scenario_id,
