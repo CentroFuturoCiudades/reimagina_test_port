@@ -1573,6 +1573,226 @@
       "spatial_inputs": {}
     },
     {
+      "description": "Compute a scenario's accessibility and write it to Reimagina's element_state_indicator_value, under the same rules as reimagina_scenario_indicators. Built-form values are not touched.",
+      "inputs": {
+        "blocks": {
+          "arguments": {},
+          "output": "reimagina_accessibility_blocks"
+        },
+        "lots": {
+          "arguments": {},
+          "output": "reimagina_accessibility_lots"
+        }
+      },
+      "name": "reimagina_scenario_accessibility",
+      "outputs": {
+        "reimagina_scenario_accessibility": {
+          "columns": [
+            {
+              "description": "Blocks and lots of the scenario.",
+              "name": "elements",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Values inserted or changed; unchanged values are not rewritten.",
+              "name": "values_written",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Scenario values removed because they match the baseline, are empty in a baseline scenario, or belong to an absent element.",
+              "name": "values_cleared",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Whether the changes were rolled back.",
+              "name": "dry_run",
+              "nullable": false,
+              "type": "boolean",
+              "unit": null
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "WriteParameters": {
+            "additionalProperties": false,
+            "description": "Scenario to write, with exe_reimagina's job options.",
+            "properties": {
+              "dry_run": {
+                "default": false,
+                "description": "Compute and count the changes, then roll them back.",
+                "title": "Dry Run",
+                "type": "boolean"
+              },
+              "full": {
+                "default": false,
+                "description": "Send every value instead of only those a fork may have changed. Slower; for after the baseline's values were computed another way.",
+                "title": "Full",
+                "type": "boolean"
+              },
+              "job_run_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "UUID of the Reimagina job_run that requested this run; recorded on written values when that job_run exists.",
+                "title": "Job Run Id"
+              },
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id"
+            ],
+            "title": "WriteParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/WriteParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_scenario_accessibility_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "Compute a scenario's built-form indicators and write them to Reimagina's element_state_indicator_value. Only keys active in indicator_catalog are written; a fork stores only values that differ from its baseline; unchanged values are not rewritten, so repeating it changes nothing. Accessibility values are not touched.",
+      "inputs": {
+        "blocks": {
+          "arguments": {},
+          "output": "reimagina_built_form_blocks"
+        },
+        "lots": {
+          "arguments": {},
+          "output": "reimagina_built_form_lots"
+        }
+      },
+      "name": "reimagina_scenario_indicators",
+      "outputs": {
+        "reimagina_scenario_indicators": {
+          "columns": [
+            {
+              "description": "Blocks and lots of the scenario.",
+              "name": "elements",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Values inserted or changed; unchanged values are not rewritten.",
+              "name": "values_written",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Scenario values removed because they match the baseline, are empty in a baseline scenario, or belong to an absent element.",
+              "name": "values_cleared",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Whether the changes were rolled back.",
+              "name": "dry_run",
+              "nullable": false,
+              "type": "boolean",
+              "unit": null
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "WriteParameters": {
+            "additionalProperties": false,
+            "description": "Scenario to write, with exe_reimagina's job options.",
+            "properties": {
+              "dry_run": {
+                "default": false,
+                "description": "Compute and count the changes, then roll them back.",
+                "title": "Dry Run",
+                "type": "boolean"
+              },
+              "full": {
+                "default": false,
+                "description": "Send every value instead of only those a fork may have changed. Slower; for after the baseline's values were computed another way.",
+                "title": "Full",
+                "type": "boolean"
+              },
+              "job_run_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "UUID of the Reimagina job_run that requested this run; recorded on written values when that job_run exists.",
+                "title": "Job Run Id"
+              },
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id"
+            ],
+            "title": "WriteParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/WriteParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_scenario_indicators_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
       "description": "Acquire a scenario's present elements with an amenity_type.",
       "inputs": {},
       "name": "reimagina_scenario_pois",
@@ -1642,23 +1862,15 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Compute a scenario's built-form and accessibility indicators and write them to Reimagina's element_state_indicator_value in one transaction, as exe_reimagina's model job does. Only keys active in indicator_catalog are written; a fork stores only values that differ from its baseline; unchanged values are not rewritten, so repeating it changes nothing.",
+      "description": "Compute and write a scenario's built-form indicators and accessibility, as exe_reimagina's model job does: reimagina_scenario_indicators and reimagina_scenario_accessibility, each in its own transaction. The result adds up both.",
       "inputs": {
-        "accessibility_blocks": {
+        "accessibility": {
           "arguments": {},
-          "output": "reimagina_accessibility_blocks"
+          "output": "reimagina_scenario_accessibility"
         },
-        "accessibility_lots": {
+        "indicators": {
           "arguments": {},
-          "output": "reimagina_accessibility_lots"
-        },
-        "built_form_blocks": {
-          "arguments": {},
-          "output": "reimagina_built_form_blocks"
-        },
-        "built_form_lots": {
-          "arguments": {},
-          "output": "reimagina_built_form_lots"
+          "output": "reimagina_scenario_indicators"
         }
       },
       "name": "reimagina_scenario_write",
@@ -1708,6 +1920,12 @@
                 "default": false,
                 "description": "Compute and count the changes, then roll them back.",
                 "title": "Dry Run",
+                "type": "boolean"
+              },
+              "full": {
+                "default": false,
+                "description": "Send every value instead of only those a fork may have changed. Slower; for after the baseline's values were computed another way.",
+                "title": "Full",
                 "type": "boolean"
               },
               "job_run_id": {

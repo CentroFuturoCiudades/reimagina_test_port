@@ -22,13 +22,15 @@ flowchart LR
     n5["<b>Metric: reimagina_lot_built_form</b><br/><br/><b>Inputs</b><br/>#8226;#160;lots:#160;reimagina_scenario#46;reimagina_scenario_lots<br/><br/><b>Output: reimagina_lot_indicators</b><br/>#8226;#160;id:#160;string<br/>#8226;#160;parent_id:#160;string<br/>#8226;#160;source_record_ref:#160;string<br/>#8226;#160;cos:#160;#91;ratio#93;<br/>#8226;#160;num_levels:#160;#91;count#93;<br/>#8226;#160;cus:#160;#91;ratio#93;<br/>#8226;#160;area:#160;#91;m2#93;<br/>#8226;#160;unit_size_m2:#160;#91;m2#93;<br/>#8226;#160;num_housing_units:#160;#91;count#93;<br/>#8226;#160;population:#160;#91;count#93;<br/>#8226;#160;density:#160;number<br/>#8226;#160;Geometry:#160;geometry"]
     n6["<b>Dataset: reimagina_road_network</b><br/><br/><b>Output: reimagina_road_network_edges</b><br/>#8226;#160;from:#160;integer<br/>#8226;#160;to:#160;integer<br/>#8226;#160;distance:#160;#91;m#93;<br/>#8226;#160;two_way:#160;boolean<br/><b>Output: reimagina_road_network_nodes</b><br/>#8226;#160;id:#160;integer<br/>#8226;#160;x:#160;number<br/>#8226;#160;y:#160;number"]
     n7["<b>Dataset: reimagina_scenario</b><br/><br/><b>Output: reimagina_scenario_blocks</b><br/>#8226;#160;id:#160;string<br/>#8226;#160;parent_id:#160;string<br/>#8226;#160;source_record_ref:#160;string<br/>#8226;#160;Geometry:#160;geometry<br/><b>Output: reimagina_scenario_lots</b><br/>#8226;#160;id:#160;string<br/>#8226;#160;parent_id:#160;string<br/>#8226;#160;source_record_ref:#160;string<br/>#8226;#160;cos:#160;#91;ratio#93;<br/>#8226;#160;num_levels:#160;#91;count#93;<br/>#8226;#160;area:#160;#91;m2#93;<br/>#8226;#160;land_use:#160;string<br/>#8226;#160;unit_size_m2:#160;#91;m2#93;<br/>#8226;#160;people_per_household:#160;#91;count#93;<br/>#8226;#160;occupancy_rate:#160;#91;ratio#93;<br/>#8226;#160;Geometry:#160;geometry"]
-    n8["<b>Dataset: reimagina_scenario_pois</b><br/><br/><b>Output: reimagina_scenario_pois</b><br/>#8226;#160;id:#160;string<br/>#8226;#160;amenity_type:#160;string<br/>#8226;#160;capacity:#160;#91;count#93;<br/>#8226;#160;Geometry:#160;geometry"]
-    n9["<b>Metric: reimagina_scenario_write</b><br/><br/><b>Inputs</b><br/>#8226;#160;accessibility_blocks:#160;reimagina_accessibility#46;reimagina_accessibility_blocks<br/>#8226;#160;accessibility_lots:#160;reimagina_accessibility#46;reimagina_accessibility_lots<br/>#8226;#160;built_form_blocks:#160;reimagina_built_form#46;reimagina_built_form_blocks<br/>#8226;#160;built_form_lots:#160;reimagina_built_form#46;reimagina_built_form_lots<br/><br/><b>Output: reimagina_scenario_write</b><br/>#8226;#160;elements:#160;#91;count#93;<br/>#8226;#160;values_written:#160;#91;count#93;<br/>#8226;#160;values_cleared:#160;#91;count#93;<br/>#8226;#160;dry_run:#160;boolean"]
+    n8["<b>Metric: reimagina_scenario_accessibility</b><br/><br/><b>Inputs</b><br/>#8226;#160;blocks:#160;reimagina_accessibility#46;reimagina_accessibility_blocks<br/>#8226;#160;lots:#160;reimagina_accessibility#46;reimagina_accessibility_lots<br/><br/><b>Output: reimagina_scenario_accessibility</b><br/>#8226;#160;elements:#160;#91;count#93;<br/>#8226;#160;values_written:#160;#91;count#93;<br/>#8226;#160;values_cleared:#160;#91;count#93;<br/>#8226;#160;dry_run:#160;boolean"]
+    n9["<b>Metric: reimagina_scenario_indicators</b><br/><br/><b>Inputs</b><br/>#8226;#160;blocks:#160;reimagina_built_form#46;reimagina_built_form_blocks<br/>#8226;#160;lots:#160;reimagina_built_form#46;reimagina_built_form_lots<br/><br/><b>Output: reimagina_scenario_indicators</b><br/>#8226;#160;elements:#160;#91;count#93;<br/>#8226;#160;values_written:#160;#91;count#93;<br/>#8226;#160;values_cleared:#160;#91;count#93;<br/>#8226;#160;dry_run:#160;boolean"]
+    n10["<b>Dataset: reimagina_scenario_pois</b><br/><br/><b>Output: reimagina_scenario_pois</b><br/>#8226;#160;id:#160;string<br/>#8226;#160;amenity_type:#160;string<br/>#8226;#160;capacity:#160;#91;count#93;<br/>#8226;#160;Geometry:#160;geometry"]
+    n11["<b>Metric: reimagina_scenario_write</b><br/><br/><b>Inputs</b><br/>#8226;#160;accessibility:#160;reimagina_scenario_accessibility#46;reimagina_scenario_accessibility<br/>#8226;#160;indicators:#160;reimagina_scenario_indicators#46;reimagina_scenario_indicators<br/><br/><b>Output: reimagina_scenario_write</b><br/>#8226;#160;elements:#160;#91;count#93;<br/>#8226;#160;values_written:#160;#91;count#93;<br/>#8226;#160;values_cleared:#160;#91;count#93;<br/>#8226;#160;dry_run:#160;boolean"]
     n4 -->|"reimagina_built_form_blocks #8594; blocks"| n0
     n6 -->|"reimagina_road_network_edges #8594; edges"| n0
     n4 -->|"reimagina_built_form_lots #8594; lots"| n0
     n6 -->|"reimagina_road_network_nodes #8594; nodes"| n0
-    n8 -->|"reimagina_scenario_pois #8594; pois"| n0
+    n10 -->|"reimagina_scenario_pois #8594; pois"| n0
     n1 -->|"reimagina_baseline_blocks #8594; blocks"| n2
     n1 -->|"reimagina_baseline_lots #8594; lots"| n2
     n1 -->|"reimagina_baseline_blocks #8594; blocks"| n3
@@ -36,8 +38,10 @@ flowchart LR
     n7 -->|"reimagina_scenario_blocks #8594; blocks"| n4
     n5 -->|"reimagina_lot_indicators #8594; lots"| n4
     n7 -->|"reimagina_scenario_lots #8594; lots"| n5
-    n0 -->|"reimagina_accessibility_blocks #8594; accessibility_blocks"| n9
-    n0 -->|"reimagina_accessibility_lots #8594; accessibility_lots"| n9
-    n4 -->|"reimagina_built_form_blocks #8594; built_form_blocks"| n9
-    n4 -->|"reimagina_built_form_lots #8594; built_form_lots"| n9
+    n0 -->|"reimagina_accessibility_blocks #8594; blocks"| n8
+    n0 -->|"reimagina_accessibility_lots #8594; lots"| n8
+    n4 -->|"reimagina_built_form_blocks #8594; blocks"| n9
+    n4 -->|"reimagina_built_form_lots #8594; lots"| n9
+    n8 -->|"reimagina_scenario_accessibility #8594; accessibility"| n11
+    n9 -->|"reimagina_scenario_indicators #8594; indicators"| n11
 ```

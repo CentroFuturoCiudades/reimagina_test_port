@@ -584,6 +584,13 @@ class WriteParameters(ScenarioParameters):
             "written values when that job_run exists."
         ),
     )
+    full: bool = Field(
+        default=False,
+        description=(
+            "Send every value instead of only those a fork may have changed. "
+            "Slower; for after the baseline's values were computed another way."
+        ),
+    )
 
 
 WRITE_DECLARATION = TableOutput(
@@ -619,46 +626,48 @@ WRITE_DECLARATION = TableOutput(
         ),
     ]
 )
+BUILT_FORM_KEYS = dict.fromkeys(UNITS, "number")
+ACCESSIBILITY_WRITE_KEYS = {
+    key: "text" if key == "farthest_amenity" else "number" for key in ACCESSIBILITY_KEYS
+}
 
 
-def write_scenario(
+def write_group(
     parameters: WriteParameters,
-    tables: dict[str, gpd.GeoDataFrame],
+    lots: gpd.GeoDataFrame,
+    blocks: gpd.GeoDataFrame,
+    keys: dict[str, str],
+    *,
+    inherited: bool,
+    node: str,
     log: Any = logger,
 ) -> pd.DataFrame:
-    """Write built-form and accessibility values in one transaction."""
-    keys = {
-        key: "text" if key == "farthest_amenity" else "number"
-        for key in [*UNITS, *ACCESSIBILITY_KEYS]
-    }
+    """Write one group of keys (built-form or accessibility) in its own transaction."""
     with timed("prepare values", log):
-        elements, values = writer.element_values(
+        values = pd.concat(
             [
-                ("lot", tables["built_form_lots"]),
-                ("lot", tables["accessibility_lots"]),
-                ("block", tables["built_form_blocks"]),
-                ("block", tables["accessibility_blocks"]),
+                writer.long_values(lots, "lot", keys),
+                writer.long_values(blocks, "block", keys),
             ],
-            keys,
+            ignore_index=True,
         )
     try:
         written, cleared = writer.write_indicators(
             parameters.scenario_id,
             values,
-            elements,
             keys,
+            inherited=inherited,
+            full=parameters.full,
             job_run_id=parameters.job_run_id,
             dry_run=parameters.dry_run,
             log=log,
         )
     except writer.ScenarioNotFoundError as exc:
-        raise MetricInputError(
-            "reimagina_scenario_write", "parameters.scenario_id", str(exc)
-        ) from exc
+        raise MetricInputError(node, "parameters.scenario_id", str(exc)) from exc
     return pd.DataFrame(
         [
             {
-                "elements": len(elements),
+                "elements": len(lots) + len(blocks),
                 "values_written": written,
                 "values_cleared": cleared,
                 "dry_run": parameters.dry_run,
@@ -668,40 +677,103 @@ def write_scenario(
 
 
 @metric(
-    name="reimagina_scenario_write",
+    name="reimagina_scenario_indicators",
     description=(
-        "Compute a scenario's built-form and accessibility indicators and write "
-        "them to Reimagina's element_state_indicator_value in one transaction, as "
-        "exe_reimagina's model job does. Only keys active in indicator_catalog are "
+        "Compute a scenario's built-form indicators and write them to Reimagina's "
+        "element_state_indicator_value. Only keys active in indicator_catalog are "
         "written; a fork stores only values that differ from its baseline; "
-        "unchanged values are not rewritten, so repeating it changes nothing."
+        "unchanged values are not rewritten, so repeating it changes nothing. "
+        "Accessibility values are not touched."
     ),
     inputs={
-        "built_form_lots": Dependency("reimagina_built_form_lots"),
-        "built_form_blocks": Dependency("reimagina_built_form_blocks"),
-        "accessibility_lots": Dependency("reimagina_accessibility_lots"),
-        "accessibility_blocks": Dependency("reimagina_accessibility_blocks"),
+        "lots": Dependency("reimagina_built_form_lots"),
+        "blocks": Dependency("reimagina_built_form_blocks"),
+    },
+    outputs={"reimagina_scenario_indicators": WRITE_DECLARATION},
+)
+def scenario_indicators(
+    parameters: WriteParameters,
+    lots: gpd.GeoDataFrame,
+    blocks: gpd.GeoDataFrame,
+    context: RunContext,
+) -> pd.DataFrame:
+    """Built-form values, in their own transaction."""
+    return write_group(
+        parameters,
+        lots,
+        blocks,
+        BUILT_FORM_KEYS,
+        inherited=False,
+        node="reimagina_scenario_indicators",
+        log=context.logger,
+    )
+
+
+@metric(
+    name="reimagina_scenario_accessibility",
+    description=(
+        "Compute a scenario's accessibility and write it to Reimagina's "
+        "element_state_indicator_value, under the same rules as "
+        "reimagina_scenario_indicators. Built-form values are not touched."
+    ),
+    inputs={
+        "lots": Dependency("reimagina_accessibility_lots"),
+        "blocks": Dependency("reimagina_accessibility_blocks"),
+    },
+    outputs={"reimagina_scenario_accessibility": WRITE_DECLARATION},
+)
+def scenario_accessibility(
+    parameters: WriteParameters,
+    lots: gpd.GeoDataFrame,
+    blocks: gpd.GeoDataFrame,
+    context: RunContext,
+) -> pd.DataFrame:
+    """Accessibility values (lots repeat their block's), in their own transaction."""
+    return write_group(
+        parameters,
+        lots,
+        blocks,
+        ACCESSIBILITY_WRITE_KEYS,
+        inherited=True,
+        node="reimagina_scenario_accessibility",
+        log=context.logger,
+    )
+
+
+@metric(
+    name="reimagina_scenario_write",
+    description=(
+        "Compute and write a scenario's built-form indicators and accessibility, "
+        "as exe_reimagina's model job does: reimagina_scenario_indicators and "
+        "reimagina_scenario_accessibility, each in its own transaction. The result "
+        "adds up both."
+    ),
+    inputs={
+        "indicators": Dependency("reimagina_scenario_indicators"),
+        "accessibility": Dependency("reimagina_scenario_accessibility"),
     },
     outputs={"reimagina_scenario_write": WRITE_DECLARATION},
 )
 def scenario_write(
     parameters: WriteParameters,
-    built_form_lots: gpd.GeoDataFrame,
-    built_form_blocks: gpd.GeoDataFrame,
-    accessibility_lots: gpd.GeoDataFrame,
-    accessibility_blocks: gpd.GeoDataFrame,
-    context: RunContext,
+    indicators: pd.DataFrame,
+    accessibility: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Final node: the scenario's summary row."""
-    return write_scenario(
-        parameters,
-        {
-            "built_form_lots": built_form_lots,
-            "built_form_blocks": built_form_blocks,
-            "accessibility_lots": accessibility_lots,
-            "accessibility_blocks": accessibility_blocks,
-        },
-        context.logger,
+    """Final node: both writes' summary in one row."""
+    first, second = indicators.iloc[0], accessibility.iloc[0]
+    return pd.DataFrame(
+        [
+            {
+                "elements": int(first["elements"]),
+                "values_written": int(
+                    first["values_written"] + second["values_written"]
+                ),
+                "values_cleared": int(
+                    first["values_cleared"] + second["values_cleared"]
+                ),
+                "dry_run": parameters.dry_run,
+            }
+        ]
     )
 
 
@@ -914,6 +986,8 @@ def create_plugin() -> PluginDefinition:
                 "reimagina_road_network_nodes",
                 "reimagina_road_network_edges",
             ),
+            scenario_indicators,
+            scenario_accessibility,
             scenario_write,
             baseline_dataset,
             baseline_elements,

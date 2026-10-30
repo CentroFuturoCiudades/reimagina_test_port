@@ -439,15 +439,21 @@ def test_fork_accessibility(dsn):
     assert lots[SHOP]["distance_to_park"] == blocks[BLOCK]["distance_to_park"]
 
 
-def write(scenario_id: str, **options) -> dict:
+def run_metric(name: str, scenario_id: str, **options) -> dict:
     runner = LocalRunner.from_definitions(
         {"reimagina-test-port": plugin.create_plugin()}
     )
-    result = runner.run(
-        "reimagina_scenario_write",
-        {"parameters": {"scenario_id": scenario_id, **options}},
-    )
-    return result["reimagina_scenario_write"].iloc[0].to_dict()
+    result = runner.run(name, {"parameters": {"scenario_id": scenario_id, **options}})
+    return result[name].iloc[0].to_dict()
+
+
+def write(scenario_id: str, **options) -> dict:
+    result = run_metric("reimagina_scenario_write", scenario_id, **options)
+    # Sending only what may have changed leaves what sending everything would.
+    check = run_metric("reimagina_scenario_write", scenario_id, full=True, dry_run=True)
+    if not result["dry_run"]:
+        assert (check["values_written"], check["values_cleared"]) == (0, 0)
+    return result
 
 
 def stored(dsn: str, scenario_id: str) -> dict:
@@ -520,6 +526,25 @@ def test_write_clears_values_back_to_baseline(dsn):
     assert (SHOP, "num_housing_units") not in fork
 
 
+def test_write_after_reverting_a_moved_lot(dsn):
+    # The fork moved HOUSE to BLOCK_2; undoing that leaves its fork values stale.
+    write(BASELINE)
+    write(FORK)
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            "DELETE FROM reimagina_urbano.element_state "
+            "WHERE scenario_id = %s AND element_id = %s",
+            (FORK, HOUSE),
+        )
+    write(FORK)  # write() checks the result against a full write
+    # Back in BLOCK, the house repeats that block's fork accessibility.
+    values = stored(dsn, FORK)
+    access = {k for k in plugin.ACCESSIBILITY_KEYS}
+    house = {k: v[:2] for (e, k), v in values.items() if e == HOUSE and k in access}
+    block = {k: v[:2] for (e, k), v in values.items() if e == BLOCK and k in access}
+    assert house == block
+
+
 def test_dry_run_and_job_run(dsn):
     dry = write(BASELINE, dry_run=True)
     assert dry["dry_run"]
@@ -555,10 +580,14 @@ def test_write_checks_the_indicator_catalog(dsn):
             "UPDATE reimagina_urbano.indicator_catalog SET value_type = 'number' "
             "WHERE key = 'farthest_amenity' AND element_type = 'lot'"
         )
+    # Built-form and accessibility are checked and written separately.
     with pytest.raises(GraphExecutionError) as failure:
         write(BASELINE)
     message = str(failure.value.__cause__)
     assert "missing block.cus (number)" in message
+    with pytest.raises(GraphExecutionError) as failure:
+        run_metric("reimagina_scenario_accessibility", BASELINE)
+    message = str(failure.value.__cause__)
     assert "lot.farthest_amenity is number, expected text" in message
     assert stored(dsn, BASELINE) == {}
 
