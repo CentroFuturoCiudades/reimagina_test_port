@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 class _Timer:
     """Logs each stage's duration (s) and a final summary."""
 
-    def __init__(self, label: str) -> None:
-        self.label, self.stages = label, {}
+    def __init__(self, label: str, log: Any) -> None:
+        self.label, self.log, self.stages = label, log, {}
         self.start = self.last = time.perf_counter()
 
     def __call__(self, stage: str) -> None:
@@ -36,7 +36,7 @@ class _Timer:
 
     def done(self, **counts: int) -> None:
         total = round(time.perf_counter() - self.start, 2)
-        logger.info("%s: %ss %s %s", self.label, total, self.stages, counts)
+        self.log.info("%s: %ss %s %s", self.label, total, self.stages, counts)
 
 
 # Decimals persisted, as reimagina-lyra ``base.INDICATOR_DECIMALS``; a fork's values
@@ -207,6 +207,7 @@ def write_indicators(
     *,
     job_run_id: str | None = None,
     dry_run: bool = False,
+    log: Any = logger,
 ) -> tuple[int, int]:
     """Write the owned ``keys`` (``{key: kind}``) of ``elements`` in one transaction.
 
@@ -217,7 +218,7 @@ def write_indicators(
     Returns:
         ``(values_written, values_cleared)``.
     """
-    timer = _Timer(f"write_indicators {scenario_id}")
+    timer = _Timer(f"write_indicators {scenario_id}", log)
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
         cur.execute(
             sql.SQL(
