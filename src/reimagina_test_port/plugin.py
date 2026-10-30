@@ -20,6 +20,7 @@ from lyra.sdk import (
     Dependency,
     MetricParameters,
     PluginDefinition,
+    RunContext,
     TableColumn,
     TableOutput,
     Unit,
@@ -37,11 +38,11 @@ logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def timed(stage: str) -> Iterator[None]:
-    """Log how long a stage of a job took."""
+def timed(stage: str, log: Any = logger) -> Iterator[None]:
+    """Log how long a stage of a job took (to the job's logger in Lyra)."""
     start = time.perf_counter()
     yield
-    logger.info("%s: %.2fs", stage, time.perf_counter() - start)
+    log.info("%s: %.2fs", stage, time.perf_counter() - start)
 
 
 IDENTITY = ["id", "parent_id", "source_record_ref"]
@@ -309,9 +310,11 @@ def read_scenario(scenario_id: str) -> dict[str, gpd.GeoDataFrame]:
         "reimagina_scenario_blocks": declaration(source=True, blocks=True),
     },
 )
-def scenario_dataset(parameters: ScenarioParameters) -> dict[str, gpd.GeoDataFrame]:
+def scenario_dataset(
+    parameters: ScenarioParameters, context: DatasetContext
+) -> dict[str, gpd.GeoDataFrame]:
     """Acquire both tables once per graph invocation."""
-    with timed("read scenario"):
+    with timed("read scenario", context.logger):
         return read_scenario(parameters.scenario_id)
 
 
@@ -358,14 +361,19 @@ def built_form_metrics(
 ) -> list:
     """Built-form metrics over one source's lot and block outputs."""
 
-    def lot_handler(parameters, lots: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-        with timed("lot built-form"):
+    def lot_handler(
+        parameters, lots: gpd.GeoDataFrame, context: RunContext
+    ) -> gpd.GeoDataFrame:
+        with timed("lot built-form", context.logger):
             return lot_built_form(lots)
 
     def block_handler(
-        parameters, lots: gpd.GeoDataFrame, blocks: gpd.GeoDataFrame
+        parameters,
+        lots: gpd.GeoDataFrame,
+        blocks: gpd.GeoDataFrame,
+        context: RunContext,
     ) -> dict[str, gpd.GeoDataFrame]:
-        with timed("block built-form"):
+        with timed("block built-form", context.logger):
             return built_form(lots, blocks)
 
     lot_handler.__annotations__["parameters"] = parameters_type
@@ -431,10 +439,12 @@ def prepared_accessibility(parameters: SnapshotParameters) -> dict[str, pd.DataF
     description="Acquire a scenario's present elements with an amenity_type.",
     outputs={"reimagina_scenario_pois": POIS_DECLARATION},
 )
-def scenario_pois(parameters: ScenarioParameters) -> gpd.GeoDataFrame:
+def scenario_pois(
+    parameters: ScenarioParameters, context: DatasetContext
+) -> gpd.GeoDataFrame:
     """Destinations of the accessibility model, with baseline fallback."""
     try:
-        with timed("read pois"):
+        with timed("read pois", context.logger):
             return scenario.read_pois(parameters.scenario_id)
     except scenario.ScenarioNotFoundError as exc:
         raise MetricInputError(
@@ -471,7 +481,7 @@ def road_network(
         raise error(
             f"The project of scenario {parameters.scenario_id} has no road_network_uri."
         )
-    with timed("road network"):
+    with timed("road network", context.logger):
         tables = network.read_network(network.download(uri, context.temp_dir))
     return {
         "reimagina_road_network_nodes": tables["nodes"],
@@ -500,12 +510,13 @@ def accessibility_tables(
     pois: gpd.GeoDataFrame,
     nodes: pd.DataFrame,
     edges: pd.DataFrame,
+    log: Any = logger,
 ) -> dict[str, gpd.GeoDataFrame]:
     """Per block, inherited by each lot of that block."""
     # pandana only where accessibility runs.
     from reimagina_test_port import accessibility
 
-    with timed("accessibility"):
+    with timed("accessibility", log):
         graph = accessibility.build_network(nodes, edges)
         by_block = accessibility.accessibility_by_block(blocks, pois, graph)
     return {
@@ -531,8 +542,9 @@ def accessibility_metric(
         pois: gpd.GeoDataFrame,
         nodes: pd.DataFrame,
         edges: pd.DataFrame,
+        context: RunContext,
     ) -> dict[str, gpd.GeoDataFrame]:
-        return accessibility_tables(lots, blocks, pois, nodes, edges)
+        return accessibility_tables(lots, blocks, pois, nodes, edges, context.logger)
 
     handler.__annotations__["parameters"] = parameters_type
     return metric(
@@ -612,13 +624,14 @@ WRITE_DECLARATION = TableOutput(
 def write_scenario(
     parameters: WriteParameters,
     tables: dict[str, gpd.GeoDataFrame],
+    log: Any = logger,
 ) -> pd.DataFrame:
     """Write built-form and accessibility values in one transaction."""
     keys = {
         key: "text" if key == "farthest_amenity" else "number"
         for key in [*UNITS, *ACCESSIBILITY_KEYS]
     }
-    with timed("prepare values"):
+    with timed("prepare values", log):
         elements, values = writer.element_values(
             [
                 ("lot", tables["built_form_lots"]),
@@ -636,6 +649,7 @@ def write_scenario(
             keys,
             job_run_id=parameters.job_run_id,
             dry_run=parameters.dry_run,
+            log=log,
         )
     except writer.ScenarioNotFoundError as exc:
         raise MetricInputError(
@@ -676,6 +690,7 @@ def scenario_write(
     built_form_blocks: gpd.GeoDataFrame,
     accessibility_lots: gpd.GeoDataFrame,
     accessibility_blocks: gpd.GeoDataFrame,
+    context: RunContext,
 ) -> pd.DataFrame:
     """Final node: the scenario's summary row."""
     return write_scenario(
@@ -686,6 +701,7 @@ def scenario_write(
             "accessibility_lots": accessibility_lots,
             "accessibility_blocks": accessibility_blocks,
         },
+        context.logger,
     )
 
 
