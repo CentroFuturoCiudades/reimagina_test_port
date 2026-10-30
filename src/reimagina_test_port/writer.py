@@ -326,18 +326,22 @@ def write_indicators(
                 job_run_id = None
         required = {
             (element_type, key): kind
-            for element_type in sorted(set(values["element_type"]))
+            for element_type in sorted(pd.unique(values["element_type"]))
             for key, kind in keys.items()
         }
         indicator_ids = {
             pair: row[0]
             for pair, row in contract.check(cur, "indicator_catalog", required).items()
         }
+        # Vectorized lookup: a Python loop over millions of rows took ~30 s.
+        lookup = pd.Series(
+            list(indicator_ids.values()),
+            index=pd.MultiIndex.from_tuples(list(indicator_ids)),
+        )
         values = values.assign(
-            indicator_id=[
-                indicator_ids[pair]
-                for pair in zip(values["element_type"], values["key"], strict=True)
-            ]
+            indicator_id=lookup.reindex(
+                pd.MultiIndex.from_arrays([values["element_type"], values["key"]])
+            ).to_numpy()
         )
         timer("catalog")
         if baseline_id is not None and not full:
