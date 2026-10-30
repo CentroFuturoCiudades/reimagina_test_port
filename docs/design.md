@@ -9,9 +9,10 @@ that metric's result and on the source block output, aggregates lots by parent
 ID, and returns both tables. `reimagina_accessibility` depends on both
 built-form tables and on two more datasets: `reimagina_scenario_pois` (present
 elements with an `amenity_type`) and `reimagina_road_network` (the project's road
-network as node and edge tables). `reimagina_scenario_write` is the final node:
-it depends on all four built-form and accessibility tables and writes them to
-Reimagina's database. `reimagina_baseline_elements` returns a city's baseline
+network as node and edge tables). `reimagina_scenario_indicators` writes the
+built-form tables and `reimagina_scenario_accessibility` the accessibility
+tables to Reimagina's database; `reimagina_scenario_write` is the final node and
+runs both. `reimagina_baseline_elements` returns a city's baseline
 lots and blocks built from the data lake by the `reimagina_baseline` dataset;
 nothing is written. `reimagina_baseline_write` writes them into a baseline
 scenario. `create_plugin()` registers this graph.
@@ -86,11 +87,13 @@ impedance as `distance`). A project without the URI fails as an input error.
 
 ## Writer
 
-Ported from reimagina-lyra `store.write_indicators`. Built-form and
-accessibility values go to `element_state_indicator_value` in one transaction,
-only for keys active in `indicator_catalog` (others, such as the
-`accessibility_<amenity>` keys missing from the catalog, are skipped). Floats
-are rounded to 4 decimals, so a fork compares exactly against its baseline.
+Ported from reimagina-lyra `store.write_indicators`. Values go to
+`element_state_indicator_value` in two transactions, as reimagina-lyra's model
+job does: `reimagina_scenario_indicators` writes the built-form keys and
+`reimagina_scenario_accessibility` the accessibility keys; each leaves the
+other's keys untouched, and `reimagina_scenario_write` runs both. Every key
+must be active in `indicator_catalog` (see the catalog contract). Floats are
+rounded to 4 decimals, so a fork compares exactly against its baseline.
 
 A fork stores only values that differ from its baseline (same tolerance as the
 API). Owned keys without a value are sent as NULL, so a fork can hide a
@@ -99,9 +102,21 @@ baseline again, or belong to an element no longer present, are removed. Rows
 whose stored value is unchanged are not rewritten and keep their `job_run_id`
 and `computed_at`, so writing the same scenario again changes nothing.
 
+For a fork, values that cannot have changed are not sent to the database at
+all. A lot the fork did not edit (no `element_state` row) and that has no stored
+fork value has its baseline value: for built-form that is what it computes, and
+for accessibility it is its block's baseline value, so only lots whose new value
+differs from that are sent. Blocks are always sent. For one edited lot this
+sends a few hundred thousand rows instead of ~14.6 million. `full` sends
+everything, for when the baseline's stored values were computed another way;
+tests check after each write that `full` would change nothing.
+
 `job_run_id` is recorded only when that `job_run` exists. `dry_run` computes
-and counts the changes, then rolls the transaction back. The result is one row:
-`elements`, `values_written`, `values_cleared`, `dry_run`.
+and counts the changes, then rolls the transaction back. Each write returns one
+row: `elements`, `values_written`, `values_cleared`, `dry_run`;
+`reimagina_scenario_write` adds up both. Each node logs its duration and the
+writer its stages (`select`, `copy`, `compare`, `delete`, `upsert`) through the
+job's logger.
 
 ## Baseline from the data lake
 

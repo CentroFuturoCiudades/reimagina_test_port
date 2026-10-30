@@ -83,23 +83,33 @@ _ATTRIBUTES_QUERY = sql.SQL(
 ).format(**_TABLES)
 
 # Accessibility destinations: present elements whose effective amenity_type is set.
+# Starts from the amenity_type values (a few thousand) and only then looks up their
+# state, instead of resolving every element of the scenario first.
 _POIS_QUERY = sql.SQL(
-    _STATES
-    + """,
-    amenity AS (
+    """
+    WITH amenity AS (
         SELECT DISTINCT ON (v.element_id) v.element_id, v.value_text
         FROM {element_state_attribute_value} v
-        JOIN {attribute_catalog} ac ON ac.id = v.attribute_id
         WHERE v.scenario_id IN (%(scenario)s::uuid, %(baseline)s::uuid)
-          AND ac.key = 'amenity_type'
+          AND v.attribute_id IN (
+              SELECT id FROM {attribute_catalog} WHERE key = 'amenity_type'
+          )
         ORDER BY v.element_id, (v.scenario_id = %(scenario)s::uuid) DESC
+    ),
+    state AS (
+        SELECT DISTINCT ON (es.element_id) es.element_id, es.geometry, es.deleted_at
+        FROM {element_state} es
+        JOIN amenity a ON a.element_id = es.element_id
+        WHERE es.scenario_id IN (%(scenario)s::uuid, %(baseline)s::uuid)
+        ORDER BY es.element_id, (es.scenario_id = %(scenario)s::uuid) DESC
     )
     SELECT st.element_id::text AS id, a.value_text AS amenity_type,
            NULL::double precision AS capacity, ST_AsBinary(st.geometry) AS geometry
-    FROM states st
-    JOIN {elements} e ON e.id = st.element_id
+    FROM state st
     JOIN amenity a ON a.element_id = st.element_id
-    WHERE e.deleted_at IS NULL AND COALESCE(a.value_text, '') <> ''
+    JOIN {elements} e ON e.id = st.element_id
+    WHERE st.deleted_at IS NULL AND e.deleted_at IS NULL
+      AND COALESCE(a.value_text, '') <> ''
     ORDER BY 1
     """
 ).format(**_TABLES)
