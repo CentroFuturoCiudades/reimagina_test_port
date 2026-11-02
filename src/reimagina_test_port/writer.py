@@ -5,9 +5,8 @@ that differ from its baseline; rows whose stored value is unchanged are not
 rewritten, so running it again for the same scenario changes nothing.
 
 For a fork, lot values that cannot have changed are not sent at all: a lot the
-fork did not edit and has no stored value for has its baseline value, which for
-built-form is what it computes and, for values inherited from its block, is its
-block's baseline value. ``full`` sends everything.
+fork did not edit and has no stored value for has its baseline value, which is
+what it computes. ``full`` sends everything.
 """
 
 import logging
@@ -194,26 +193,6 @@ def long_values(
     )
 
 
-def same_value(a_num, a_text, b_num, b_text) -> np.ndarray:
-    """Vectorized ``_SAME_VALUE``: equal text and numbers within the API tolerance."""
-    a_num, b_num = np.asarray(a_num, float), np.asarray(b_num, float)
-    a_text = pd.Series(a_text, dtype=object).where(
-        pd.notna(pd.Series(a_text, dtype=object)), None
-    )
-    b_text = pd.Series(b_text, dtype=object).where(
-        pd.notna(pd.Series(b_text, dtype=object)), None
-    )
-    text_equal = (a_text.to_numpy() == b_text.to_numpy()) | (
-        a_text.isna().to_numpy() & b_text.isna().to_numpy()
-    )
-    both_nan = np.isnan(a_num) & np.isnan(b_num)
-    with np.errstate(invalid="ignore"):
-        close = np.abs(a_num - b_num) <= np.maximum(
-            1e-12, 1e-9 * np.maximum(np.abs(a_num), np.abs(b_num))
-        )
-    return text_equal & (both_nan | np.nan_to_num(close, nan=False).astype(bool))
-
-
 def _rows(
     cur: psycopg.Cursor, query: str, params: Sequence[Any], columns: list[str]
 ) -> pd.DataFrame:
@@ -227,8 +206,6 @@ def _to_send(
     scenario_id: str,
     baseline_id: str,
     indicator_ids: dict[tuple[str, str], int],
-    *,
-    inherited: bool,
 ) -> np.ndarray:
     """Mask of the fork's rows that may differ from what it shows today."""
     lots = (values["element_type"] == "lot").to_numpy()
@@ -248,35 +225,7 @@ def _to_send(
     )
     stored_pairs = pd.MultiIndex.from_frame(stored)
     pairs = pd.MultiIndex.from_frame(values[["id", "indicator_id"]])
-    send = ~lots | values["id"].isin(edited["id"]).to_numpy() | pairs.isin(stored_pairs)
-    if inherited:
-        # A lot shows its block's baseline value; send it when the new one differs.
-        block_ids = {k: i for (t, k), i in indicator_ids.items() if t == "block"}
-        base = _rows(
-            cur,
-            "SELECT element_id::text, indicator_id, value_num, value_text "
-            "FROM {element_state_indicator_value} "
-            "WHERE scenario_id = %s::uuid AND indicator_id = ANY(%s)",
-            (baseline_id, sorted(block_ids.values())),
-            ["parent_id", "block_indicator_id", "base_num", "base_text"],
-        )
-        candidates = values.loc[
-            lots & ~send, ["parent_id", "key", "value_num", "value_text"]
-        ]
-        candidates = candidates.assign(
-            block_indicator_id=candidates["key"].map(block_ids)
-        )
-        merged = candidates.merge(
-            base, on=["parent_id", "block_indicator_id"], how="left"
-        )
-        changed = ~same_value(
-            merged["value_num"],
-            merged["value_text"],
-            merged["base_num"],
-            merged["base_text"],
-        )
-        send[candidates.index.to_numpy()[changed]] = True
-    return send
+    return ~lots | values["id"].isin(edited["id"]).to_numpy() | pairs.isin(stored_pairs)
 
 
 def write_indicators(
@@ -284,7 +233,6 @@ def write_indicators(
     values: pd.DataFrame,
     keys: Mapping[str, str],
     *,
-    inherited: bool = False,
     full: bool = False,
     job_run_id: str | None = None,
     dry_run: bool = False,
@@ -292,8 +240,7 @@ def write_indicators(
 ) -> tuple[int, int]:
     """Write the owned ``keys`` (``{key: kind}``) of ``values`` in one transaction.
 
-    ``values`` comes from ``long_values``. ``inherited`` says lots repeat their
-    block's values (accessibility). Every key must be active in
+    ``values`` comes from ``long_values``. Every key must be active in
     ``indicator_catalog`` for each element type written (``contract.check``).
     ``job_run_id`` is recorded only when that job_run exists. A dry run computes
     the changes and rolls them back.
@@ -352,7 +299,6 @@ def write_indicators(
                     scenario_id,
                     baseline_id,
                     indicator_ids,
-                    inherited=inherited,
                 )
             ]
         timer("select")

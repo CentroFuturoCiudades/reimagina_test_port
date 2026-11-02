@@ -634,20 +634,21 @@ ACCESSIBILITY_WRITE_KEYS = {
 
 def write_group(
     parameters: WriteParameters,
-    lots: gpd.GeoDataFrame,
-    blocks: gpd.GeoDataFrame,
+    tables: dict[str, gpd.GeoDataFrame],
     keys: dict[str, str],
     *,
-    inherited: bool,
     node: str,
     log: Any = logger,
 ) -> pd.DataFrame:
-    """Write one group of keys (built-form or accessibility) in its own transaction."""
+    """Write one group of keys (built-form or accessibility) in its own transaction.
+
+    ``tables`` maps each element type written (``lot``, ``block``) to its values.
+    """
     with timed("prepare values", log):
         values = pd.concat(
             [
-                writer.long_values(lots, "lot", keys),
-                writer.long_values(blocks, "block", keys),
+                writer.long_values(table, element_type, keys)
+                for element_type, table in tables.items()
             ],
             ignore_index=True,
         )
@@ -656,7 +657,6 @@ def write_group(
             parameters.scenario_id,
             values,
             keys,
-            inherited=inherited,
             full=parameters.full,
             job_run_id=parameters.job_run_id,
             dry_run=parameters.dry_run,
@@ -667,7 +667,7 @@ def write_group(
     return pd.DataFrame(
         [
             {
-                "elements": len(lots) + len(blocks),
+                "elements": sum(len(table) for table in tables.values()),
                 "values_written": written,
                 "values_cleared": cleared,
                 "dry_run": parameters.dry_run,
@@ -700,10 +700,8 @@ def scenario_indicators(
     """Built-form values, in their own transaction."""
     return write_group(
         parameters,
-        lots,
-        blocks,
+        {"lot": lots, "block": blocks},
         BUILT_FORM_KEYS,
-        inherited=False,
         node="reimagina_scenario_indicators",
         log=context.logger,
     )
@@ -714,27 +712,22 @@ def scenario_indicators(
     description=(
         "Compute a scenario's accessibility and write it to Reimagina's "
         "element_state_indicator_value, under the same rules as "
-        "reimagina_scenario_indicators. Built-form values are not touched."
+        "reimagina_scenario_indicators. Only blocks are written: a lot's "
+        "accessibility is its block's. Built-form values are not touched."
     ),
-    inputs={
-        "lots": Dependency("reimagina_accessibility_lots"),
-        "blocks": Dependency("reimagina_accessibility_blocks"),
-    },
+    inputs={"blocks": Dependency("reimagina_accessibility_blocks")},
     outputs={"reimagina_scenario_accessibility": WRITE_DECLARATION},
 )
 def scenario_accessibility(
     parameters: WriteParameters,
-    lots: gpd.GeoDataFrame,
     blocks: gpd.GeoDataFrame,
     context: RunContext,
 ) -> pd.DataFrame:
-    """Accessibility values (lots repeat their block's), in their own transaction."""
+    """Block accessibility values, in their own transaction."""
     return write_group(
         parameters,
-        lots,
-        blocks,
+        {"block": blocks},
         ACCESSIBILITY_WRITE_KEYS,
-        inherited=True,
         node="reimagina_scenario_accessibility",
         log=context.logger,
     )

@@ -90,8 +90,10 @@ impedance as `distance`). A project without the URI fails as an input error.
 Ported from reimagina-lyra `store.write_indicators`. Values go to
 `element_state_indicator_value` in two transactions, as reimagina-lyra's model
 job does: `reimagina_scenario_indicators` writes the built-form keys and
-`reimagina_scenario_accessibility` the accessibility keys; each leaves the
-other's keys untouched, and `reimagina_scenario_write` runs both. Every key
+`reimagina_scenario_accessibility` the accessibility keys, on blocks only (a
+lot's accessibility is its block's; readers take it from the lot's
+`parent_id`); each leaves the other's keys untouched, and
+`reimagina_scenario_write` runs both. Every key
 must be active in `indicator_catalog` (see the catalog contract). Floats are
 rounded to 4 decimals, so a fork compares exactly against its baseline.
 
@@ -104,9 +106,8 @@ and `computed_at`, so writing the same scenario again changes nothing.
 
 For a fork, values that cannot have changed are not sent to the database at
 all. A lot the fork did not edit (no `element_state` row) and that has no stored
-fork value has its baseline value: for built-form that is what it computes, and
-for accessibility it is its block's baseline value, so only lots whose new value
-differs from that are sent. Blocks are always sent. For one edited lot this
+fork value has its baseline value, which is what it computes. Blocks are always
+sent. For one edited lot this
 sends a few hundred thousand rows instead of ~14.6 million. `full` sends
 everything, for when the baseline's stored values were computed another way;
 tests check after each write that `full` would change nothing.

@@ -94,8 +94,9 @@ and the following nullable numerical columns:
 `reimagina_accessibility` returns `reimagina_accessibility_lots` and
 `reimagina_accessibility_blocks` with `id`, `parent_id`, `source_record_ref`,
 geometry, `minutes` (min), `farthest_amenity`, and `accessibility_<amenity>`
-(score 0-1) and `distance_to_<amenity>` (min) for the 13 amenity types. See
-[design](design.md#accessibility).
+(score 0-1) and `distance_to_<amenity>` (min) for the 13 amenity types; lots
+repeat their block's values. `reimagina_scenario_accessibility` writes only the
+blocks. See [design](design.md#accessibility).
 
 The Python client's submission, polling, table decoding, descriptor, and download
 interfaces are demonstrated in `tests/test_client.py` with fully mocked HTTP
