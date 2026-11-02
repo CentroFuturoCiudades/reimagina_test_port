@@ -479,9 +479,13 @@ def test_write_baseline_is_idempotent(dsn):
     assert values[(BLOCK, "num_housing_units")][0] == 31
     # Baseline POIs: a clinic and a pharmacy.
     assert values[(BLOCK, "farthest_amenity")][1] in {"clinic", "pharmacy"}
-    assert values[(HOUSE, "distance_to_clinic")][0] > 0
+    assert values[(BLOCK, "distance_to_clinic")][0] > 0
     # No POI: never written.
-    assert (HOUSE, "distance_to_park") not in values
+    assert (BLOCK, "distance_to_park") not in values
+    # Accessibility is stored on blocks only; a lot shows its block's.
+    assert not any(
+        element == HOUSE and key in plugin.ACCESSIBILITY_KEYS for element, key in values
+    )
     # Null values are not stored in a baseline: the shop has no unit size.
     assert (SHOP, "unit_size_m2") not in values
     again = write(BASELINE)
@@ -537,12 +541,11 @@ def test_write_after_reverting_a_moved_lot(dsn):
             (FORK, HOUSE),
         )
     write(FORK)  # write() checks the result against a full write
-    # Back in BLOCK, the house repeats that block's fork accessibility.
+    # Lots store no accessibility, so none is left stale on the house.
     values = stored(dsn, FORK)
-    access = {k for k in plugin.ACCESSIBILITY_KEYS}
-    house = {k: v[:2] for (e, k), v in values.items() if e == HOUSE and k in access}
-    block = {k: v[:2] for (e, k), v in values.items() if e == BLOCK and k in access}
-    assert house == block
+    assert not any(
+        element == HOUSE and key in plugin.ACCESSIBILITY_KEYS for element, key in values
+    )
 
 
 def test_dry_run_and_job_run(dsn):
@@ -578,7 +581,7 @@ def test_write_checks_the_indicator_catalog(dsn):
         )
         conn.execute(
             "UPDATE reimagina_urbano.indicator_catalog SET value_type = 'number' "
-            "WHERE key = 'farthest_amenity' AND element_type = 'lot'"
+            "WHERE key = 'farthest_amenity' AND element_type = 'block'"
         )
     # Built-form and accessibility are checked and written separately.
     with pytest.raises(GraphExecutionError) as failure:
@@ -588,7 +591,7 @@ def test_write_checks_the_indicator_catalog(dsn):
     with pytest.raises(GraphExecutionError) as failure:
         run_metric("reimagina_scenario_accessibility", BASELINE)
     message = str(failure.value.__cause__)
-    assert "lot.farthest_amenity is number, expected text" in message
+    assert "block.farthest_amenity is number, expected text" in message
     assert stored(dsn, BASELINE) == {}
 
 

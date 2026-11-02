@@ -1573,15 +1573,11 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Compute a scenario's accessibility and write it to Reimagina's element_state_indicator_value, under the same rules as reimagina_scenario_indicators. Built-form values are not touched.",
+      "description": "Compute a scenario's accessibility and write it to Reimagina's element_state_indicator_value, under the same rules as reimagina_scenario_indicators. Only blocks are written: a lot's accessibility is its block's. Built-form values are not touched.",
       "inputs": {
         "blocks": {
           "arguments": {},
           "output": "reimagina_accessibility_blocks"
-        },
-        "lots": {
-          "arguments": {},
-          "output": "reimagina_accessibility_lots"
         }
       },
       "name": "reimagina_scenario_accessibility",
