@@ -124,7 +124,8 @@ job's logger.
 Adapted from reimagina-lyra `ingestion/pipeline.build_elements`, with the same
 sources (CFC lake, `DefaultAzureCredential`): INEGI 2024 urban blocks and the
 2020 census, the IMIP cadastre, the zoning normativa, Open Buildings 2.5D
-heights and the accessibility POIs. `prep.py`, `footprints.py` and
+heights and the accessibility POIs. The code lives in `ingestion/` (data only;
+indicators are computed elsewhere). `ingestion/prep.py`, `footprints.py` and
 `elements.py` are copied unchanged (excluded from ruff): blocks join census by
 CVEGEO; lots get area, normativa (containing polygon, else nearest within 3 m)
 and the block of their nearest representative point; heights give `cos`,
