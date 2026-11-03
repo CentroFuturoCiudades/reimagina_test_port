@@ -21,8 +21,8 @@ import pandas as pd
 import psycopg
 from psycopg import sql
 
-from reimagina_test_port import contract
-from reimagina_test_port.scenario import SCHEMA, resolve_dsn
+from reimagina_test_port.scenario import contract
+from reimagina_test_port.scenario.source import SCHEMA, resolve_dsn
 
 logger = logging.getLogger(__name__)
 

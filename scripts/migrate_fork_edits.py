@@ -17,7 +17,7 @@ import sys
 
 import psycopg
 
-from reimagina_test_port.scenario import resolve_dsn
+from reimagina_test_port.scenario.source import resolve_dsn
 
 MIN_IOU = 0.9
 

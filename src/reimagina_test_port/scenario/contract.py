@@ -11,7 +11,7 @@ from collections.abc import Iterable, Mapping
 import psycopg
 from psycopg import sql
 
-from reimagina_test_port.scenario import SCHEMA
+from reimagina_test_port.scenario.source import SCHEMA
 
 # Plugin kind -> catalog value types it can be stored as.
 KINDS = {"number": ("number", "integer"), "text": ("text", "enum")}

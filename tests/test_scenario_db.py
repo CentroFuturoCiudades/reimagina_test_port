@@ -20,11 +20,15 @@ from lyra.sdk.errors import MetricInputError
 from psycopg import conninfo, sql
 from shapely.geometry import box
 
-from reimagina_test_port import contract, plugin, scenario
+from reimagina_test_port import plugin
+from reimagina_test_port.common import schema
 from reimagina_test_port.indicators.accessibility import model as accessibility
 from reimagina_test_port.indicators.accessibility import nodes as accessibility_nodes
 from reimagina_test_port.ingestion import baseline_writer
 from reimagina_test_port.ingestion import nodes as ingestion_nodes
+from reimagina_test_port.scenario import contract
+from reimagina_test_port.scenario import nodes as scenario_nodes
+from reimagina_test_port.scenario import source as scenario
 
 pytestmark = pytest.mark.postgis
 ROOT = Path(__file__).resolve().parents[1]
@@ -264,7 +268,7 @@ def seed(conn, network_uri: str) -> None:
 
 def seed_catalog(conn) -> None:
     keys = [
-        *plugin.UNITS,
+        *schema.UNITS,
         "minutes",
         *accessibility_nodes.DISTANCE_KEYS,
         *accessibility_nodes.SCORE_KEYS,
@@ -297,7 +301,7 @@ def by_id(table):
 
 
 def test_baseline_tables(dsn):
-    tables = plugin.read_scenario(BASELINE)
+    tables = scenario_nodes.read_scenario(BASELINE)
     lots = tables["reimagina_scenario_lots"]
     blocks = tables["reimagina_scenario_blocks"]
     assert lots.id.tolist() == [HOUSE, SHOP, FLATS, GONE]
@@ -309,7 +313,7 @@ def test_baseline_tables(dsn):
     assert house["land_use"] == "single_family"
     assert house["occupancy_rate"] == pytest.approx(0.9)
     assert house["geometry"].bounds == pytest.approx((0, 0, 0.001, 0.001))
-    assert lots[plugin.NUMERIC_ATTRIBUTES].dtypes.eq("float64").all()
+    assert lots[schema.NUMERIC_ATTRIBUTES].dtypes.eq("float64").all()
 
 
 def test_baseline_built_form(dsn):
@@ -330,7 +334,7 @@ def test_baseline_built_form(dsn):
 
 
 def test_fork_falls_back_to_baseline(dsn):
-    tables = plugin.read_scenario(FORK)
+    tables = scenario_nodes.read_scenario(FORK)
     lots = by_id(tables["reimagina_scenario_lots"])
     # Deleted in the fork: absent; only in the fork: present.
     assert set(lots) == {HOUSE, SHOP, FLATS, NEW}
@@ -358,7 +362,7 @@ def test_fork_falls_back_to_baseline(dsn):
 
 def test_baseline_is_not_modified_by_fork(dsn):
     assert (
-        by_id(plugin.read_scenario(BASELINE)["reimagina_scenario_lots"])[SHOP][
+        by_id(scenario_nodes.read_scenario(BASELINE)["reimagina_scenario_lots"])[SHOP][
             "land_use"
         ]
         == "commerce"
@@ -704,7 +708,7 @@ def test_write_new_baseline(new_baseline, dsn):
     }
     assert counts(dsn, NEW_BASELINE) == (6, 21)
     assert counts(dsn, BASELINE) == old
-    tables = plugin.read_scenario(NEW_BASELINE)
+    tables = scenario_nodes.read_scenario(NEW_BASELINE)
     lots = by_id(tables["reimagina_scenario_lots"])
     assert lots[NEW_LOTS[0]]["num_levels"] == 2
     assert lots[NEW_LOTS[0]]["occupancy_rate"] == pytest.approx(0.9)
@@ -778,7 +782,7 @@ def test_migrate_fork_edits(new_baseline, dsn):
         assert mapping[old][3] > module.MIN_IOU
     # Only in the fork: same id.
     assert mapping[NEW][1:3] == (NEW, "same id")
-    fork = plugin.read_scenario(NEW_FORK)
+    fork = scenario_nodes.read_scenario(NEW_FORK)
     lots = by_id(fork["reimagina_scenario_lots"])
     # The shop's edit (now a house) lands on the new lot; GONE stays deleted.
     assert lots[NEW_LOTS[1]]["land_use"] == "single_family"
