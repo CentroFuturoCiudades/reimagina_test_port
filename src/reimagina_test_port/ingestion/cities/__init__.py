@@ -47,6 +47,9 @@ class CityPreset:
     # that turns them into the amenities file (raw_amenities.NORMALIZERS).
     amenities_uri: str
     amenities_normalizer: str
+    # Amenity categories taken from the amenities file only; every other category
+    # comes from the DENUE only. One source per kind, so no amenity is loaded twice.
+    amenity_file_categories: tuple[str, ...]
     # Raw INEGI DENUE of the state, filtered to the municipality: amenities and
     # establishments by the SCIAN crosswalk.
     denue_uri: str
@@ -170,6 +173,7 @@ def from_yaml(path: Path) -> CityPreset:
         year=str(heights.required("year")),
         amenities_uri=amenities_uri,
         amenities_normalizer=str(raw_amenities.required("normalizer")),
+        amenity_file_categories=tuple(map(str, raw_amenities.required("categories"))),
         denue_uri=denue_uri,
         denue_municipio=str(denue.required("municipio")),
         denue_encoding=str(denue.optional("encoding", default("denue_encoding"))),
@@ -204,6 +208,11 @@ def from_yaml(path: Path) -> CityPreset:
             f"{path.name}: sources.amenities: unknown normalizer "
             f"{preset.amenities_normalizer!r}; known: {sorted(NORMALIZERS)}"
         )
+        raise CityConfigError(msg)
+    from reimagina_test_port.ingestion.crosswalk import AMENITY_CATEGORIES
+
+    if unknown := sorted(set(preset.amenity_file_categories) - set(AMENITY_CATEGORIES)):
+        msg = f"{path.name}: sources.amenities: unknown categories {unknown}"
         raise CityConfigError(msg)
     if preset.key != path.stem:
         msg = f"{path.name}: city is {preset.key!r}, the file must be {preset.key}.yaml"

@@ -33,9 +33,15 @@ sources:
       manifests_uri: az://sandbox/projects/EXE/raw/open_buildings_temporal_data_v1_mx
   # Raw amenity layers, turned into the amenities file by the raw_amenities step's
   # normalizer: IMIP's equipment layers, one geoparquet each (edu_basica, esp_pub...).
+  # One source per kind: these categories come only from the amenities file, the
+  # rest (schools, health, care...) only from the DENUE. IMIP covers parks, sports
+  # and culture far better (366 sports and 339 culture places, against 18 and 47);
+  # the DENUE has schools with their SCIAN level and workers.
   amenities:
     uri: az://cleaned/por_estado/02_baja_california/002_mexicali/imip/equipamiento
-    params: {normalizer: imip}
+    params:
+      normalizer: imip
+      categories: [public_space, sports_recreation, cultural_facility]
   denue:   # INEGI DENUE 05_2025 as published: amenities and establishments by the SCIAN crosswalk
     uri: az://raw/inegi/denue/02_baja_california/denue_02_0525_csv/conjunto_de_datos/denue_inegi_02_.csv
     params: {municipio: Mexicali, encoding: latin-1}

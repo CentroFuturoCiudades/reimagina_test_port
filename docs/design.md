@@ -97,8 +97,8 @@ and establishment elements, at their point. Their `category` and `scian_code` gi
 one of the model's 13 types (`vocabulary.amenity_type_of`): the longest SCIAN
 prefix first (`61112` primary school, `46411` pharmacy, `512130` cinema...), else
 the category (`public_space` park, `sports_recreation` gym, `cultural_facility`
-recreation). Schools without a SCIAN code (the amenities file's) are left out, as
-the DENUE already has them. Elements with no type are ignored. Until the model's
+recreation). Schools without a SCIAN code are left out, as their level is
+unknown (Mexicali loads none: its schools come from the DENUE). Elements with no type are ignored. Until the model's
 indicators move to the categories, its keys and radii are unchanged. The model routes up to five nearest destinations per type
 within 10 km at 4.8 km/h, with radii capped at 10 km and the POI-to-network snap
 distance included. The metric CRS is `ACCESS_CRS`, else the blocks' UTM zone;
@@ -211,6 +211,16 @@ The other amenities come from each city's own layers, in two steps. The
 with `source`, `source_id`, `category` (an amenity category), `name` and
 `area_m2`. The `points` step then places it like the DENUE. A new city with
 another source adds a normalizer to `raw_amenities.NORMALIZERS`.
+
+Each amenity category comes from one source only, as exe_reimagina did, so no
+amenity is loaded twice: the categories in `sources.amenities.params.categories`
+come only from the amenities file, every other one only from the DENUE; the
+report counts the rows each source left to the other (`file_skipped`,
+`denue_skipped`). Mexicali takes `public_space`, `sports_recreation` and
+`cultural_facility` from IMIP (366 sports and 339 culture places, against the
+DENUE's 18 and 47) and schools from the DENUE (with their SCIAN level and
+workers). Matched within 100 m, about 214 IMIP schools have no DENUE school of
+the same level nearby, and about 40 DENUE sports and culture places no IMIP one.
 
 Mexicali's normalizer, `imip`, reads IMIP's equipment layers
 (`az://cleaned/por_estado/02_baja_california/002_mexicali/imip/equipamiento/`)

@@ -223,18 +223,19 @@ def write_sources(root: Path) -> dict[str, str]:
     # crosswalk makes the school an amenity; it is 30 m from the nearest lot.
     businesses = gpd.GeoDataFrame(
         {
-            "id": ["101", "102", "103", "104", "105", "106"],
+            "id": ["101", "102", "103", "104", "105", "106", "107"],
             "nom_estab": ["Tienda", "Taller", "Lejos", "Tijuana", "Farmacia",
-                          "Escuela"],
+                          "Escuela", "Unidad deportiva"],
             "codigo_act": ["461110", "811111", "461110", "461110", "464111",
-                           "611122"],
+                           "611122", "713942"],
             "per_ocu": ["0 a 5 personas", "11 a 30 personas", "0 a 5 personas",
-                        "6 a 10 personas", "6 a 10 personas", "31 a 50 personas"],
+                        "6 a 10 personas", "6 a 10 personas", "31 a 50 personas",
+                        "6 a 10 personas"],
             "municipio": ["Mexicali", "Mexicali", "Mexicali", "Tijuana", "Mexicali",
-                          "Mexicali"],
+                          "Mexicali", "Mexicali"],
         },
         geometry=[Point(70, 10), Point(15, 5), Point(500, 500), Point(70, 10),
-                  Point(10, 30), Point(70, 50)],
+                  Point(10, 30), Point(70, 50), Point(10, 10)],
         crs=CRS,
     ).to_crs(4326)  # fmt: skip
     businesses.assign(
@@ -307,20 +308,23 @@ def test_build(city, tmp_path):
             "lots_without_key": 1,
         },
         "amenities_file": {"public_space": 1, "primary_education": 1},
-        # Two IMIP rows and the DENUE school.
+        # One source per kind: the IMIP park, not its school; the DENUE school,
+        # not its sports club (sports come from the file).
         "amenities": {
-            "from_file": 2,
+            "from_file": 1,
+            "file_skipped": 1,
             "from_denue": 1,
-            "source": 3,
+            "denue_skipped": 1,
+            "source": 2,
             "elements": 2,
-            "outside_every_lot": 1,
+            "outside_every_lot": 0,
         },
-        # Six DENUE rows in the state, five of Mexicali: one amenity.
+        # Seven DENUE rows in the state, six of Mexicali: two amenities.
         "establishments": {
-            "denue_state": 6,
-            "denue_municipio": 5,
+            "denue_state": 7,
+            "denue_municipio": 6,
             "without_coordinates": 0,
-            "denue_amenities": 1,
+            "denue_amenities": 2,
             "denue_establishments": 4,
             "source": 4,
             "elements": 3,
@@ -461,6 +465,10 @@ def write_city(tmp_path: Path, name: str, change) -> Path:
         (lambda c: c["params"].pop("space_allocation"), "housing.floor_share is required"),
         (lambda c: c["sources"]["amenities"]["params"].update(normalizer="sigcdmx"),
          "unknown normalizer 'sigcdmx'"),
+        (lambda c: c["sources"]["amenities"]["params"].update(categories=["parks"]),
+         r"unknown categories \['parks'\]"),
+        (lambda c: c["sources"]["amenities"]["params"].pop("categories"),
+         "categories is required"),
         (lambda c: c["params"]["space_allocation"]["housing.floor_share"].update(park=1),
          r"unknown land uses \['park'\]"),
         (lambda c: c["params"]["space_allocation"]["housing.floor_share"].update(amenity=120),

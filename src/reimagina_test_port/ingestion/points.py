@@ -5,7 +5,8 @@ From reimagina_pipelines_lab ``reimagina_ingestion`` (the ``equipment_layer`` an
 as reimagina_urbano_api ``urban_fabric.md`` says: every DENUE record of the
 municipality is an amenity or an establishment by the SCIAN crosswalk
 (``crosswalk``), never both; the amenities file (the raw_amenities step's output:
-Mexicali's IMIP layers) adds amenities with their own categories. Each goes to the lot holding it, else
+Mexicali's IMIP layers) adds amenities with their own categories. Each amenity
+category comes from one source only (``amenity_file_categories``). Each goes to the lot holding it, else
 the nearest within ``lot_max_distance_m`` (50 m), as a point at that lot's center;
 farther, it is not loaded.
 """
@@ -181,10 +182,18 @@ def amenity_table(
     ``amenities_file`` is the raw_amenities step's output
     (``raw_amenities.AMENITIES_FILE_COLUMNS``): keys ``source:source_id``, with
     its category, name and area and no SCIAN code or workers. DENUE amenities are
-    ``denue:<id>``, without area. Capacity is ``default_capacity``. The report adds
-    the rows of each source (``from_file``, ``from_denue``).
+    ``denue:<id>``, without area. Capacity is ``default_capacity``.
+
+    One source per kind: the file's rows of ``city.amenity_file_categories`` and
+    the DENUE amenities of every other category. The report adds the rows taken
+    from each source (``from_file``, ``from_denue``) and those left to the other
+    (``file_skipped``, ``denue_skipped``).
     """
     raw_amenities.check(amenities_file)
+    from_file_categories = list(city.amenity_file_categories)
+    file_kept = amenities_file["category"].isin(from_file_categories)
+    file_skipped = int((~file_kept).sum())
+    amenities_file = amenities_file[file_kept]
     from_file = pd.DataFrame(
         {
             "key": amenities_file["source"].astype(str)
@@ -196,6 +205,9 @@ def amenity_table(
         }
     )
     denue = denue[denue["element"] == "amenity"]
+    denue_kept = ~denue["category"].isin(from_file_categories)
+    denue_skipped = int((~denue_kept).sum())
+    denue = denue[denue_kept]
     from_denue = _denue_attributes(denue).drop(columns="scian_sector")
     from_denue.insert(0, "key", "denue:" + denue["id"].astype(str).str.strip())
     attributes = pd.concat([from_file, from_denue], ignore_index=True)
@@ -209,7 +221,13 @@ def amenity_table(
     )
     keys = attributes.pop("key")
     table, report = _point_table(points, "amenity", keys, attributes, lots, city)
-    return table, {"from_file": len(from_file), "from_denue": len(from_denue)} | report
+    counts = {
+        "from_file": len(from_file),
+        "file_skipped": file_skipped,
+        "from_denue": len(from_denue),
+        "denue_skipped": denue_skipped,
+    }
+    return table, counts | report
 
 
 def establishment_table(
