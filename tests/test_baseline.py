@@ -14,8 +14,9 @@ from lyra.sdk import LocalRunner
 from rasterio.transform import from_origin
 from shapely.geometry import Point, box
 
-from reimagina_test_port import baseline, cadastral, lake, plugin, prep
+from reimagina_test_port import baseline, cadastral, plugin, prep
 from reimagina_test_port.cities import CITIES
+from reimagina_test_port.common import lake
 
 CRS = "EPSG:32611"
 KEYS = ("Numdel", "Colonia", "Manzana", "Lote", "Fraccion")

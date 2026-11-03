@@ -61,7 +61,7 @@ no custom context factory.
 
 Ported from reimagina-lyra `accessibility.py` (exe_reimagina's model job). The
 CFC model (`accessibility_metrics.py`, its vectorized `accessibility_fastpath.py`)
-and the amenity vocabulary (`vocabulary.py`) are copied unchanged and excluded
+and the amenity vocabulary (`common/vocabulary.py`) are copied unchanged and excluded
 from ruff so they stay diffable; `accessibility.py` adapts the orchestration to
 tables.
 

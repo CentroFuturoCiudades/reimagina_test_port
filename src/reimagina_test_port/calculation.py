@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
-MIN_BUILT_M2 = 20  # a single-family lot with less built area counts as empty (same threshold as ingestion)
+from reimagina_test_port.common.rules import MIN_BUILT_M2
+
 NON_RESIDENTIAL = {"amenity", "commerce", "office"}
 BLOCK_SUM = ["num_housing_units", "population", "area"]
 BLOCK_AVERAGE = ["num_levels", "unit_size_m2"]

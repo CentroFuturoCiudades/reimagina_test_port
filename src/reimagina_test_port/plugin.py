@@ -7,9 +7,6 @@ data lake. The bundled snapshot datasets feed the same metrics offline
 
 import logging
 import os
-import time
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal
 
@@ -32,17 +29,10 @@ from pydantic import Field
 
 from reimagina_test_port import network, scenario, writer
 from reimagina_test_port.calculation import block_indicators, lot_indicators
-from reimagina_test_port.vocabulary import AMENITY_TYPES
+from reimagina_test_port.common.nodes import column, timed
+from reimagina_test_port.common.vocabulary import AMENITY_TYPES
 
 logger = logging.getLogger(__name__)
-
-
-@contextmanager
-def timed(stage: str, log: Any = logger) -> Iterator[None]:
-    """Log how long a stage of a job took (to the job's logger in Lyra)."""
-    start = time.perf_counter()
-    yield
-    log.info("%s: %.2fs", stage, time.perf_counter() - start)
 
 
 IDENTITY = ["id", "parent_id", "source_record_ref"]
@@ -120,13 +110,6 @@ def declaration(*, source: bool = False, blocks: bool = False) -> TableOutput:
                 )
             )
     return TableOutput(columns=columns, geometry="geometry")
-
-
-def column(name: str, kind: str, unit: Unit | None, description: str) -> TableColumn:
-    """Nullable column."""
-    return TableColumn(
-        name=name, type=kind, unit=unit, nullable=True, description=description
-    )
 
 
 def accessibility_declaration() -> TableOutput:
