@@ -1,4 +1,8 @@
-"""Write a city's baseline lots and blocks as a Reimagina baseline scenario.
+"""Write a city's baseline elements as a Reimagina baseline scenario.
+
+The elements are blocks, lots, amenities and establishments; each element type
+must exist in the database's ``element_type`` enum and its attributes in
+``attribute_catalog``.
 
 Fills an existing baseline scenario (created in the API) with ``elements``,
 ``element_state`` and ``element_state_attribute_value`` rows, in one
@@ -145,7 +149,7 @@ def write_baseline(
     *,
     dry_run: bool = False,
 ) -> dict[str, int]:
-    """Write ``tables`` (``{"lot": ..., "block": ...}``) into the baseline.
+    """Write ``tables`` (``{element_type: table}``) into the baseline.
 
     ``attributes`` maps each element type to ``{column: kind}``, the columns
     written as attribute values. A dry run rolls everything back.

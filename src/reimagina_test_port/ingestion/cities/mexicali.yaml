@@ -1,0 +1,51 @@
+# Mexicali (02002): exe_reimagina's sources (src/pipeline/cities/mexicali.toml),
+# laid out as reimagina_pipelines_lab's pipelines/ingestion/cities/mexicali.yaml.
+#
+# Everything is read from the CFC data lake (account cfcetlsadls) with
+# DefaultAzureCredential: the worker's managed identity, or `az login` locally.
+city: mexicali
+name: Mexicali
+ent_code: "02"
+muni_code: "002"
+# Metric CRS used for areas, distances and the height rasters.
+crs: EPSG:32611
+
+sources:
+  blocks:
+    uri: az://cleaned/inegi/marco_geostadistico/2024/manzanas_urbanas.parquet/CVE_ENT=02/CVE_MUN=002
+  census:
+    uri: az://cleaned/inegi/censo/manzanas_2020.parquet/entidad=2/mun=2
+  parcels:
+    uri: az://raw/por_estado/02_baja_california/002_mexicali/imip/PRED_CAT_CP/PREDIOS_CAT_CP.shp
+    # Cadastral columns joined with "-" into each lot's key.
+    params: {key_columns: [Numdel, Colonia, Manzana, Lote, Fraccion]}
+  zoning:
+    uri: az://sandbox/projects/EXE/raw/normativa/Predios (Normativa sintesis).geojson
+    # Source column -> internal name; a lot takes the containing polygon, else the
+    # nearest within max_distance_m.
+    params:
+      columns: {USOSUELO24: zoning, Max_cos: max_cos, Max_cus: max_cus, Dens_U_max: max_density}
+      max_distance_m: 3.0
+  heights:   # Open Buildings 2.5D temporal tiles and their manifests
+    uri: az://sandbox/projects/EXE/cleaned/open_buildings_temporal_data_v1_mx
+    params:
+      year: "2023"
+      manifests_uri: az://sandbox/projects/EXE/raw/open_buildings_temporal_data_v1_mx
+  equipment:   # DENUE + IMIP (cleaning/equipamientos): amenity elements and lot amenity_type
+    uri: az://sandbox/projects/EXE/cleaned/pois_accesibilidad/pois_02002.geoparquet
+  denue:   # INEGI DENUE 05_2025 as published: establishment elements
+    uri: az://raw/inegi/denue/02_baja_california/denue_02_0525_csv/conjunto_de_datos/denue_inegi_02_.csv
+    params: {municipio: Mexicali, encoding: latin-1}
+
+params:
+  lots:   # exe_reimagina cities/mexicali.toml values
+    presence_threshold: 0.5
+    height_percentile: 95.0
+    average_level_height: 2.7
+    gsd_pixel: 0.5
+    poi_max_distance_m: 20.0
+    mf_min_units: 1.5
+  amenities: {default_capacity: 1}
+  # An amenity or establishment hangs from the lot holding it, else the nearest
+  # lot within this distance (geocoded on the street in front); farther, it is dropped.
+  points: {lot_max_distance_m: 15.0}

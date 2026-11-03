@@ -1,10 +1,12 @@
-"""A city's baseline lots and blocks from the data lake, with exe_reimagina's rules.
+"""A city's baseline from the data lake, with exe_reimagina's rules.
 
 Adapted from reimagina-lyra ``ingestion/pipeline.build_elements``: the same
 sources, block and lot preparation, building heights and element attributes
 (``prep``, ``footprints``, ``elements``, copied unchanged), returned as tables
 instead of written. Lot ids come from the cadastral key (``cadastral.lot_keys``)
-instead of the shapefile's row number.
+instead of the shapefile's row number. Amenities (equipment layer) and
+establishments (DENUE) hang from their lot, as in reimagina_pipelines_lab
+(``points``).
 """
 
 import logging
@@ -15,7 +17,7 @@ import geopandas as gpd
 import pandas as pd
 
 from reimagina_test_port.common import lake
-from reimagina_test_port.ingestion import cadastral, footprints, prep
+from reimagina_test_port.ingestion import cadastral, footprints, points, prep
 from reimagina_test_port.ingestion.cities import CityPreset
 from reimagina_test_port.ingestion.elements import (
     amenity_type_by_lot,
@@ -29,7 +31,7 @@ from reimagina_test_port.ingestion.elements import (
 logger = logging.getLogger(__name__)
 
 Progress = Callable[[str, int, int], None]
-STAGES = ("download", "blocks", "lots", "footprints", "elements")
+STAGES = ("download", "blocks", "lots", "footprints", "elements", "points")
 LOT_ATTRIBUTES = [
     "land_use",
     "cos",
@@ -132,11 +134,16 @@ def lot_table(
 def build(
     city: CityPreset, workdir: Path, progress: Progress
 ) -> dict[str, gpd.GeoDataFrame | dict]:
-    """``lots``, ``blocks`` and a ``report`` of the cadastral keys."""
+    """``lots``, ``blocks``, ``amenities``, ``establishments`` and a ``report``.
+
+    The report has the cadastral keys (``lots``) and, for amenities and
+    establishments, the elements kept and those outside every lot.
+    """
     progress("download", 0, len(STAGES))
     lots_path = lake.download_shapefile(city.lots_uri, workdir / "lots")
     normativa_path = lake.download(city.normativa_uri, workdir)
     pois_path = lake.download(city.pois_uri, workdir)
+    denue_path = lake.download(city.denue_uri, workdir)
     manifests_uri = f"{city.manifests_uri}/{city.year}/manifests"
     manifest_paths = [
         lake.download(f"{manifests_uri}/{name}", workdir / "manifests")
@@ -153,8 +160,8 @@ def build(
     progress("lots", 2, len(STAGES))
     source = gpd.read_file(lots_path, engine="pyogrio").to_crs(city.target_crs)
     # prep uses the index as lot_id: index by the unique cadastral key.
-    source, report = cadastral.lot_keys(source, city.key_columns)
-    logger.info("Cadastral keys: %s", report)
+    source, keys_report = cadastral.lot_keys(source, city.key_columns)
+    logger.info("Cadastral keys: %s", keys_report)
     lots = prep.prepare_lots(
         source,
         gpd.read_file(normativa_path, engine="pyogrio"),
@@ -193,10 +200,25 @@ def build(
     )
 
     progress("elements", 4, len(STAGES))
+    equipment = gpd.read_parquet(pois_path)
+    lot_rows = lot_table(lots, blocks, prepare_pois(equipment), city)
+
+    progress("points", 5, len(STAGES))
+    amenities, amenities_report = points.amenity_table(equipment, lot_rows, city)
+    businesses = points.read_denue(
+        denue_path, city.denue_municipio, city.denue_encoding
+    )
+    establishments, establishments_report = points.establishment_table(
+        businesses, lot_rows, city
+    )
     return {
         "blocks": block_table(blocks),
-        "lots": lot_table(
-            lots, blocks, prepare_pois(gpd.read_parquet(pois_path)), city
-        ),
-        "report": report,
+        "lots": lot_rows,
+        "amenities": amenities,
+        "establishments": establishments,
+        "report": {
+            "lots": keys_report,
+            "amenities": amenities_report,
+            "establishments": establishments_report,
+        },
     }

@@ -10,13 +10,14 @@ import numpy as np
 import pandas as pd
 import pytest
 import rasterio
+import yaml
 from lyra.sdk import LocalRunner
 from rasterio.transform import from_origin
 from shapely.geometry import Point, box
 
 from reimagina_test_port import plugin
 from reimagina_test_port.common import lake
-from reimagina_test_port.ingestion import baseline, cadastral, prep
+from reimagina_test_port.ingestion import baseline, cadastral, cities, prep
 from reimagina_test_port.ingestion.cities import CITIES
 
 CRS = "EPSG:32611"
@@ -150,10 +151,35 @@ def write_sources(root: Path) -> dict[str, str]:
         geometry=[box(-5, -5, 45, 45), box(55, -5, 105, 45)],
         crs=CRS,
     ).to_file(root / "normativa.geojson", engine="pyogrio")
-    (root / "pois").mkdir()
+    # A pharmacy in a lot, a park 5 m from one and a cinema far from every lot.
     gpd.GeoDataFrame(
-        {"category": ["Farmacia"]}, geometry=[Point(10, 30)], crs=CRS
-    ).to_parquet(root / "pois" / "pois_02002.geoparquet")
+        {
+            "category": ["Farmacia", "Parques", "Cine"],
+            "fuente": ["DENUE", "IMIP", "DENUE"],
+            "source_id": [11, 12, 13],
+            "capacity": [None, 3, 1],
+        },
+        geometry=[Point(10, 30), Point(105, 10), Point(500, 500)],
+        crs=CRS,
+    ).to_parquet(root / "pois_02002.geoparquet")
+    # Three Mexicali businesses (one far from every lot) and one elsewhere.
+    businesses = gpd.GeoDataFrame(
+        {
+            "id": ["101", "102", "103", "104"],
+            "nom_estab": ["Tienda", "Taller", "Lejos", "Tijuana"],
+            "codigo_act": ["461110", "811111", "461110", "461110"],
+            "per_ocu": ["0 a 5 personas", "11 a 30 personas", "0 a 5 personas",
+                        "6 a 10 personas"],
+            "municipio": ["Mexicali", "Mexicali", "Mexicali", "Tijuana"],
+        },
+        geometry=[Point(70, 10), Point(15, 5), Point(500, 500), Point(70, 10)],
+        crs=CRS,
+    ).to_crs(4326)  # fmt: skip
+    businesses.assign(
+        latitud=businesses.geometry.y, longitud=businesses.geometry.x
+    ).drop(columns="geometry").to_csv(
+        root / "denue.csv", index=False, encoding="latin-1"
+    )
     # One 120 x 60 m tile at 0.5 m: 5 m (2 floors, exact in float32), built.
     tiles = root / "tiles" / "2023"
     tiles.mkdir(parents=True)
@@ -183,7 +209,8 @@ def write_sources(root: Path) -> dict[str, str]:
     return {
         "lots_uri": str(root / "lots" / "PREDIOS.shp"),
         "normativa_uri": str(root / "normativa.geojson"),
-        "pois_uri_prefix": str(root / "pois"),
+        "pois_uri": str(root / "pois_02002.geoparquet"),
+        "denue_uri": str(root / "denue.csv"),
         "tiles_uri": str(root / "tiles"),
         "manifests_uri": str(root / "manifests"),
     }
@@ -212,9 +239,13 @@ def test_build(city, tmp_path):
     )
     assert stages == list(baseline.STAGES)
     assert result["report"] == {
-        "exact_copies_dropped": 1,
-        "lots_sharing_a_key": 2,
-        "lots_without_key": 1,
+        "lots": {
+            "exact_copies_dropped": 1,
+            "lots_sharing_a_key": 2,
+            "lots_without_key": 1,
+        },
+        "amenities": {"elements": 2, "outside_every_lot": 1},
+        "establishments": {"elements": 2, "outside_every_lot": 1},
     }
     lots = result["lots"].set_index("source_record_ref")
     blocks = result["blocks"].set_index("source_record_ref")
@@ -247,9 +278,32 @@ def test_build(city, tmp_path):
     assert lots.loc["1-A-7-1", "area"] == pytest.approx(400.0)
     assert lots.loc["1-A-7-1", "occupancy_rate"] == pytest.approx(0.75)
     assert blocks.loc[CVEGEO[0], "people_per_household"] == 3.25
+    # Amenities and establishments hang from the lot holding them, or the nearest
+    # within 15 m; farther ones are dropped.
+    amenities = result["amenities"].set_index("source_record_ref")
+    assert sorted(amenities.index) == ["DENUE:Farmacia:11", "IMIP:Parques:12"]
+    assert amenities.crs == "EPSG:4326"
+    assert amenities.loc["DENUE:Farmacia:11", "id"] == cadastral.stable_element_uuid(
+        "mexicali", "amenity", "DENUE:Farmacia:11"
+    )
+    assert amenities.loc["DENUE:Farmacia:11", "parent_id"] == lots.loc["1-A-7-2", "id"]
+    assert amenities.loc["DENUE:Farmacia:11", "amenity_type"] == "pharmacy"
+    assert amenities.loc["DENUE:Farmacia:11", "capacity"] == 1
+    # 5 m east of the last lot, box(80, 0, 100, 20) ("sin_clave").
+    assert amenities.loc["IMIP:Parques:12", "parent_id"] == lots.loc["sin_clave", "id"]
+    assert amenities.loc["IMIP:Parques:12", "capacity"] == 3
+    establishments = result["establishments"].set_index("source_record_ref")
+    assert sorted(establishments.index) == ["denue:101", "denue:102"]
+    assert establishments.loc["denue:101", "parent_id"] == lots.loc["1-B-8-1", "id"]
+    assert establishments.loc["denue:101", "scian_class"] == "461110"
+    assert establishments.loc["denue:101", "scian_sector"] == "46"
+    assert establishments.loc["denue:101", "employees"] == 3
+    assert establishments.loc["denue:102", "employees"] == 20
+    assert establishments.loc["denue:102", "parent_id"] == lots.loc["1-A-7-1", "id"]
     # Same sources, same ids.
     again = baseline.build(city, tmp_path / "again", lambda *_: None)
     assert again["lots"]["id"].tolist() == result["lots"]["id"].tolist()
+    assert again["amenities"]["id"].tolist() == result["amenities"]["id"].tolist()
 
 
 def test_baseline_metric(city, monkeypatch):
@@ -262,3 +316,52 @@ def test_baseline_metric(city, monkeypatch):
     )
     assert len(tables["reimagina_baseline_elements_lots"]) == 5
     assert len(tables["reimagina_baseline_elements_blocks"]) == 2
+    assert len(tables["reimagina_baseline_elements_amenities"]) == 2
+    assert len(tables["reimagina_baseline_elements_establishments"]) == 2
+
+
+# ------------------------------------------------------------------ city YAMLs
+
+MEXICALI_YAML = cities.FOLDER / "mexicali.yaml"
+
+
+def test_mexicali_yaml():
+    city = CITIES["mexicali"]
+    assert city.cve_code == "02002"
+    assert city.key_columns == KEYS
+    assert city.normativa_columns["USOSUELO24"] == "zoning"
+    assert city.denue_municipio == "Mexicali"
+    assert city.lot_max_distance_m == 15.0
+    assert city.pois_uri.endswith("pois_02002.geoparquet")
+
+
+def write_city(tmp_path: Path, name: str, change) -> Path:
+    config = yaml.safe_load(MEXICALI_YAML.read_text(encoding="utf-8"))
+    change(config)
+    path = tmp_path / f"{name}.yaml"
+    path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (lambda c: c["sources"].pop("denue"), "sources.denue: uri is required"),
+        (lambda c: c["sources"]["denue"]["params"].pop("municipio"), "municipio"),
+        (lambda c: c["params"]["lots"].update(typo=1), r"params.lots: unknown keys \['typo'\]"),
+        (lambda c: c["sources"].update(roads={"uri": "x"}), r"sources: unknown keys \['roads'\]"),
+        (lambda c: c.update(city="tijuana"), "must be tijuana.yaml"),
+    ],
+)  # fmt: skip
+def test_city_yaml_errors(tmp_path, change, message):
+    with pytest.raises(cities.CityConfigError, match=message):
+        cities.from_yaml(write_city(tmp_path, "mexicali", change))
+
+
+def test_cities_loads_every_yaml(tmp_path):
+    def rename(config):
+        config.update(city="tijuana", name="Tijuana")
+
+    write_city(tmp_path, "tijuana", rename)
+    assert list(cities.load(tmp_path)) == ["tijuana"]
+    assert cities.load(tmp_path)["tijuana"].lots_uri == CITIES["mexicali"].lots_uri

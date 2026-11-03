@@ -511,10 +511,51 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's baseline lots and blocks from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights and amenity POIs. Blocks are keyed by CVEGEO; lots by their cadastral key.",
+      "description": "Build a city's baseline elements from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights, the equipment layer and the DENUE. Blocks are keyed by CVEGEO; lots by their cadastral key; amenities (equipment) and establishments (DENUE) hang from the lot holding them.",
       "inputs": {},
       "name": "reimagina_baseline",
       "outputs": {
+        "reimagina_baseline_amenities": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "amenity type",
+              "name": "amenity_type",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "capacity",
+              "name": "capacity",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        },
         "reimagina_baseline_blocks": {
           "columns": [
             {
@@ -548,6 +589,54 @@
             {
               "description": "Census average occupants per inhabited dwelling.",
               "name": "people_per_household",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        },
+        "reimagina_baseline_establishments": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "scian class",
+              "name": "scian_class",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "scian sector",
+              "name": "scian_sector",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "employees",
+              "name": "employees",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -655,7 +744,7 @@
             "properties": {
               "city": {
                 "const": "mexicali",
-                "description": "City preset.",
+                "description": "City preset (ingestion/cities/<city>.yaml).",
                 "title": "City",
                 "type": "string"
               }
@@ -684,11 +773,19 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Return a city's baseline lots and blocks as built from the data lake (reimagina_baseline). Nothing is written to Reimagina's database.",
+      "description": "Return a city's baseline lots, blocks, amenities and establishments as built from the data lake (reimagina_baseline). Nothing is written to Reimagina's database.",
       "inputs": {
+        "amenities": {
+          "arguments": {},
+          "output": "reimagina_baseline_amenities"
+        },
         "blocks": {
           "arguments": {},
           "output": "reimagina_baseline_blocks"
+        },
+        "establishments": {
+          "arguments": {},
+          "output": "reimagina_baseline_establishments"
         },
         "lots": {
           "arguments": {},
@@ -697,6 +794,47 @@
       },
       "name": "reimagina_baseline_elements",
       "outputs": {
+        "reimagina_baseline_elements_amenities": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "amenity type",
+              "name": "amenity_type",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "capacity",
+              "name": "capacity",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        },
         "reimagina_baseline_elements_blocks": {
           "columns": [
             {
@@ -730,6 +868,54 @@
             {
               "description": "Census average occupants per inhabited dwelling.",
               "name": "people_per_household",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        },
+        "reimagina_baseline_elements_establishments": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "scian class",
+              "name": "scian_class",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "scian sector",
+              "name": "scian_sector",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "employees",
+              "name": "employees",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -837,7 +1023,7 @@
             "properties": {
               "city": {
                 "const": "mexicali",
-                "description": "City preset.",
+                "description": "City preset (ingestion/cities/<city>.yaml).",
                 "title": "City",
                 "type": "string"
               }
@@ -866,11 +1052,19 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's baseline from the data lake (reimagina_baseline) and write it into an existing baseline scenario of a project: elements, state and attribute values, in one transaction. Existing elements are reused unchanged; running it again replaces the scenario's rows. Every attribute must be active in attribute_catalog. Compute indicators afterwards with reimagina_scenario_write.",
+      "description": "Build a city's baseline from the data lake (reimagina_baseline) and write it into an existing baseline scenario of a project: elements, state and attribute values of blocks, lots, amenities and establishments, in one transaction. Existing elements are reused unchanged; running it again replaces the scenario's rows. Every attribute must be active in attribute_catalog. Compute indicators afterwards with reimagina_scenario_write.",
       "inputs": {
+        "amenities": {
+          "arguments": {},
+          "output": "reimagina_baseline_amenities"
+        },
         "blocks": {
           "arguments": {},
           "output": "reimagina_baseline_blocks"
+        },
+        "establishments": {
+          "arguments": {},
+          "output": "reimagina_baseline_establishments"
         },
         "lots": {
           "arguments": {},
@@ -882,7 +1076,7 @@
         "reimagina_baseline_write": {
           "columns": [
             {
-              "description": "Blocks and lots written.",
+              "description": "Blocks, lots, amenities and establishments written.",
               "name": "elements",
               "nullable": false,
               "type": "integer",
@@ -929,7 +1123,7 @@
             "properties": {
               "city": {
                 "const": "mexicali",
-                "description": "City preset.",
+                "description": "City preset (ingestion/cities/<city>.yaml).",
                 "title": "City",
                 "type": "string"
               },

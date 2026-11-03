@@ -12,7 +12,8 @@ src/reimagina_test_port/
 │                  contract.py, nodes.py (reimagina_scenario*, road network, POIs)
 ├── snapshot.py    prepared GeoParquet snapshots, the offline sources
 ├── ingestion/     a city's baseline from the data lake (data, not indicators):
-│                  cities, prep, footprints, cadastral, elements, baseline,
+│                  cities/*.yaml, prep, footprints, cadastral, elements,
+│                  points, baseline,
 │                  baseline_writer, nodes.py (reimagina_baseline*)
 ├── indicators/    one subpackage per indicator type, each with its nodes.py
 │   ├── built_form/      calculation.py
@@ -176,13 +177,41 @@ be compared.
 `num_levels` is an integer in `attribute_catalog`, so the baseline rounds the
 raster's average floors to whole floors, as the API's integer decoding does.
 
+Each city is a YAML in `ingestion/cities/` (`<city>.yaml`, the city key), laid
+out as reimagina_pipelines_lab's `pipelines/ingestion/cities`: codes and CRS,
+`sources` (`blocks`, `census`, `parcels`, `zoning`, `heights`, `equipment`,
+`denue`; a `uri` and its `params` each) and the builders' `params` (`lots`,
+`amenities`, `points`). Values come from exe_reimagina's
+`src/pipeline/cities/*.toml`. A missing or unknown key fails at import, and the
+`city` parameter of the baseline nodes accepts every YAML in the folder. Only
+Mexicali is configured: Tlalpan's normativa derives its maxima from levels and
+open area, which `prep.prepare_normativa` does not do.
+
+As in the lab (`reimagina_ingestion`), amenities and establishments are elements
+of their own (`ingestion/points.py`). Amenities are the equipment layer
+(`pois_accesibilidad`, DENUE + IMIP, the same points that give lots their
+`amenity_type`), keyed `fuente:category:source_id`, with `amenity_type` and
+`capacity` (missing: `default_capacity`). Establishments are every business of
+the raw INEGI DENUE CSV of the state whose `municipio` is the city's, keyed
+`denue:<id>`, with `scian_class` (`codigo_act`), `scian_sector` (its first two
+digits) and `employees` (the `per_ocu` band's midpoint; the top band, its
+floor). Both hang from the lot containing them, else the nearest lot within
+`lot_max_distance_m` (15 m); farther ones are dropped and counted in the report.
+Ids are `uuid5(NS, "<city>:amenity:<key>")` and
+`uuid5(NS, "<city>:establishment:<key>")`, the lab's `element_id`.
+
 ## Baseline writer
 
 `reimagina_baseline_write(city, project_id, scenario_id)` fills an existing
 baseline scenario (created in the API, without forks) in one transaction:
 `elements` (new ids only; an existing element, such as a block shared with
 another baseline, is reused unchanged), `element_state` and
-`element_state_attribute_value`. Running it again replaces the scenario's own
+`element_state_attribute_value`, for blocks, lots, amenities and
+establishments. The API's `element_type` enum must include `amenity` (it has
+`establishment`), and `attribute_catalog` the keys in `BASELINE_ATTRIBUTES`
+(`amenity.amenity_type`, `amenity.capacity`, `establishment.scian_class`,
+`establishment.scian_sector`, `establishment.employees`); otherwise the contract
+check fails naming what is missing. Running it again replaces the scenario's own
 rows, removing elements no longer present and their indicator values. Then
 `reimagina_scenario_write` computes the baseline's indicators, and after it
 each fork's.

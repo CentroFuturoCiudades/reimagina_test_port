@@ -51,7 +51,9 @@ SCHEMA_DDL = """
 CREATE EXTENSION postgis;
 CREATE SCHEMA reimagina_urbano;
 SET search_path = reimagina_urbano, public;
-CREATE TYPE element_type AS ENUM ('block', 'lot', 'building', 'tree');
+CREATE TYPE element_type AS ENUM (
+    'block', 'lot', 'building', 'tree', 'amenity', 'establishment'
+);
 CREATE TYPE attribute_value_type AS ENUM ('number', 'integer', 'text', 'enum', 'json');
 CREATE TABLE projects (id uuid PRIMARY KEY, road_network_uri text);
 CREATE TABLE scenarios (
@@ -124,7 +126,10 @@ INSERT INTO attribute_catalog (element_type, key, value_type) VALUES
     ('lot', 'unit_size_m2', 'number'), ('lot', 'people_per_household', 'number'),
     ('lot', 'occupancy_rate', 'number'), ('lot', 'amenity_type', 'enum'),
     ('lot', 'commerce_type', 'text'), ('block', 'vivtot', 'number'),
-    ('block', 'people_per_household', 'number');
+    ('block', 'people_per_household', 'number'),
+    ('amenity', 'amenity_type', 'enum'), ('amenity', 'capacity', 'number'),
+    ('establishment', 'scian_class', 'text'), ('establishment', 'scian_sector', 'text'),
+    ('establishment', 'employees', 'integer');
 UPDATE attribute_catalog SET enum_values = ARRAY[
     'single_family', 'multifamily', 'mixed_use', 'amenity', 'commerce', 'office'
 ] WHERE key = 'land_use';
@@ -604,6 +609,8 @@ def test_write_checks_the_indicator_catalog(dsn):
 NEW_BASELINE = "40000000-0000-0000-0000-000000000000"
 NEW_FORK = "50000000-0000-0000-0000-000000000000"
 NEW_LOTS = [f"c0000000-0000-0000-0000-00000000000{i}" for i in range(1, 5)]
+NEW_AMENITY = "d0000000-0000-0000-0000-000000000001"
+NEW_ESTABLISHMENT = "e0000000-0000-0000-0000-000000000001"
 
 
 def lot_box(i: int, shift: float = 0.0):
@@ -612,7 +619,8 @@ def lot_box(i: int, shift: float = 0.0):
 
 
 def new_tables(count: int = 4):
-    """Blocks reuse BLOCK and BLOCK_2; four lots with new ids."""
+    """Blocks reuse BLOCK and BLOCK_2; four lots, an amenity and an establishment
+    with new ids, both in the first lot."""
     blocks = gpd.GeoDataFrame(
         {
             "id": [BLOCK, BLOCK_2],
@@ -642,7 +650,36 @@ def new_tables(count: int = 4):
         geometry=[lot_box(i, 0.00002) for i in range(count)],
         crs=4326,
     )
-    return {"lot": lots, "block": blocks}
+    inside = lot_box(0, 0.00002).centroid
+    amenities = gpd.GeoDataFrame(
+        {
+            "id": [NEW_AMENITY],
+            "parent_id": [NEW_LOTS[0]],
+            "source_record_ref": ["DENUE:Farmacia:11"],
+            "amenity_type": ["pharmacy"],
+            "capacity": [1.0],
+        },
+        geometry=[inside],
+        crs=4326,
+    )
+    establishments = gpd.GeoDataFrame(
+        {
+            "id": [NEW_ESTABLISHMENT],
+            "parent_id": [NEW_LOTS[0]],
+            "source_record_ref": ["denue:101"],
+            "scian_class": ["461110"],
+            "scian_sector": ["46"],
+            "employees": [None],
+        },
+        geometry=[inside],
+        crs=4326,
+    )
+    return {
+        "block": blocks,
+        "lot": lots,
+        "amenity": amenities,
+        "establishment": establishments,
+    }
 
 
 @pytest.fixture
@@ -696,17 +733,18 @@ def test_baseline_contract(new_baseline, dsn):
 def test_write_new_baseline(new_baseline, dsn):
     old = counts(dsn, BASELINE)
     dry = write_new_baseline(dry_run=True)
-    assert dry["elements_created"] == 4
+    assert dry["elements_created"] == 6
     assert counts(dsn, NEW_BASELINE) == (0, 0)
     first = write_new_baseline()
-    # The blocks already exist: reused, not created.
+    # The blocks already exist: reused, not created. 21 lot and block values, 2 of
+    # the amenity and 2 of the establishment (no employees).
     assert first == {
-        "elements": 6,
-        "elements_created": 4,
-        "attribute_values": 21,
+        "elements": 8,
+        "elements_created": 6,
+        "attribute_values": 25,
         "elements_removed": 0,
     }
-    assert counts(dsn, NEW_BASELINE) == (6, 21)
+    assert counts(dsn, NEW_BASELINE) == (8, 25)
     assert counts(dsn, BASELINE) == old
     tables = scenario_nodes.read_scenario(NEW_BASELINE)
     lots = by_id(tables["reimagina_scenario_lots"])
@@ -720,13 +758,29 @@ def test_write_new_baseline(new_baseline, dsn):
             "WHERE id = %s",
             (NEW_LOTS[0],),
         ).fetchone()[0]
+        points = dict(
+            conn.execute(
+                "SELECT e.type::text, s.parent_element_id::text "
+                "FROM reimagina_urbano.elements e JOIN reimagina_urbano.element_state s "
+                "ON s.element_id = e.id AND s.scenario_id = %s WHERE e.id IN (%s, %s)",
+                (NEW_BASELINE, NEW_AMENITY, NEW_ESTABLISHMENT),
+            ).fetchall()
+        )
+        pharmacy = conn.execute(
+            "SELECT v.value_text FROM reimagina_urbano.element_state_attribute_value v "
+            "JOIN reimagina_urbano.attribute_catalog c ON c.id = v.attribute_id "
+            "WHERE v.scenario_id = %s AND v.element_id = %s AND c.key = 'amenity_type'",
+            (NEW_BASELINE, NEW_AMENITY),
+        ).fetchone()[0]
     assert origin == NEW_BASELINE
+    assert points == {"amenity": NEW_LOTS[0], "establishment": NEW_LOTS[0]}
+    assert pharmacy == "pharmacy"
     # Indicators then come from the scenario writer.
     assert write(NEW_BASELINE)["values_written"] > 0
     # Again without one lot: replaced, and its indicators go too.
     second = write_new_baseline(count=3)
     assert second["elements_removed"] == 1
-    assert counts(dsn, NEW_BASELINE)[0] == 5
+    assert counts(dsn, NEW_BASELINE)[0] == 7
     assert not any(e == NEW_LOTS[3] for e, _ in stored(dsn, NEW_BASELINE))
 
 
@@ -801,7 +855,13 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch):
     monkeypatch.setattr(
         baseline,
         "build",
-        lambda *_: {"lots": tables["lot"], "blocks": tables["block"], "report": {}},
+        lambda *_: {
+            "lots": tables["lot"],
+            "blocks": tables["block"],
+            "amenities": tables["amenity"],
+            "establishments": tables["establishment"],
+            "report": {},
+        },
     )
     runner = LocalRunner.from_definitions(
         {"reimagina-test-port": plugin.create_plugin()}
@@ -813,4 +873,4 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch):
     parameters["scenario_id"] = NEW_BASELINE
     result = runner.run("reimagina_baseline_write", {"parameters": parameters})
     row = result["reimagina_baseline_write"].iloc[0].to_dict()
-    assert (row["elements"], row["elements_created"], row["dry_run"]) == (6, 4, False)
+    assert (row["elements"], row["elements_created"], row["dry_run"]) == (8, 6, False)
