@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 from pandana.loaders.pandash5 import open_hdf_store
 
-from reimagina_test_port.lake import download
+from reimagina_test_port.common.lake import download
 
 __all__ = ["download", "read_network"]
 

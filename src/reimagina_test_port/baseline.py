@@ -14,8 +14,9 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 
-from reimagina_test_port import cadastral, footprints, lake, prep
+from reimagina_test_port import cadastral, footprints, prep
 from reimagina_test_port.cities import CityPreset
+from reimagina_test_port.common import lake
 from reimagina_test_port.elements import (
     amenity_type_by_lot,
     classify_land_use,

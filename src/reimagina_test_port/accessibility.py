@@ -25,7 +25,7 @@ from reimagina_test_port.accessibility_metrics import (
     compute_pois_accessibility_scores,
     create_origin_destination_mappings,
 )
-from reimagina_test_port.vocabulary import (
+from reimagina_test_port.common.vocabulary import (
     AMENITY_ACCESSIBILITY_PARAMS,
     AMENITY_TYPES,
     normalize_amenity_type,
