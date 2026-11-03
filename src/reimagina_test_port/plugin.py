@@ -28,7 +28,6 @@ from lyra.sdk.errors import MetricInputError
 from pydantic import Field
 
 from reimagina_test_port import network, scenario, writer
-from reimagina_test_port.calculation import block_indicators, lot_indicators
 from reimagina_test_port.common.nodes import column, timed
 from reimagina_test_port.common.schema import (
     ATTRIBUTES,
@@ -36,8 +35,10 @@ from reimagina_test_port.common.schema import (
     NUMERIC_ATTRIBUTES,
     UNITS,
     identity_columns,
+    source_declaration,
 )
 from reimagina_test_port.common.vocabulary import AMENITY_TYPES
+from reimagina_test_port.indicators.built_form import nodes as built_form_nodes
 from reimagina_test_port.ingestion import nodes as ingestion_nodes
 
 logger = logging.getLogger(__name__)
@@ -48,50 +49,9 @@ DISTANCE_KEYS = [f"distance_to_{amenity}" for amenity in AMENITY_TYPES]
 ACCESSIBILITY_KEYS = ["minutes", "farthest_amenity", *SCORE_KEYS, *DISTANCE_KEYS]
 
 
-def declaration(*, source: bool = False, blocks: bool = False) -> TableOutput:
-    """Describe identity, numerical meaning, and spatial output."""
-    columns = identity_columns()
-    if source:
-        for key in [] if blocks else ATTRIBUTES:
-            columns.append(
-                TableColumn(
-                    name=key,
-                    type="string" if key == "land_use" else "number",
-                    unit=None
-                    if key == "land_use"
-                    else (
-                        {
-                            "people_per_household": Unit.COUNT,
-                            "occupancy_rate": Unit.RATIO,
-                        }
-                        | UNITS
-                    )[key],
-                    nullable=True,
-                    description=key.replace("_", " "),
-                )
-            )
-    else:
-        for key, unit in UNITS.items():
-            description = (
-                "Housing density in homes per hectare (viv/ha)."
-                if key == "density"
-                else key.replace("_", " ")
-            )
-            columns.append(
-                TableColumn(
-                    name=key,
-                    type="number",
-                    unit=unit,
-                    nullable=True,
-                    description=description,
-                )
-            )
-    return TableOutput(columns=columns, geometry="geometry")
-
-
 def accessibility_declaration() -> TableOutput:
     """Identity, accessibility keys (as indicator_catalog) and geometry."""
-    identity = declaration(source=True, blocks=True).columns
+    identity = identity_columns()
     # Minutes as indicator_catalog ("min"); Lyra has no minute unit.
     columns = [
         *identity,
@@ -219,19 +179,6 @@ def read_snapshot(name: str) -> dict[str, gpd.GeoDataFrame]:
     return result
 
 
-def plain_record(row: dict[str, Any]) -> dict[str, Any]:
-    """Translate tabular missing values to the source algorithm's nulls."""
-    return {key: None if pd.isna(value) else value for key, value in row.items()}
-
-
-def result_frame(source: gpd.GeoDataFrame, values: list[dict]) -> gpd.GeoDataFrame:
-    """Attach indicators positionally, preserving IDs, order, and geometry."""
-    result = source[IDENTITY + ["geometry"]].copy()
-    for key in UNITS:
-        result[key] = [value[key] for value in values]
-    return result
-
-
 class ScenarioParameters(MetricParameters):
     """Select a Reimagina scenario; forks fall back to their baseline."""
 
@@ -266,8 +213,8 @@ def read_scenario(scenario_id: str) -> dict[str, gpd.GeoDataFrame]:
     name="reimagina_scenario",
     description="Acquire a scenario's effective lots and blocks from Reimagina.",
     outputs={
-        "reimagina_scenario_lots": declaration(source=True),
-        "reimagina_scenario_blocks": declaration(source=True, blocks=True),
+        "reimagina_scenario_lots": source_declaration(),
+        "reimagina_scenario_blocks": source_declaration(blocks=True),
     },
 )
 def scenario_dataset(
@@ -282,82 +229,13 @@ def scenario_dataset(
     name="reimagina_prepared_snapshot",
     description="Acquire prepared lot and block GeoParquet tables.",
     outputs={
-        "reimagina_prepared_lots": declaration(source=True),
-        "reimagina_prepared_blocks": declaration(source=True, blocks=True),
+        "reimagina_prepared_lots": source_declaration(),
+        "reimagina_prepared_blocks": source_declaration(blocks=True),
     },
 )
 def prepared_snapshot(parameters: SnapshotParameters) -> dict[str, gpd.GeoDataFrame]:
     """Acquire both files once per graph invocation."""
     return read_snapshot(parameters.snapshot)
-
-
-def lot_built_form(lots: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Lot indicators; density in viv/ha as indicator_catalog."""
-    values = [
-        lot_indicators(plain_record(row)) for row in lots[ATTRIBUTES].to_dict("records")
-    ]
-    return result_frame(lots, values)
-
-
-def built_form(
-    lots: gpd.GeoDataFrame, blocks: gpd.GeoDataFrame
-) -> dict[str, gpd.GeoDataFrame]:
-    """Aggregate upstream lot values into their blocks."""
-    children: dict[str, list[dict]] = {}
-    for row in lots[["parent_id", *UNITS]].to_dict("records"):
-        record = plain_record(row)
-        children.setdefault(record.pop("parent_id"), []).append(record)
-    values = [
-        block_indicators(children.get(identifier, [])) for identifier in blocks.id
-    ]
-    return {
-        "reimagina_built_form_lots": lots.copy(),
-        "reimagina_built_form_blocks": result_frame(blocks, values),
-    }
-
-
-def built_form_metrics(
-    parameters_type: type[MetricParameters], lots_output: str, blocks_output: str
-) -> list:
-    """Built-form metrics over one source's lot and block outputs."""
-
-    def lot_handler(
-        parameters, lots: gpd.GeoDataFrame, context: RunContext
-    ) -> gpd.GeoDataFrame:
-        with timed("lot built-form", context.logger):
-            return lot_built_form(lots)
-
-    def block_handler(
-        parameters,
-        lots: gpd.GeoDataFrame,
-        blocks: gpd.GeoDataFrame,
-        context: RunContext,
-    ) -> dict[str, gpd.GeoDataFrame]:
-        with timed("block built-form", context.logger):
-            return built_form(lots, blocks)
-
-    lot_handler.__annotations__["parameters"] = parameters_type
-    block_handler.__annotations__["parameters"] = parameters_type
-    return [
-        metric(
-            name="reimagina_lot_built_form",
-            description="Calculate built-form indicators for every lot.",
-            inputs={"lots": Dependency(lots_output)},
-            outputs={"reimagina_lot_indicators": declaration()},
-        )(lot_handler),
-        metric(
-            name="reimagina_built_form",
-            description="Return lot indicators and their block aggregates.",
-            inputs={
-                "lots": Dependency("reimagina_lot_indicators"),
-                "blocks": Dependency(blocks_output),
-            },
-            outputs={
-                "reimagina_built_form_lots": declaration(),
-                "reimagina_built_form_blocks": declaration(),
-            },
-        )(block_handler),
-    ]
 
 
 def read_snapshot_accessibility(name: str) -> dict[str, pd.DataFrame]:
@@ -737,7 +615,7 @@ def create_plugin() -> PluginDefinition:
             scenario_dataset,
             scenario_pois,
             road_network,
-            *built_form_metrics(
+            *built_form_nodes.built_form_metrics(
                 ScenarioParameters,
                 "reimagina_scenario_lots",
                 "reimagina_scenario_blocks",
@@ -764,7 +642,7 @@ def create_snapshot_plugin() -> PluginDefinition:
         nodes=[
             prepared_snapshot,
             prepared_accessibility,
-            *built_form_metrics(
+            *built_form_nodes.built_form_metrics(
                 SnapshotParameters,
                 "reimagina_prepared_lots",
                 "reimagina_prepared_blocks",

@@ -181,7 +181,7 @@ instead of skipping keys.
 Source: Reimagina `dev` commit `cf17664d169116a2760741ea92737abf9b9ad212`,
 `pipelines/indicators/built-form/src/built_form/__init__.py`.
 
-The pure functions in `calculation.py` preserve the original threshold, land-use
+The pure functions in `indicators/built_form/calculation.py` preserve the original threshold, land-use
 branches, Python rounding, missing-data behavior, and aggregation. Local variable
 bindings in aggregation permit static type narrowing without changing arithmetic.
 The adapter normalizes pandas missing values to Python `None` before computation.
