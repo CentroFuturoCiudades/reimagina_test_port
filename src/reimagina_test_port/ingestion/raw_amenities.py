@@ -49,19 +49,16 @@ class Rule:
 class Layer:
     rules: tuple[Rule, ...]
     name_column: str | None = None
+    # Read for public_space rows only: urban_fabric.md's area_m2.
     area_column: str | None = None
 
 
-PUBLIC_SPACES = (
-    "ESPACIO DEPORTIVO",
-    "JARDIN VECINAL",
-    "PARQUE DE BARRIO",
-    "PARQUE URBANO",
-)
+PUBLIC_SPACES = ("JARDIN VECINAL", "PARQUE DE BARRIO", "PARQUE URBANO")
 # exe_reimagina ``cleaning/equipamientos/mexicali/2_equip_for_exe.ipynb``
 # (CATEGORY_CONFIG): the same six layers and TIPO filters, with the categories of
-# urban_fabric.md. Rows no rule matches are left out (edu_basica's CENDI and
-# telesecundarias; esp_pub's medians, roundabouts...).
+# urban_fabric.md. One change: esp_pub's sports spaces are sports_recreation (exe
+# counted them as parks). Rows no rule matches are left out (edu_basica's CENDI
+# and telesecundarias; esp_pub's medians, roundabouts...).
 IMIP_LAYERS = {
     "edu_basica": Layer(
         rules=(
@@ -80,7 +77,13 @@ IMIP_LAYERS = {
     "cult_rec": Layer((Rule("cultural_facility"),), name_column="NOMBRE"),
     # No name column; Sup_M2 is the space's area (SUP_HA and Shape_Area are the
     # urban boundary's).
-    "esp_pub": Layer((Rule("public_space", PUBLIC_SPACES),), area_column="Sup_M2"),
+    "esp_pub": Layer(
+        (
+            Rule("public_space", PUBLIC_SPACES),
+            Rule("sports_recreation", ("ESPACIO DEPORTIVO",)),
+        ),
+        area_column="Sup_M2",
+    ),
 }
 
 
@@ -120,7 +123,7 @@ def imip(folder: Path) -> gpd.GeoDataFrame:
                         "name": names.where(names.ne("") & names.ne("None")),
                         "area_m2": (
                             pd.to_numeric(rows[layer.area_column], errors="coerce")
-                            if layer.area_column
+                            if layer.area_column and rule.category == "public_space"
                             else float("nan")
                         ),
                     },

@@ -130,7 +130,8 @@ def test_imip_normalizer(tmp_path):
                      "ESCUELA SECUNDARIA TECNICA", "TELESECUNDARIA",
                      "CENTRO DE DESARROLLO INFANTIL (CENDI)"],
                     [Point(i, 0) for i in range(5)]),
-        esp_pub=([1, 2], ["PARQUE URBANO", "GLORIETAS"], [Point(0, 0), Point(1, 0)]),
+        esp_pub=([1, 2, 3], ["PARQUE URBANO", "GLORIETAS", "ESPACIO DEPORTIVO"],
+                 [Point(0, 0), Point(1, 0), Point(2, 0)]),
         deporte=([9], ["UNIDAD DEPORTIVA"], [Point(0, 0)]),
     )  # fmt: skip
     raw = raw_amenities.imip(tmp_path / "imip")
@@ -141,12 +142,15 @@ def test_imip_normalizer(tmp_path):
         "edu_basica:3": "secondary_education",
         "edu_basica:2": "primary_education",
         "esp_pub:1": "public_space",
+        "esp_pub:3": "sports_recreation",
         "deporte:9": "sports_recreation",
     }
     assert table.loc["edu_basica:1", "name"] == "edu_basica 1"
     assert table.loc["esp_pub:1", "area_m2"] == 1500
     assert pd.isna(table.loc["esp_pub:1", "name"])
     assert pd.isna(table.loc["deporte:9", "area_m2"])
+    # area_m2 is for public spaces only.
+    assert pd.isna(table.loc["esp_pub:3", "area_m2"])
     assert (table["source"] == "IMIP").all()
 
 

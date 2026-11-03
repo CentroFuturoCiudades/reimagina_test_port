@@ -219,8 +219,8 @@ with exe_reimagina's `2_equip_for_exe.ipynb` rules: six of its 15 layers,
 and technical secondary `secondary_education`; CENDI and telesecundaria left
 out), `med_sup` `secondary_education`, `edu_sup` `tertiary_education`, `deporte`
 `sports_recreation`, `cult_rec` `cultural_facility`, and `esp_pub` filtered to
-sports spaces, neighbourhood gardens and parks, all `public_space` (as exe
-does). Names come from `NOM_ESC` or `NOMBRE` (`esp_pub` has none); `area_m2`,
+neighbourhood gardens and parks (`public_space`) and sports spaces
+(`sports_recreation`; exe counted them as parks). Names come from `NOM_ESC` or `NOMBRE` (`esp_pub` has none); `area_m2`,
 of public spaces only, from `esp_pub`'s `Sup_M2`. It replaces the copy of that
 notebook's output exe_reimagina read (`pois_accesibilidad/pois_02002`), which
 also lost names and areas.
