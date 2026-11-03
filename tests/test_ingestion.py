@@ -11,7 +11,7 @@ import rasterio
 from rasterio.transform import from_origin
 from shapely.geometry import Point, box
 
-from reimagina_test_port import elements, footprints, prep
+from reimagina_test_port.ingestion import elements, footprints, prep
 
 CRS = "EPSG:32611"
 PARAMS = footprints.FootprintParams()

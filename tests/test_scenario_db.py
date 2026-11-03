@@ -22,11 +22,12 @@ from shapely.geometry import box
 
 from reimagina_test_port import (
     accessibility,
-    baseline_writer,
     contract,
     plugin,
     scenario,
 )
+from reimagina_test_port.ingestion import baseline_writer
+from reimagina_test_port.ingestion import nodes as ingestion_nodes
 
 pytestmark = pytest.mark.postgis
 ROOT = Path(__file__).resolve().parents[1]
@@ -653,7 +654,11 @@ def new_baseline(dsn):
 
 def write_new_baseline(count: int = 4, **options) -> dict:
     return baseline_writer.write_baseline(
-        PROJECT, NEW_BASELINE, new_tables(count), plugin.BASELINE_ATTRIBUTES, **options
+        PROJECT,
+        NEW_BASELINE,
+        new_tables(count),
+        ingestion_nodes.BASELINE_ATTRIBUTES,
+        **options,
     )
 
 
@@ -732,7 +737,7 @@ def test_baseline_with_forks_is_refused(new_baseline, dsn):
         write_new_baseline()
     with pytest.raises(baseline_writer.BaselineScenarioError, match="is a fork"):
         baseline_writer.write_baseline(
-            PROJECT, FORK, new_tables(), plugin.BASELINE_ATTRIBUTES
+            PROJECT, FORK, new_tables(), ingestion_nodes.BASELINE_ATTRIBUTES
         )
 
 
@@ -787,7 +792,7 @@ def test_migrate_fork_edits(new_baseline, dsn):
 
 
 def test_baseline_write_metric(new_baseline, dsn, monkeypatch):
-    from reimagina_test_port import baseline
+    from reimagina_test_port.ingestion import baseline
 
     tables = new_tables()
     monkeypatch.setattr(

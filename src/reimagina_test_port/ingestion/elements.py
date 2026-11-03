@@ -16,9 +16,9 @@ import pandas as pd
 import shapely
 from shapely.geometry.base import BaseGeometry
 
-from reimagina_test_port.cadastral import stable_element_uuid
 from reimagina_test_port.common.rules import MIN_BUILT_M2
 from reimagina_test_port.common.vocabulary import normalize_amenity_type
+from reimagina_test_port.ingestion.cadastral import stable_element_uuid
 
 logger = logging.getLogger(__name__)
 

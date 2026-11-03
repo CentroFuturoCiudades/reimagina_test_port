@@ -25,7 +25,7 @@ RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
     && rm /tmp/base-constraints.txt
 RUN python -c "import reimagina_test_port.plugin" \
     && python -c "from lyra.sdk.plugin_loader import load_plugin_manifest; load_plugin_manifest('reimagina-test-port')" \
-    && python -c "import reimagina_test_port.accessibility, reimagina_test_port.baseline"
+    && python -c "import reimagina_test_port.accessibility, reimagina_test_port.ingestion.baseline"
 # Writes LYRA_TOML (Container Apps secret) to /lyra_data/config/lyra.toml.
 COPY --chmod=755 docker/entrypoint.sh /app/entrypoint.sh
 ENTRYPOINT ["/app/entrypoint.sh"]
