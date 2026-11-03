@@ -16,6 +16,7 @@ from collections.abc import Mapping
 import psycopg
 from psycopg import sql
 
+from reimagina_test_port.common.rules import LAND_USES
 from reimagina_test_port.common.schema import UNITS
 from reimagina_test_port.indicators.accessibility.nodes import ACCESSIBILITY_KEYS
 from reimagina_test_port.ingestion.crosswalk import (
@@ -25,15 +26,10 @@ from reimagina_test_port.ingestion.crosswalk import (
 from reimagina_test_port.scenario.contract import ContractError
 from reimagina_test_port.scenario.source import SCHEMA
 
-LAND_USE = (
-    "single_family", "multifamily", "mixed_use", "commerce", "office", "industrial",
-    "amenity",
-)  # fmt: skip
-
 # (element_type, key) -> (value_type, enum_values, unit), where the plugin's kind
 # ("number" or "text") is not enough.
 ATTRIBUTES = {
-    ("lot", "land_use"): ("enum", LAND_USE, None),
+    ("lot", "land_use"): ("enum", LAND_USES, None),
     ("lot", "num_levels"): ("integer", None, None),
     ("lot", "area"): ("number", None, "m2"),
     ("lot", "unit_size_m2"): ("number", None, "m2"),

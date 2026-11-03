@@ -232,14 +232,12 @@ establishments are offices); with amenities only,
 that also holds homes or establishments. Lots no longer carry `amenity_type`: an
 amenity's category lives on the amenity element.
 
-`housing.floor_share` (0-100) comes from a per-city space allocation source
-(`sources.space_allocation`: one row per lot, `lot_key` and
-`housing.floor_share`), a stand-in for the space allocation of
-`ingestion_pipelines.md` until it is computed. Lots it lacks have no value; the
-report counts them and the file's keys of no lot. Mexicali's
-(`az://sandbox/projects/EXE/cleaned/space_allocation/space_allocation_02002.parquet`)
-is written by `scripts/space_allocation.py` from a build's `land_use`: 80 for
-`mixed_use` lots, 100 for every other.
+`housing.floor_share` (0-100) is the space allocation by lot type, a stand-in
+for the per-lot space allocation of `ingestion_pipelines.md` until it is
+computed: each city's YAML gives a share per land use
+(`params.space_allocation.housing.floor_share`), and each lot takes its land
+use's. A land use not listed, or a lot without land use, has no value. Mexicali:
+`mixed_use` 80 (80 housing, 20 other), every other land use 100.
 
 ## Baseline writer
 

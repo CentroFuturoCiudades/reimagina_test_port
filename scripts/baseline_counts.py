@@ -113,7 +113,6 @@ def main() -> None:
         for category, count in tables[element_type]["category"].value_counts().items():
             print(row(category, count))
     print()
-    print(f"Space allocation: {report['space_allocation']}")
     print(f"Cadastral keys: {report['lots']}")
 
     if args.scenario:

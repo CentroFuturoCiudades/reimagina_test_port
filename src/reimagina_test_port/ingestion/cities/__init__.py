@@ -7,11 +7,13 @@ builders' ``params``. Values come from exe_reimagina's
 meaning of each parameter. Source URIs point at the CFC data lake.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from reimagina_test_port.common.rules import LAND_USES
 
 FOLDER = Path(__file__).parent
 
@@ -47,9 +49,6 @@ class CityPreset:
     # establishments by the SCIAN crosswalk.
     denue_uri: str
     denue_municipio: str
-    # Space allocation per lot (cadastral key -> housing.floor_share), a source of
-    # its own until the allocation is computed (scripts/space_allocation.py).
-    space_allocation_uri: str
     denue_encoding: str = "latin-1"
     normativa_max_distance: float = 3.0
     presence_threshold: float = 0.5
@@ -60,6 +59,9 @@ class CityPreset:
     default_capacity: float = 1.0
     # Placement distance (urban_fabric.md): farther from every lot, not loaded.
     lot_max_distance_m: float = 50.0
+    # Space allocation by lot type: land_use -> housing.floor_share (0-100), until
+    # the allocation is computed per lot. A land use not listed has no value.
+    floor_share_by_land_use: dict[str, float] = field(default_factory=dict)
 
     @property
     def cve_code(self) -> str:
@@ -124,12 +126,25 @@ def from_yaml(path: Path) -> CityPreset:
     tiles_uri, heights = source("heights")
     pois_uri, equipment = source("equipment")
     denue_uri, denue = source("denue")
-    space_allocation_uri, space_allocation = source("space_allocation")
-    lots, amenities, points = (
+    lots, amenities, points, space_allocation = (
         params.section("lots"),
         params.section("amenities"),
         params.section("points"),
+        params.section("space_allocation"),
     )
+    shares = {
+        str(use): float(share)
+        for use, share in _mapping(
+            space_allocation.required("housing.floor_share"),
+            "space_allocation.housing.floor_share",
+        ).items()
+    }
+    if unknown := sorted(set(shares) - set(LAND_USES)):
+        msg = f"{path.name}: space_allocation: unknown land uses {unknown}"
+        raise CityConfigError(msg)
+    if not all(0 <= share <= 100 for share in shares.values()):
+        msg = f"{path.name}: space_allocation: housing.floor_share must be 0-100"
+        raise CityConfigError(msg)
     preset = CityPreset(
         name=str(config.required("name")),
         key=str(config.required("city")),
@@ -154,11 +169,11 @@ def from_yaml(path: Path) -> CityPreset:
         pois_uri=pois_uri,
         denue_uri=denue_uri,
         denue_municipio=str(denue.required("municipio")),
-        space_allocation_uri=space_allocation_uri,
         denue_encoding=str(denue.optional("encoding", default("denue_encoding"))),
         default_capacity=float(
             amenities.optional("default_capacity", default("default_capacity"))
         ),
+        floor_share_by_land_use=shares,
         lot_max_distance_m=float(
             points.optional("lot_max_distance_m", default("lot_max_distance_m"))
         ),
@@ -174,8 +189,8 @@ def from_yaml(path: Path) -> CityPreset:
         },
     )
     for section in (
-        blocks, census, parcels, zoning, heights, equipment, denue, space_allocation,
-        lots, amenities, points, sources, params, config,
+        blocks, census, parcels, zoning, heights, equipment, denue,
+        lots, amenities, points, space_allocation, sources, params, config,
     ):  # fmt: skip
         section.done()
     if preset.key != path.stem:
