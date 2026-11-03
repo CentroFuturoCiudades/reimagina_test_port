@@ -8,7 +8,10 @@ import pandas as pd
 import pytest
 from lyra.sdk import GraphExecutionError
 
-from reimagina_test_port import accessibility, network, plugin
+from reimagina_test_port import plugin
+from reimagina_test_port.indicators.accessibility import model as accessibility
+from reimagina_test_port.indicators.accessibility import network
+from reimagina_test_port.indicators.accessibility import nodes as accessibility_nodes
 from reimagina_test_port.local import run_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,7 +42,7 @@ def test_parity_with_reimagina_lyra():
         assert list(table.columns) == [
             *plugin.IDENTITY,
             "geometry",
-            *plugin.ACCESSIBILITY_KEYS,
+            *accessibility_nodes.ACCESSIBILITY_KEYS,
         ]
         for row in table.drop(columns=plugin.IDENTITY[1:] + ["geometry"]).to_dict(
             "records"
@@ -60,11 +63,11 @@ def test_lots_inherit_their_block():
         values = present(row)
         if row["parent_id"] in blocks.index:
             block = present(blocks.loc[row["parent_id"]].to_dict())
-            for key in plugin.ACCESSIBILITY_KEYS:
+            for key in accessibility_nodes.ACCESSIBILITY_KEYS:
                 assert values.get(key) == block.get(key)
         else:
             # Orphans and lots without a parent reach nothing.
-            assert not set(values) & set(plugin.ACCESSIBILITY_KEYS)
+            assert not set(values) & set(accessibility_nodes.ACCESSIBILITY_KEYS)
 
 
 def test_minutes_is_the_slowest_reachable_amenity():
@@ -74,30 +77,32 @@ def test_minutes_is_the_slowest_reachable_amenity():
     for row in blocks.to_dict("records"):
         distances = {
             key.removeprefix("distance_to_"): row[key]
-            for key in plugin.DISTANCE_KEYS
+            for key in accessibility_nodes.DISTANCE_KEYS
             if not pd.isna(row[key])
         }
         assert row["farthest_amenity"] == max(distances, key=distances.get)
         assert row["minutes"] == distances[row["farthest_amenity"]]
     # Unreachable or absent categories (and the unknown "casino") stay null.
     assert blocks["distance_to_hospital"].isna().all()
-    scores = blocks[plugin.SCORE_KEYS].stack().dropna()
+    scores = blocks[accessibility_nodes.SCORE_KEYS].stack().dropna()
     assert scores.between(0, 1, inclusive="right").all()
 
 
 def test_no_demand_or_no_pois_gives_nulls():
     lots, blocks, pois, nodes, edges = inputs()
     empty = blocks.assign(population=0)
-    tables = plugin.accessibility_tables(lots, empty, pois, nodes, edges)
+    tables = accessibility_nodes.accessibility_tables(lots, empty, pois, nodes, edges)
     assert (
-        tables["reimagina_accessibility_blocks"][plugin.ACCESSIBILITY_KEYS]
+        tables["reimagina_accessibility_blocks"][accessibility_nodes.ACCESSIBILITY_KEYS]
         .isna()
         .all()
         .all()
     )
-    tables = plugin.accessibility_tables(lots, blocks, pois.iloc[:0], nodes, edges)
+    tables = accessibility_nodes.accessibility_tables(
+        lots, blocks, pois.iloc[:0], nodes, edges
+    )
     assert (
-        tables["reimagina_accessibility_lots"][plugin.ACCESSIBILITY_KEYS]
+        tables["reimagina_accessibility_lots"][accessibility_nodes.ACCESSIBILITY_KEYS]
         .isna()
         .all()
         .all()
@@ -108,7 +113,7 @@ def test_network_in_another_crs_fails():
     lots, blocks, pois, nodes, edges = inputs()
     far = nodes.assign(x=nodes.x + 500_000)
     with pytest.raises(ValueError, match="ACCESS_CRS"):
-        plugin.accessibility_tables(lots, blocks, pois, far, edges)
+        accessibility_nodes.accessibility_tables(lots, blocks, pois, far, edges)
 
 
 def test_missing_snapshot_inputs(tmp_path, monkeypatch):

@@ -20,15 +20,15 @@ import geopandas as gpd
 import pandana as pdna
 import pandas as pd
 
-from reimagina_test_port.accessibility_fastpath import apply_fastpath
-from reimagina_test_port.accessibility_metrics import (
-    compute_pois_accessibility_scores,
-    create_origin_destination_mappings,
-)
 from reimagina_test_port.common.vocabulary import (
     AMENITY_ACCESSIBILITY_PARAMS,
     AMENITY_TYPES,
     normalize_amenity_type,
+)
+from reimagina_test_port.indicators.accessibility.fastpath import apply_fastpath
+from reimagina_test_port.indicators.accessibility.metrics import (
+    compute_pois_accessibility_scores,
+    create_origin_destination_mappings,
 )
 
 logger = logging.getLogger(__name__)
