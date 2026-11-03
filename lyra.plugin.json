@@ -772,6 +772,13 @@
               "nullable": true,
               "type": "string",
               "unit": null
+            },
+            {
+              "description": "housing.floor share",
+              "name": "housing.floor_share",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
             }
           ],
           "geometry": "geometry",
@@ -1093,6 +1100,13 @@
               "nullable": true,
               "type": "string",
               "unit": null
+            },
+            {
+              "description": "housing.floor share",
+              "name": "housing.floor_share",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
             }
           ],
           "geometry": "geometry",
@@ -1136,7 +1150,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's baseline from the data lake (reimagina_baseline) and write it into an existing baseline scenario of a project: elements, state and attribute values of blocks, lots, amenities and establishments, in one transaction. Existing elements are reused unchanged; running it again replaces the scenario's rows. Every attribute must be active in attribute_catalog. Compute indicators afterwards with reimagina_scenario_write.",
+      "description": "Build a city's baseline from the data lake (reimagina_baseline) and write it into an existing baseline scenario of a project: elements, state and attribute values of blocks, lots, amenities and establishments, in one transaction. Existing elements are reused unchanged; running it again replaces the scenario's rows. Missing attribute_catalog and indicator_catalog rows are added first; existing ones are left as they are and must be active. Compute indicators afterwards with reimagina_scenario_write.",
       "inputs": {
         "amenities": {
           "arguments": {},
@@ -1183,6 +1197,20 @@
             {
               "description": "Scenario elements no longer in the baseline.",
               "name": "elements_removed",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "attribute_catalog rows added (missing before).",
+              "name": "attributes_added",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "indicator_catalog rows added (missing before).",
+              "name": "indicators_added",
               "nullable": false,
               "type": "integer",
               "unit": "count"

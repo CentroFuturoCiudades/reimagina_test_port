@@ -187,6 +187,13 @@ def write_sources(root: Path) -> dict[str, str]:
     ).drop(columns="geometry").to_csv(
         root / "denue.csv", index=False, encoding="latin-1"
     )
+    # Space allocation: two lots, and a key of no lot.
+    pd.DataFrame(
+        {
+            "lot_key": ["1-A-7-1", "1-A-7-2", "9-Z-9-9"],
+            "housing.floor_share": [80.0, 100.0, 100.0],
+        }
+    ).to_parquet(root / "space_allocation.parquet")
     # One 120 x 60 m tile at 0.5 m: 5 m (2 floors, exact in float32), built.
     tiles = root / "tiles" / "2023"
     tiles.mkdir(parents=True)
@@ -218,6 +225,7 @@ def write_sources(root: Path) -> dict[str, str]:
         "normativa_uri": str(root / "normativa.geojson"),
         "pois_uri": str(root / "pois_02002.geoparquet"),
         "denue_uri": str(root / "denue.csv"),
+        "space_allocation_uri": str(root / "space_allocation.parquet"),
         "tiles_uri": str(root / "tiles"),
         "manifests_uri": str(root / "manifests"),
     }
@@ -264,6 +272,7 @@ def test_build(city, tmp_path):
             "elements": 3,
             "outside_every_lot": 1,
         },
+        "space_allocation": {"rows": 3, "lots_without_value": 3, "keys_of_no_lot": 1},
     }
     lots = result["lots"].set_index("source_record_ref")
     blocks = result["blocks"].set_index("source_record_ref")
@@ -300,6 +309,9 @@ def test_build(city, tmp_path):
     assert lots.loc["1-A-7-1", "num_levels"] == 2
     assert lots.loc["1-A-7-1", "area"] == pytest.approx(400.0)
     assert lots.loc["1-A-7-1", "occupancy_rate"] == pytest.approx(0.75)
+    assert lots.loc["1-A-7-1", "housing.floor_share"] == 80
+    assert lots.loc["1-A-7-2", "housing.floor_share"] == 100
+    assert pd.isna(lots.loc["1-B-8-1", "housing.floor_share"])
     assert blocks.loc[CVEGEO[0], "people_per_household"] == 3.25
     # Targets: declared, unset when loaded.
     assert blocks[["lot.size_m2", "lot.frontage_m"]].isna().all().all()
@@ -388,6 +400,7 @@ def write_city(tmp_path: Path, name: str, change) -> Path:
     ("change", "message"),
     [
         (lambda c: c["sources"].pop("denue"), "sources.denue: uri is required"),
+        (lambda c: c["sources"].pop("space_allocation"), "space_allocation: uri"),
         (lambda c: c["sources"]["denue"]["params"].pop("municipio"), "municipio"),
         (lambda c: c["params"]["lots"].update(typo=1), r"params.lots: unknown keys \['typo'\]"),
         (lambda c: c["sources"].update(roads={"uri": "x"}), r"sources: unknown keys \['roads'\]"),

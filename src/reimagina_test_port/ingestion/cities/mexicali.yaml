@@ -36,6 +36,11 @@ sources:
   denue:   # INEGI DENUE 05_2025 as published: amenities and establishments by the SCIAN crosswalk
     uri: az://raw/inegi/denue/02_baja_california/denue_02_0525_csv/conjunto_de_datos/denue_inegi_02_.csv
     params: {municipio: Mexicali, encoding: latin-1}
+  # One row per lot: lot_key (cadastral key) and housing.floor_share (0-100), until
+  # the space allocation is computed. Mexicali: 80 for mixed use, 100 for the rest
+  # (scripts/space_allocation.py).
+  space_allocation:
+    uri: az://sandbox/projects/EXE/cleaned/space_allocation/space_allocation_02002.parquet
 
 params:
   lots:   # exe_reimagina cities/mexicali.toml values

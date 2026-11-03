@@ -7,8 +7,7 @@ winning (``461110`` before ``4611``). A code no prefix matches is an establishme
 of category ``other``: it counts only as jobs. Each DENUE record is one or the
 other, never both.
 
-Also the amenities file's own category -> category map, and the categories and
-office sectors that land use reads.
+Also the amenities file's own category -> category map.
 """
 
 import csv
@@ -45,11 +44,6 @@ AMENITY_FILE_CATEGORIES = {
     "Educación Superior": "tertiary_education",
 }
 
-# SCIAN sectors whose establishments are offices, for land use (a draft: the
-# design does not list them): information, finance, real estate, professional,
-# corporate and support services, and government.
-OFFICE_SECTORS = frozenset({"51", "52", "53", "54", "55", "56", "93"})
-
 
 @cache
 def table(path: Path = PATH) -> tuple[tuple[str, str, str], ...]:
@@ -81,7 +75,3 @@ def classify(scian_codes: pd.Series) -> pd.DataFrame:
     rest = element.isna()
     element[rest], category[rest] = "establishment", "other"
     return pd.DataFrame({"element": element, "category": category})
-
-
-def is_office(scian_codes: pd.Series) -> pd.Series:
-    return scian_codes.astype(str).str[:2].isin(OFFICE_SECTORS)

@@ -1,8 +1,9 @@
 """Write a city's baseline elements as a Reimagina baseline scenario.
 
 The elements are blocks, lots, amenities and establishments; each element type
-must exist in the database's ``element_type`` enum and its attributes in
-``attribute_catalog``.
+must exist in the database's ``element_type`` enum. Missing ``attribute_catalog``
+and ``indicator_catalog`` rows are added first (``catalogs.upsert``), existing
+ones left as they are.
 
 Fills an existing baseline scenario (created in the API) with ``elements``,
 ``element_state`` and ``element_state_attribute_value`` rows, in one
@@ -20,6 +21,7 @@ import psycopg
 import shapely
 from psycopg import sql
 
+from reimagina_test_port.ingestion import catalogs
 from reimagina_test_port.scenario import contract
 from reimagina_test_port.scenario.source import SCHEMA, resolve_dsn
 
@@ -167,7 +169,8 @@ def write_baseline(
 
     Returns:
         Counts: ``elements``, ``elements_created``, ``attribute_values``,
-        ``elements_removed`` (state rows of elements no longer present) and
+        ``elements_removed`` (state rows of elements no longer present),
+        ``attributes_added`` and ``indicators_added`` (catalog rows added) and
         ``by_type`` (``{element_type: elements}``, the scenario's state rows of
         each type of ``tables`` after the write, read back from the database).
     """
@@ -185,6 +188,7 @@ def write_baseline(
     }
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
         _check_scenario(cur, project_id, scenario_id)
+        added = catalogs.upsert(cur, attributes)
         ids = contract.check(cur, "attribute_catalog", required, enums)
         cur.execute(
             "CREATE TEMP TABLE baseline_elements (id uuid PRIMARY KEY, type text, "
@@ -246,6 +250,7 @@ def write_baseline(
         "elements_created": created,
         "attribute_values": values,
         "elements_removed": removed,
+        **added,
         "by_type": {
             element_type: stored.get(element_type, 0) for element_type in tables
         },

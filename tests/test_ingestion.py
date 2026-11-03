@@ -208,7 +208,8 @@ def test_classify_land_use_from_contents() -> None:
         + ["industrial"]
     )  # fmt: skip
     contents = contents_frame(
-        # A clinic doesn't change the class of a lot with homes.
+        # A clinic doesn't change the class of a lot with homes. Offices are not
+        # classified: the design does not say which establishments are offices.
         ("sf", "amenity", "primary_healthcare", "621112", 3),
         ("mixed", "establishment", "medicines", "464111", 3),
         ("school", "amenity", "primary_education", "611122", 40),
@@ -227,7 +228,7 @@ def test_classify_land_use_from_contents() -> None:
     # nothing: its zone's use; "vacant" is built with nothing: industrial zone.
     expect_equal(
         land_use.tolist(),
-        ["single_family", "multifamily", "mixed_use", "amenity", "commerce", "office",
+        ["single_family", "multifamily", "mixed_use", "amenity", "commerce", "commerce",
          "industrial", "multifamily", "single_family", "industrial"],
     )  # fmt: skip
     # Remaining homes = 10 - 1 reserved for the single-family lot -> 900 / 9 m².

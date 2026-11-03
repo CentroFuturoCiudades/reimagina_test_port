@@ -47,6 +47,9 @@ class CityPreset:
     # establishments by the SCIAN crosswalk.
     denue_uri: str
     denue_municipio: str
+    # Space allocation per lot (cadastral key -> housing.floor_share), a source of
+    # its own until the allocation is computed (scripts/space_allocation.py).
+    space_allocation_uri: str
     denue_encoding: str = "latin-1"
     normativa_max_distance: float = 3.0
     presence_threshold: float = 0.5
@@ -121,6 +124,7 @@ def from_yaml(path: Path) -> CityPreset:
     tiles_uri, heights = source("heights")
     pois_uri, equipment = source("equipment")
     denue_uri, denue = source("denue")
+    space_allocation_uri, space_allocation = source("space_allocation")
     lots, amenities, points = (
         params.section("lots"),
         params.section("amenities"),
@@ -150,6 +154,7 @@ def from_yaml(path: Path) -> CityPreset:
         pois_uri=pois_uri,
         denue_uri=denue_uri,
         denue_municipio=str(denue.required("municipio")),
+        space_allocation_uri=space_allocation_uri,
         denue_encoding=str(denue.optional("encoding", default("denue_encoding"))),
         default_capacity=float(
             amenities.optional("default_capacity", default("default_capacity"))
@@ -169,7 +174,7 @@ def from_yaml(path: Path) -> CityPreset:
         },
     )
     for section in (
-        blocks, census, parcels, zoning, heights, equipment, denue,
+        blocks, census, parcels, zoning, heights, equipment, denue, space_allocation,
         lots, amenities, points, sources, params, config,
     ):  # fmt: skip
         section.done()

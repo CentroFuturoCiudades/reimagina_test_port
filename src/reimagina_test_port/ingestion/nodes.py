@@ -88,7 +88,11 @@ def baseline_declaration(*, blocks: bool) -> TableOutput:
             ),
         ]
     else:
-        units = {"people_per_household": Unit.COUNT, "occupancy_rate": Unit.RATIO}
+        units = {
+            "people_per_household": Unit.COUNT,
+            "occupancy_rate": Unit.RATIO,
+            "housing.floor_share": Unit.PERCENT,
+        }
         attributes = [
             column(
                 key,
@@ -111,6 +115,7 @@ BASELINE_LOT_ATTRIBUTES = [
     "people_per_household",
     "occupancy_rate",
     "commerce_type",
+    "housing.floor_share",
 ]
 
 
@@ -238,6 +243,8 @@ BASELINE_WRITE_DECLARATION = TableOutput(
             ("elements_created", "Elements new to the database."),
             ("attribute_values", "Attribute values written."),
             ("elements_removed", "Scenario elements no longer in the baseline."),
+            ("attributes_added", "attribute_catalog rows added (missing before)."),
+            ("indicators_added", "indicator_catalog rows added (missing before)."),
             *(
                 (name, f"{name.capitalize()} in the scenario after the write.")
                 for name in WRITTEN_COLUMNS.values()
@@ -262,9 +269,10 @@ BASELINE_WRITE_DECLARATION = TableOutput(
         "it into an existing baseline scenario of a project: elements, state and "
         "attribute values of blocks, lots, amenities and establishments, in one "
         "transaction. Existing elements are reused "
-        "unchanged; running it again replaces the scenario's rows. Every attribute "
-        "must be active in attribute_catalog. Compute indicators afterwards with "
-        "reimagina_scenario_write."
+        "unchanged; running it again replaces the scenario's rows. Missing "
+        "attribute_catalog and indicator_catalog rows are added first; existing "
+        "ones are left as they are and must be active. Compute indicators "
+        "afterwards with reimagina_scenario_write."
     ),
     inputs=BASELINE_INPUTS,
     outputs={"reimagina_baseline_write": BASELINE_WRITE_DECLARATION},

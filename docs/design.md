@@ -13,7 +13,7 @@ src/reimagina_test_port/
 ├── snapshot.py    prepared GeoParquet snapshots, the offline sources
 ├── ingestion/     a city's baseline from the data lake (data, not indicators):
 │                  cities/*.yaml, prep, footprints, cadastral, elements,
-│                  crosswalk (+ crosswalk.csv), points, baseline,
+│                  crosswalk (+ crosswalk.csv), points, baseline, catalogs,
 │                  baseline_writer, nodes.py (reimagina_baseline*)
 ├── indicators/    one subpackage per indicator type, each with its nodes.py
 │   ├── built_form/      calculation.py
@@ -225,11 +225,21 @@ homes estimated from the census until the space allocation exists: a built lot
 the block's homes by built-up area. With homes and establishments a lot is
 `mixed_use`; with homes only, `multifamily` from `mf_min_units` homes or one home
 in a building of 600 m² and 2.5 floors, else `single_family`; with establishments
-only, `office` if all are in SCIAN sectors 51-56 or 93 (a draft), `industrial` if
-most workers are in manufacturing, else `commerce`; with amenities only,
+only, `industrial` if most workers are in manufacturing, else `commerce`
+(`office`, "all offices", is not assigned: the design does not say which
+establishments are offices); with amenities only,
 `amenity`; with nothing, its zone's use. Amenities don't change the class of a lot
 that also holds homes or establishments. Lots no longer carry `amenity_type`: an
 amenity's category lives on the amenity element.
+
+`housing.floor_share` (0-100) comes from a per-city space allocation source
+(`sources.space_allocation`: one row per lot, `lot_key` and
+`housing.floor_share`), a stand-in for the space allocation of
+`ingestion_pipelines.md` until it is computed. Lots it lacks have no value; the
+report counts them and the file's keys of no lot. Mexicali's
+(`az://sandbox/projects/EXE/cleaned/space_allocation/space_allocation_02002.parquet`)
+is written by `scripts/space_allocation.py` from a build's `land_use`: 80 for
+`mixed_use` lots, 100 for every other.
 
 ## Baseline writer
 
@@ -239,12 +249,16 @@ baseline scenario (created in the API, without forks) in one transaction:
 another baseline, is reused unchanged), `element_state` and
 `element_state_attribute_value`, for blocks, lots, amenities and
 establishments. The API's `element_type` enum must include `amenity` (it has
-`establishment`), and `attribute_catalog` the keys in `BASELINE_ATTRIBUTES`
-(`block.lot.size_m2`, `block.lot.frontage_m`; `category`, `scian_code`,
-`num_workers` and `name` of amenities and establishments, `amenity.capacity`,
-`establishment.scian_sector`; `lot.land_use` with `industrial`), with the
-categories as their enum values; otherwise the contract check fails naming what
-is missing. Running it again replaces the scenario's own
+`establishment`); otherwise the write fails naming the missing types. Before
+writing, `ingestion/catalogs.py` adds the `attribute_catalog` rows of
+`BASELINE_ATTRIBUTES` and the `indicator_catalog` rows of every built-form and
+accessibility indicator (lots and blocks) that are missing, with the API seed's
+types, units and names and the categories as enum values (`ON CONFLICT DO
+NOTHING`). Rows already there are left as they are, so an existing row that is
+deprecated, of another type or whose enum lacks a value the baseline uses (for
+example `lot.land_use` without `industrial`) still fails the contract check,
+naming it. The write returns `attributes_added` and `indicators_added`; a dry run
+rolls them back too. Running it again replaces the scenario's own
 rows, removing elements no longer present and their indicator values. Then
 `reimagina_scenario_write` computes the baseline's indicators, and after it
 each fork's.

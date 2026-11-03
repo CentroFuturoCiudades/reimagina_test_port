@@ -113,6 +113,7 @@ def main() -> None:
         for category, count in tables[element_type]["category"].value_counts().items():
             print(row(category, count))
     print()
+    print(f"Space allocation: {report['space_allocation']}")
     print(f"Cadastral keys: {report['lots']}")
 
     if args.scenario:
@@ -128,6 +129,7 @@ def main() -> None:
         by_type = counts.pop("by_type")
         print()
         print("Written" if args.apply else "Dry run (rolled back)", counts)
+        # attributes_added / indicators_added: catalog rows the write added.
         print(row("type", "built", "in scenario"))
         for element_type, table in tables.items():
             print(row(element_type, len(table), by_type[element_type]))

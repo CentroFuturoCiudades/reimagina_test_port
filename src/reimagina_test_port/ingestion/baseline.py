@@ -40,7 +40,9 @@ LOT_ATTRIBUTES = [
     "people_per_household",
     "occupancy_rate",
     "commerce_type",
+    "housing.floor_share",
 ]
+SPACE_ALLOCATION_COLUMNS = ["lot_key", "housing.floor_share"]
 # lot.size_m2 and lot.frontage_m are targets: unset when the city is loaded
 # bottom-up (urban_fabric.md), so these columns stay empty.
 BLOCK_ATTRIBUTES = ["vivtot", "people_per_household", "lot.size_m2", "lot.frontage_m"]
@@ -100,13 +102,37 @@ def lot_contents(shapes: gpd.GeoDataFrame, *tables: gpd.GeoDataFrame) -> pd.Data
     )
 
 
+def floor_shares(path: Path, keys: pd.Series) -> tuple[pd.Series, dict[str, int]]:
+    """``housing.floor_share`` of each cadastral key from the space allocation file,
+    and a report: its rows, lots without a value and file keys of no lot."""
+    rows = pd.read_parquet(path, columns=SPACE_ALLOCATION_COLUMNS)
+    if repeated := sorted(set(rows["lot_key"][rows["lot_key"].duplicated()])):
+        msg = f"Space allocation lot_key repeated: {repeated[:5]}"
+        raise ValueError(msg)
+    share = pd.to_numeric(rows["housing.floor_share"], errors="coerce")
+    if not share.dropna().between(0, 100).all():
+        msg = "Space allocation housing.floor_share must be 0-100"
+        raise ValueError(msg)
+    by_key = pd.Series(share.to_numpy(), index=rows["lot_key"].astype(str))
+    shares = keys.astype(str).map(by_key)
+    report = {
+        "rows": len(rows),
+        "lots_without_value": int(shares.isna().sum()),
+        "keys_of_no_lot": int((~by_key.index.isin(keys.astype(str))).sum()),
+    }
+    logger.info("Space allocation: %s", report)
+    return shares, report
+
+
 def lot_table(
     lots: gpd.GeoDataFrame,
     blocks: gpd.GeoDataFrame,
     contents: pd.DataFrame,
     city: CityPreset,
+    floor_share: pd.Series,
 ) -> gpd.GeoDataFrame:
-    """One row per lot, with cadastral ids and land use from ``contents``, EPSG:4326."""
+    """One row per lot, with cadastral ids, land use from ``contents`` and
+    ``floor_share`` (aligned with ``lots``), EPSG:4326."""
     missing = sorted(set(lots["cvegeo"].dropna()) - set(blocks["cvegeo"]))
     if missing:
         msg = f"{len(missing)} lot cvegeo without a block, e.g. {missing[:5]}"
@@ -150,6 +176,7 @@ def lot_table(
     )
     for key in LOT_ATTRIBUTES:
         frame[key] = [row.get(key) for row in rows]
+    frame["housing.floor_share"] = floor_share.to_numpy()
     # num_levels is an integer in attribute_catalog: whole floors, rounded as the
     # API's integer decoding does.
     frame["num_levels"] = [
@@ -167,13 +194,15 @@ def build(
     establishments, the source points, the elements kept and those outside
     every lot; for establishments also the DENUE rows of the state and of the
     municipality, those without coordinates, and how many of the municipality's
-    the crosswalk made amenities and establishments.
+    the crosswalk made amenities and establishments; and the space allocation
+    file's rows, lots without a value and keys of no lot.
     """
     progress("download", 0, len(STAGES))
     lots_path = lake.download_shapefile(city.lots_uri, workdir / "lots")
     normativa_path = lake.download(city.normativa_uri, workdir)
     pois_path = lake.download(city.pois_uri, workdir)
     denue_path = lake.download(city.denue_uri, workdir)
+    space_path = lake.download(city.space_allocation_uri, workdir)
     manifests_uri = f"{city.manifests_uri}/{city.year}/manifests"
     manifest_paths = [
         lake.download(f"{manifests_uri}/{name}", workdir / "manifests")
@@ -243,7 +272,8 @@ def build(
 
     progress("elements", 5, len(STAGES))
     contents = lot_contents(shapes, amenities, establishments)
-    lot_rows = lot_table(lots, blocks, contents, city)
+    shares, space_report = floor_shares(space_path, lots["lot_id"])
+    lot_rows = lot_table(lots, blocks, contents, city, shares)
     return {
         "blocks": block_table(blocks),
         "lots": lot_rows,
@@ -253,5 +283,6 @@ def build(
             "lots": keys_report,
             "amenities": amenities_report,
             "establishments": denue_report | establishments_report,
+            "space_allocation": space_report,
         },
     }

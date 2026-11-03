@@ -24,7 +24,7 @@ from reimagina_test_port import plugin
 from reimagina_test_port.common import schema
 from reimagina_test_port.indicators.accessibility import model as accessibility
 from reimagina_test_port.indicators.accessibility import nodes as accessibility_nodes
-from reimagina_test_port.ingestion import baseline_writer
+from reimagina_test_port.ingestion import baseline_writer, catalogs
 from reimagina_test_port.ingestion import nodes as ingestion_nodes
 from reimagina_test_port.scenario import contract
 from reimagina_test_port.scenario import nodes as scenario_nodes
@@ -87,6 +87,8 @@ CREATE TABLE attribute_catalog (
     key text NOT NULL,
     value_type attribute_value_type NOT NULL,
     enum_values text[],
+    unit text,
+    applies_when jsonb,
     status text NOT NULL DEFAULT 'active',
     UNIQUE (element_type, key)
 );
@@ -102,12 +104,17 @@ CREATE TABLE element_state_attribute_value (
         REFERENCES element_state (scenario_id, element_id)
 );
 CREATE TYPE indicator_catalog_status AS ENUM ('active', 'deprecated', 'suspended');
+CREATE TYPE indicator_scope AS ENUM ('diagnostic', 'scenario');
 CREATE TABLE job_run (id uuid PRIMARY KEY);
 CREATE TABLE indicator_catalog (
     id serial PRIMARY KEY,
     element_type element_type NOT NULL,
     key text NOT NULL,
+    name text NOT NULL,
+    unit text,
     value_type attribute_value_type NOT NULL,
+    scope indicator_scope NOT NULL,
+    job_code text,
     status indicator_catalog_status NOT NULL DEFAULT 'active',
     UNIQUE (element_type, key)
 );
@@ -129,14 +136,9 @@ INSERT INTO attribute_catalog (element_type, key, value_type) VALUES
     ('lot', 'unit_size_m2', 'number'), ('lot', 'people_per_household', 'number'),
     ('lot', 'occupancy_rate', 'number'),
     ('lot', 'commerce_type', 'text'), ('block', 'vivtot', 'number'),
-    ('block', 'people_per_household', 'number'), ('block', 'lot.size_m2', 'number'),
-    ('block', 'lot.frontage_m', 'number'),
+    ('block', 'people_per_household', 'number'),
     ('amenity', 'category', 'enum'), ('amenity', 'scian_code', 'text'),
-    ('amenity', 'num_workers', 'integer'), ('amenity', 'capacity', 'number'),
-    ('amenity', 'name', 'text'),
-    ('establishment', 'category', 'enum'), ('establishment', 'scian_code', 'text'),
-    ('establishment', 'scian_sector', 'text'),
-    ('establishment', 'num_workers', 'integer'), ('establishment', 'name', 'text');
+    ('establishment', 'category', 'enum'), ('establishment', 'scian_code', 'text');
 UPDATE attribute_catalog SET enum_values = ARRAY[
     'single_family', 'multifamily', 'mixed_use', 'amenity', 'commerce', 'office',
     'industrial'
@@ -307,12 +309,14 @@ def seed_catalog(conn) -> None:
         for key in keys:
             conn.execute(
                 "INSERT INTO reimagina_urbano.indicator_catalog "
-                "(element_type, key, value_type) VALUES (%s, %s, 'number')",
-                (element_type, key),
+                "(element_type, key, name, value_type, scope) "
+                "VALUES (%s, %s, %s, 'number', 'scenario')",
+                (element_type, key, key),
             )
         conn.execute(
             "INSERT INTO reimagina_urbano.indicator_catalog "
-            "(element_type, key, value_type) VALUES (%s, 'farthest_amenity', 'text')",
+            "(element_type, key, name, value_type, scope) "
+            "VALUES (%s, 'farthest_amenity', 'farthest_amenity', 'text', 'scenario')",
             (element_type,),
         )
 
@@ -674,6 +678,7 @@ def new_tables(count: int = 4):
             "unit_size_m2": [None, None, 80.0, None][:count],
             "people_per_household": [3.5, None, 3.0, None][:count],
             "occupancy_rate": [0.9, None, None, None][:count],
+            "housing.floor_share": [100.0, 100.0, 80.0, None][:count],
             "commerce_type": [None, "shop", None, None][:count],
         },
         geometry=[lot_box(i, 0.00002) for i in range(count)],
@@ -764,22 +769,68 @@ def test_baseline_contract(new_baseline, dsn):
     assert counts(dsn, NEW_BASELINE) == (0, 0)
 
 
+def test_catalog_upsert_needs_the_element_types(dsn):
+    with (
+        psycopg.connect(dsn) as conn,
+        conn.cursor() as cur,
+        pytest.raises(contract.ContractError, match=r"lacks \['station'\]"),
+    ):
+        catalogs.upsert(cur, {"station": {"name": "text"}})
+
+
 def test_write_new_baseline(new_baseline, dsn):
     old = counts(dsn, BASELINE)
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            "DELETE FROM reimagina_urbano.indicator_catalog "
+            "WHERE element_type = 'block' AND key = 'density'"
+        )
+        land_use = conn.execute(
+            "SELECT id, enum_values FROM reimagina_urbano.attribute_catalog "
+            "WHERE element_type = 'lot' AND key = 'land_use'"
+        ).fetchone()
     dry = write_new_baseline(dry_run=True)
     assert dry["elements_created"] == 6
     assert counts(dsn, NEW_BASELINE) == (0, 0)
     first = write_new_baseline()
-    # The blocks already exist: reused, not created. 20 lot and block values, 4 of
-    # the amenity (no name) and 4 of the establishment (no workers).
+    # The blocks already exist: reused, not created. 23 lot and block values, 4 of
+    # the amenity (no name) and 4 of the establishment (no workers). The catalogs
+    # get the 9 attributes they lacked (housing.floor_share, the block's targets,
+    # 3 of the amenity and 3 of the establishment) and block.density; the dry run
+    # rolled its rows back.
     assert first == {
         "elements": 8,
         "elements_created": 6,
-        "attribute_values": 28,
+        "attribute_values": 31,
         "elements_removed": 0,
+        "attributes_added": 9,
+        "indicators_added": 1,
         "by_type": {"block": 2, "lot": 4, "amenity": 1, "establishment": 1},
     }
-    assert counts(dsn, NEW_BASELINE) == (8, 28)
+    assert counts(dsn, NEW_BASELINE) == (8, 31)
+    with psycopg.connect(dsn) as conn:
+        # Added rows take the plugin's types and units; existing ones stay.
+        rows = dict(
+            conn.execute(
+                "SELECT element_type || '.' || key, (value_type::text, unit, "
+                "enum_values) FROM reimagina_urbano.attribute_catalog"
+            ).fetchall()
+        )
+        density = conn.execute(
+            "SELECT name, unit, job_code FROM reimagina_urbano.indicator_catalog "
+            "WHERE element_type = 'block' AND key = 'density'"
+        ).fetchone()
+        assert (
+            conn.execute(
+                "SELECT id, enum_values FROM reimagina_urbano.attribute_catalog "
+                "WHERE element_type = 'lot' AND key = 'land_use'"
+            ).fetchone()
+            == land_use
+        )
+    assert rows["lot.housing.floor_share"] == ("number", "%", None)
+    assert rows["block.lot.size_m2"] == ("number", "m2", None)
+    assert rows["establishment.num_workers"] == ("integer", None, None)
+    assert density == ("Densidad", "viv/ha", "indicators")
     assert counts(dsn, BASELINE) == old
     tables = scenario_nodes.read_scenario(NEW_BASELINE)
     lots = by_id(tables["reimagina_scenario_lots"])

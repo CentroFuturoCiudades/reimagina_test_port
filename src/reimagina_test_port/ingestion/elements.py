@@ -19,7 +19,6 @@ from shapely.geometry.base import BaseGeometry
 
 from reimagina_test_port.common.rules import MIN_BUILT_M2
 from reimagina_test_port.ingestion.cadastral import stable_element_uuid
-from reimagina_test_port.ingestion.crosswalk import is_office
 
 logger = logging.getLogger(__name__)
 
@@ -140,14 +139,13 @@ def zone_use(zoning: pd.Series) -> pd.Series:
 
 
 def _contents_by_lot(contents: pd.DataFrame) -> pd.DataFrame:
-    """Per lot: amenities, establishments, whether all are offices, manufacturing share."""
+    """Per lot: amenities, establishments and their manufacturing share of workers."""
     establishments = contents[contents["element_type"] == "establishment"]
     workers = establishments["num_workers"].astype(float)
     manufacturing = workers.where(establishments["category"] == "manufacturing", 0.0)
     grouped = pd.DataFrame(
         {
             "lot_id": establishments["lot_id"],
-            "office": is_office(establishments["scian_code"]),
             "workers": workers,
             "manufacturing": manufacturing,
         }
@@ -155,7 +153,6 @@ def _contents_by_lot(contents: pd.DataFrame) -> pd.DataFrame:
     by_lot = pd.DataFrame(
         {
             "establishments": grouped.size(),
-            "all_offices": grouped["office"].all(),
             "manufacturing_share": grouped["manufacturing"].sum()
             / grouped["workers"].sum(),
         }
@@ -177,16 +174,17 @@ def classify_land_use(
     homes estimated from the census until the space allocation exists: a built lot
     (over ``MIN_BUILT_M2``) whose zone allows housing holds homes when its block
     has any, its share of the block's homes by built-up area. ``contents`` has one
-    row per amenity or establishment: ``lot_id``, ``element_type``, ``category``,
-    ``scian_code`` and ``num_workers``.
+    row per amenity or establishment: ``lot_id``, ``element_type``, ``category``
+    and ``num_workers``.
 
     - Nothing: its zone's use (``zone_use``).
     - Only amenities: ``amenity``.
     - Homes and establishments: ``mixed_use``.
     - Homes only: ``multifamily`` with at least ``mf_min_units`` homes, or one home
       in a building of ``MF_BUILTUP_M2`` and ``MF_LEVELS``; else ``single_family``.
-    - Establishments only: ``office`` if all are offices, ``industrial`` if mostly
-      manufacturing by workers, else ``commerce``.
+    - Establishments only: ``industrial`` if mostly manufacturing by workers, else
+      ``commerce``. ``office`` ("all offices") is not assigned: the design does not
+      say which establishments are offices.
 
     Amenities don't change the class of a lot that also holds homes or
     establishments. ``unit_size_m2`` is the block's multifamily and mixed-use
@@ -209,7 +207,6 @@ def classify_land_use(
     held = lots[["lot_id"]].join(_contents_by_lot(contents), on="lot_id")
     establishments = held["establishments"].fillna(0).to_numpy() > 0
     amenities = held["amenities"].fillna(0).to_numpy() > 0
-    all_offices = held["all_offices"].fillna(False).to_numpy(dtype=bool)
     industrial = held["manufacturing_share"].fillna(0).to_numpy() > 0.5
 
     land_use = zone_use(zoning)
@@ -217,7 +214,6 @@ def classify_land_use(
     only_business = establishments & ~homes
     land_use[only_business] = "commerce"
     land_use[only_business & industrial] = "industrial"
-    land_use[only_business & all_offices] = "office"
     land_use[homes & establishments] = "mixed_use"
     homes_only = homes & ~establishments
     land_use[homes_only] = "single_family"
