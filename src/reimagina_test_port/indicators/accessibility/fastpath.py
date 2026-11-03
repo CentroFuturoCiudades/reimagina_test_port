@@ -65,7 +65,7 @@ def fast_get_accessibility_metrics(
     adjustment_factor: float,
 ) -> pd.DataFrame:
     """Idéntica a la del paquete, sin `.apply(axis=1)`."""
-    from reimagina_test_port.accessibility_metrics import POI_NETWORK_COL, POI_SNAP_DISTANCE_COL
+    from reimagina_test_port.indicators.accessibility.metrics import POI_NETWORK_COL, POI_SNAP_DISTANCE_COL
 
     proximities = proximities.join(weights, on="origin_id")
     proximities = proximities.join(destinations[["capacity"]], on="destination_id")
@@ -133,7 +133,7 @@ def apply_fastpath() -> bool:
         logger.info("ACCESSIBILITY_FASTPATH=0: se usa la implementación original.")
         return False
 
-    from reimagina_test_port import accessibility_metrics as metrics
+    from reimagina_test_port.indicators.accessibility import metrics
 
     original = getattr(metrics, "get_accessibility_metrics", None)
     if original is None:

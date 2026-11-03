@@ -20,12 +20,9 @@ from lyra.sdk.errors import MetricInputError
 from psycopg import conninfo, sql
 from shapely.geometry import box
 
-from reimagina_test_port import (
-    accessibility,
-    contract,
-    plugin,
-    scenario,
-)
+from reimagina_test_port import contract, plugin, scenario
+from reimagina_test_port.indicators.accessibility import model as accessibility
+from reimagina_test_port.indicators.accessibility import nodes as accessibility_nodes
 from reimagina_test_port.ingestion import baseline_writer
 from reimagina_test_port.ingestion import nodes as ingestion_nodes
 
@@ -269,8 +266,8 @@ def seed_catalog(conn) -> None:
     keys = [
         *plugin.UNITS,
         "minutes",
-        *plugin.DISTANCE_KEYS,
-        *plugin.SCORE_KEYS,
+        *accessibility_nodes.DISTANCE_KEYS,
+        *accessibility_nodes.SCORE_KEYS,
     ]
     for element_type in ("lot", "block"):
         for key in keys:
@@ -485,7 +482,8 @@ def test_write_baseline_is_idempotent(dsn):
     assert (BLOCK, "distance_to_park") not in values
     # Accessibility is stored on blocks only; a lot shows its block's.
     assert not any(
-        element == HOUSE and key in plugin.ACCESSIBILITY_KEYS for element, key in values
+        element == HOUSE and key in accessibility_nodes.ACCESSIBILITY_KEYS
+        for element, key in values
     )
     # Null values are not stored in a baseline: the shop has no unit size.
     assert (SHOP, "unit_size_m2") not in values
@@ -545,7 +543,8 @@ def test_write_after_reverting_a_moved_lot(dsn):
     # Lots store no accessibility, so none is left stale on the house.
     values = stored(dsn, FORK)
     assert not any(
-        element == HOUSE and key in plugin.ACCESSIBILITY_KEYS for element, key in values
+        element == HOUSE and key in accessibility_nodes.ACCESSIBILITY_KEYS
+        for element, key in values
     )
 
 
