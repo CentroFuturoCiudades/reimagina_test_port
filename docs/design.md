@@ -1,5 +1,29 @@
 # Design and provenance
 
+## Package layout
+
+One package holds both the baseline data and the indicators, so an indicator that
+needs new baseline data changes both in the same repository.
+
+```
+src/reimagina_test_port/
+├── plugin.py      create_plugin / create_snapshot_plugin: assembles the nodes
+├── scenario/      a Reimagina scenario in Postgres: source.py (read), writer.py,
+│                  contract.py, nodes.py (reimagina_scenario*, road network, POIs)
+├── snapshot.py    prepared GeoParquet snapshots, the offline sources
+├── ingestion/     a city's baseline from the data lake (data, not indicators):
+│                  cities, prep, footprints, cadastral, elements, baseline,
+│                  baseline_writer, nodes.py (reimagina_baseline*)
+├── indicators/    one subpackage per indicator type, each with its nodes.py
+│   ├── built_form/      calculation.py
+│   └── accessibility/   model.py, metrics.py, fastpath.py, network.py
+└── common/        shared: lake, vocabulary, schema (element identity,
+                   attributes, units), rules (MIN_BUILT_M2), nodes (timed, column)
+```
+
+A new indicator type is a new `indicators/<type>/` with its `nodes.py`, added to
+`create_plugin()`; data it needs in the baseline goes into `ingestion/`.
+
 ## Graph
 
 `reimagina_scenario` is an internal dataset producing a Reimagina scenario's

@@ -16,8 +16,8 @@ import psycopg
 import shapely
 from psycopg import sql
 
-from reimagina_test_port import contract
-from reimagina_test_port.scenario import SCHEMA, resolve_dsn
+from reimagina_test_port.scenario import contract
+from reimagina_test_port.scenario.source import SCHEMA, resolve_dsn
 
 _TABLES = {
     name: sql.Identifier(SCHEMA, name)

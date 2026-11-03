@@ -12,6 +12,8 @@ from lyra.sdk import GraphExecutionError, LocalRunner
 from lyra.sdk.errors import MetricInputError
 
 from reimagina_test_port import plugin
+from reimagina_test_port import snapshot as snapshot_source
+from reimagina_test_port.common import schema
 from reimagina_test_port.indicators.built_form import nodes as built_form_nodes
 from reimagina_test_port.local import run_snapshot
 
@@ -20,9 +22,9 @@ EXPECTED = json.loads((ROOT / "tests/expected.json").read_text())
 
 
 def test_reference_parity_and_shared_acquisition(monkeypatch):
-    reader = Mock(wraps=plugin.read_snapshot)
+    reader = Mock(wraps=snapshot_source.read_snapshot)
     calculation = Mock(wraps=built_form_nodes.lot_indicators)
-    monkeypatch.setattr(plugin, "read_snapshot", reader)
+    monkeypatch.setattr(snapshot_source, "read_snapshot", reader)
     monkeypatch.setattr(built_form_nodes, "lot_indicators", calculation)
     runner = LocalRunner.from_definitions(
         {"reimagina-test-port": plugin.create_snapshot_plugin()}
@@ -49,7 +51,7 @@ def test_reference_parity_and_shared_acquisition(monkeypatch):
 
 
 def test_handlers_preserve_inputs():
-    source = plugin.read_snapshot("synthetic")
+    source = snapshot_source.read_snapshot("synthetic")
     copies = {key: value.copy(deep=True) for key, value in source.items()}
     lots = built_form_nodes.lot_built_form(source["reimagina_prepared_lots"])
     before = lots.copy(deep=True)
@@ -116,14 +118,14 @@ def test_invalid_snapshots(tmp_path, monkeypatch, problem):
 def test_empty_and_absent_attributes(tmp_path, monkeypatch):
     folder = snapshot(tmp_path, monkeypatch)
     path = folder / "lot.parquet"
-    frame = gpd.read_parquet(path).drop(columns=plugin.ATTRIBUTES)
+    frame = gpd.read_parquet(path).drop(columns=schema.ATTRIBUTES)
     frame.to_parquet(path)
     results = run_snapshot("custom")
     assert results["reimagina_built_form_lots"].population.isna().all()
     frame.iloc[:0].to_parquet(path)
     results = run_snapshot("custom")
     assert results["reimagina_built_form_lots"].empty
-    assert results["reimagina_built_form_blocks"][list(plugin.UNITS)].isna().all().all()
+    assert results["reimagina_built_form_blocks"][list(schema.UNITS)].isna().all().all()
     gpd.read_parquet(folder / "block.parquet").iloc[:0].to_parquet(
         folder / "block.parquet"
     )
@@ -133,7 +135,7 @@ def test_empty_and_absent_attributes(tmp_path, monkeypatch):
 @pytest.mark.parametrize("name", ["", "../synthetic", "/tmp", "a/b"])
 def test_snapshot_selector(name):
     with pytest.raises(ValueError):
-        plugin.SnapshotParameters(snapshot=name)
+        snapshot_source.SnapshotParameters(snapshot=name)
 
 
 def test_manifest_freshness():

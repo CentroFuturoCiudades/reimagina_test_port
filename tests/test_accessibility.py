@@ -8,7 +8,8 @@ import pandas as pd
 import pytest
 from lyra.sdk import GraphExecutionError
 
-from reimagina_test_port import plugin
+from reimagina_test_port import snapshot
+from reimagina_test_port.common import schema
 from reimagina_test_port.indicators.accessibility import model as accessibility
 from reimagina_test_port.indicators.accessibility import network
 from reimagina_test_port.indicators.accessibility import nodes as accessibility_nodes
@@ -20,7 +21,7 @@ EXPECTED = json.loads((ROOT / "tests/expected_accessibility.json").read_text())
 
 def inputs():
     built = run_snapshot("synthetic")
-    tables = plugin.read_snapshot_accessibility("synthetic")
+    tables = snapshot.read_snapshot_accessibility("synthetic")
     return (
         built["reimagina_built_form_lots"],
         built["reimagina_built_form_blocks"],
@@ -40,11 +41,11 @@ def test_parity_with_reimagina_lyra():
         table = results[f"reimagina_accessibility_{kind}"]
         assert table.id.tolist() == list(EXPECTED[kind])
         assert list(table.columns) == [
-            *plugin.IDENTITY,
+            *schema.IDENTITY,
             "geometry",
             *accessibility_nodes.ACCESSIBILITY_KEYS,
         ]
-        for row in table.drop(columns=plugin.IDENTITY[1:] + ["geometry"]).to_dict(
+        for row in table.drop(columns=schema.IDENTITY[1:] + ["geometry"]).to_dict(
             "records"
         ):
             values = present(row)
