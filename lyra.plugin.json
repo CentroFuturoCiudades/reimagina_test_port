@@ -1104,6 +1104,34 @@
               "unit": "count"
             },
             {
+              "description": "Blocks in the scenario after the write.",
+              "name": "blocks",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Lots in the scenario after the write.",
+              "name": "lots",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Amenities in the scenario after the write.",
+              "name": "amenities",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Establishments in the scenario after the write.",
+              "name": "establishments",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
               "description": "Whether the changes were rolled back.",
               "name": "dry_run",
               "nullable": false,

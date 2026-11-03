@@ -13,6 +13,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
+import shapely
 
 from reimagina_test_port.common.vocabulary import normalize_amenity_type
 from reimagina_test_port.ingestion.cadastral import stable_element_uuid
@@ -39,21 +40,33 @@ DENUE_EMPLOYEES = {
 }
 
 
-def read_denue(path: Path, municipio: str, encoding: str) -> gpd.GeoDataFrame:
-    """The DENUE CSV's businesses of ``municipio``, as EPSG:4326 points."""
+def read_denue(
+    path: Path, municipio: str, encoding: str
+) -> tuple[gpd.GeoDataFrame, dict[str, int]]:
+    """The DENUE CSV's businesses of ``municipio``, as EPSG:4326 points, and a report.
+
+    The report counts the CSV's rows (the whole state), those of ``municipio``
+    and, of these, those without coordinates (left out).
+    """
     rows = pd.read_csv(path, encoding=encoding, usecols=DENUE_COLUMNS, dtype=str)
+    state = len(rows)
     rows = rows[rows["municipio"].str.strip() == municipio]
     x = pd.to_numeric(rows["longitud"], errors="coerce")
     y = pd.to_numeric(rows["latitud"], errors="coerce")
     located = x.notna() & y.notna()
-    if not located.all():
-        logger.info("DENUE: %s businesses without coordinates", int((~located).sum()))
+    report = {
+        "denue_state": state,
+        "denue_municipio": len(rows),
+        "without_coordinates": int((~located).sum()),
+    }
+    logger.info("DENUE: %s", report)
     rows = rows[located]
-    return gpd.GeoDataFrame(
+    businesses = gpd.GeoDataFrame(
         rows.reset_index(drop=True),
         geometry=gpd.points_from_xy(x[located], y[located]),
         crs="EPSG:4326",
     )
+    return businesses, report
 
 
 def lot_holders(
@@ -102,11 +115,15 @@ def _point_table(
     )
     for column in attributes:
         frame[column] = attributes.loc[kept, column].to_numpy()
-    report = {"elements": int(kept.sum()), "outside_every_lot": int((~kept).sum())}
+    report = {
+        "source": len(points),
+        "elements": int(kept.sum()),
+        "outside_every_lot": int((~kept).sum()),
+    }
     logger.info("%s: %s", element_type, report)
-    table = gpd.GeoDataFrame(
-        frame, geometry=points.geometry[kept].to_crs(4326).to_numpy(), crs=4326
-    )
+    # The equipment layer has Z coordinates; element_state.geometry is 2D.
+    geometry = shapely.force_2d(points.geometry[kept].to_crs(4326).to_numpy())
+    table = gpd.GeoDataFrame(frame, geometry=geometry, crs=4326)
     return table, report
 
 

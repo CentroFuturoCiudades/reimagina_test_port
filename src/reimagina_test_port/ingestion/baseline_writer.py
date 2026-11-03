@@ -95,6 +95,17 @@ _INSERT_ATTRIBUTES = sql.SQL(
 ).format(**_TABLES)
 
 
+# What the scenario holds once written, read back from the database.
+_COUNT_BY_TYPE = sql.SQL(
+    """
+    SELECT e.type::text, count(*) FROM {element_state} s
+    JOIN {elements} e ON e.id = s.element_id
+    WHERE s.scenario_id = %(scenario)s::uuid AND s.deleted_at IS NULL
+    GROUP BY 1
+    """
+).format(**_TABLES)
+
+
 class BaselineScenarioError(ValueError):
     """The target is not an existing, fork-free baseline of the project."""
 
@@ -155,8 +166,10 @@ def write_baseline(
     written as attribute values. A dry run rolls everything back.
 
     Returns:
-        Counts: ``elements``, ``elements_created``, ``attribute_values`` and
-        ``elements_removed`` (state rows of elements no longer present).
+        Counts: ``elements``, ``elements_created``, ``attribute_values``,
+        ``elements_removed`` (state rows of elements no longer present) and
+        ``by_type`` (``{element_type: elements}``, the scenario's state rows of
+        each type of ``tables`` after the write, read back from the database).
     """
     required = {
         (element_type, key): kind
@@ -222,6 +235,8 @@ def write_baseline(
         removed = cur.rowcount
         cur.execute(_UPSERT_STATE, params)
         cur.execute(_INSERT_ATTRIBUTES, params)
+        cur.execute(_COUNT_BY_TYPE, params)
+        stored = dict(cur.fetchall())
         if dry_run:
             conn.rollback()
         else:
@@ -231,4 +246,7 @@ def write_baseline(
         "elements_created": created,
         "attribute_values": values,
         "elements_removed": removed,
+        "by_type": {
+            element_type: stored.get(element_type, 0) for element_type in tables
+        },
     }

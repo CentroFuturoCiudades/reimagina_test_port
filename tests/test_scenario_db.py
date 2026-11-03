@@ -743,6 +743,7 @@ def test_write_new_baseline(new_baseline, dsn):
         "elements_created": 6,
         "attribute_values": 25,
         "elements_removed": 0,
+        "by_type": {"block": 2, "lot": 4, "amenity": 1, "establishment": 1},
     }
     assert counts(dsn, NEW_BASELINE) == (8, 25)
     assert counts(dsn, BASELINE) == old
@@ -775,11 +776,15 @@ def test_write_new_baseline(new_baseline, dsn):
     assert origin == NEW_BASELINE
     assert points == {"amenity": NEW_LOTS[0], "establishment": NEW_LOTS[0]}
     assert pharmacy == "pharmacy"
+    # Accessibility destinations are lots only: the pharmacy amenity hangs from
+    # NEW_LOTS[0], which has no amenity_type, and is not a destination itself.
+    assert scenario.read_pois(NEW_BASELINE)["id"].tolist() == [NEW_LOTS[2]]
     # Indicators then come from the scenario writer.
     assert write(NEW_BASELINE)["values_written"] > 0
     # Again without one lot: replaced, and its indicators go too.
     second = write_new_baseline(count=3)
     assert second["elements_removed"] == 1
+    assert second["by_type"]["lot"] == 3
     assert counts(dsn, NEW_BASELINE)[0] == 7
     assert not any(e == NEW_LOTS[3] for e, _ in stored(dsn, NEW_BASELINE))
 
@@ -874,3 +879,5 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch):
     result = runner.run("reimagina_baseline_write", {"parameters": parameters})
     row = result["reimagina_baseline_write"].iloc[0].to_dict()
     assert (row["elements"], row["elements_created"], row["dry_run"]) == (8, 6, False)
+    written = [row[c] for c in ("blocks", "lots", "amenities", "establishments")]
+    assert written == [2, 4, 1, 1]

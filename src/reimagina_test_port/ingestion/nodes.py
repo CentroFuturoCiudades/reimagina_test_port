@@ -205,6 +205,13 @@ BASELINE_ATTRIBUTES = {
     "amenity": AMENITY_ATTRIBUTES,
     "establishment": ESTABLISHMENT_ATTRIBUTES,
 }
+# Element type -> column of the write summary with its elements in the scenario.
+WRITTEN_COLUMNS = {
+    "block": "blocks",
+    "lot": "lots",
+    "amenity": "amenities",
+    "establishment": "establishments",
+}
 BASELINE_WRITE_DECLARATION = TableOutput(
     columns=[
         TableColumn(name=name, type="integer", unit=Unit.COUNT, description=description)
@@ -213,6 +220,10 @@ BASELINE_WRITE_DECLARATION = TableOutput(
             ("elements_created", "Elements new to the database."),
             ("attribute_values", "Attribute values written."),
             ("elements_removed", "Scenario elements no longer in the baseline."),
+            *(
+                (name, f"{name.capitalize()} in the scenario after the write.")
+                for name in WRITTEN_COLUMNS.values()
+            ),
         )
     ]
     + [
@@ -267,4 +278,6 @@ def baseline_write(
         raise MetricInputError(
             "reimagina_baseline_write", "parameters.scenario_id", str(exc)
         ) from exc
-    return pd.DataFrame([{**counts, "dry_run": parameters.dry_run}])
+    by_type = counts.pop("by_type")
+    written = {name: by_type[t] for t, name in WRITTEN_COLUMNS.items()}
+    return pd.DataFrame([{**counts, **written, "dry_run": parameters.dry_run}])

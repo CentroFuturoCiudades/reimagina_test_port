@@ -159,7 +159,8 @@ def write_sources(root: Path) -> dict[str, str]:
             "source_id": [11, 12, 13],
             "capacity": [None, 3, 1],
         },
-        geometry=[Point(10, 30), Point(105, 10), Point(500, 500)],
+        # With Z, as the lake's layer.
+        geometry=[Point(10, 30, 1), Point(105, 10, 1), Point(500, 500, 1)],
         crs=CRS,
     ).to_parquet(root / "pois_02002.geoparquet")
     # Three Mexicali businesses (one far from every lot) and one elsewhere.
@@ -244,8 +245,16 @@ def test_build(city, tmp_path):
             "lots_sharing_a_key": 2,
             "lots_without_key": 1,
         },
-        "amenities": {"elements": 2, "outside_every_lot": 1},
-        "establishments": {"elements": 2, "outside_every_lot": 1},
+        "amenities": {"source": 3, "elements": 2, "outside_every_lot": 1},
+        # Four DENUE rows in the state, three of Mexicali.
+        "establishments": {
+            "denue_state": 4,
+            "denue_municipio": 3,
+            "without_coordinates": 0,
+            "source": 3,
+            "elements": 2,
+            "outside_every_lot": 1,
+        },
     }
     lots = result["lots"].set_index("source_record_ref")
     blocks = result["blocks"].set_index("source_record_ref")
@@ -283,6 +292,7 @@ def test_build(city, tmp_path):
     amenities = result["amenities"].set_index("source_record_ref")
     assert sorted(amenities.index) == ["DENUE:Farmacia:11", "IMIP:Parques:12"]
     assert amenities.crs == "EPSG:4326"
+    assert not amenities.has_z.any()
     assert amenities.loc["DENUE:Farmacia:11", "id"] == cadastral.stable_element_uuid(
         "mexicali", "amenity", "DENUE:Farmacia:11"
     )

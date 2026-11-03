@@ -137,7 +137,9 @@ def build(
     """``lots``, ``blocks``, ``amenities``, ``establishments`` and a ``report``.
 
     The report has the cadastral keys (``lots``) and, for amenities and
-    establishments, the elements kept and those outside every lot.
+    establishments, the source points, the elements kept and those outside
+    every lot; for establishments also the DENUE rows of the state and of the
+    municipality, and those without coordinates.
     """
     progress("download", 0, len(STAGES))
     lots_path = lake.download_shapefile(city.lots_uri, workdir / "lots")
@@ -205,7 +207,7 @@ def build(
 
     progress("points", 5, len(STAGES))
     amenities, amenities_report = points.amenity_table(equipment, lot_rows, city)
-    businesses = points.read_denue(
+    businesses, denue_report = points.read_denue(
         denue_path, city.denue_municipio, city.denue_encoding
     )
     establishments, establishments_report = points.establishment_table(
@@ -219,6 +221,6 @@ def build(
         "report": {
             "lots": keys_report,
             "amenities": amenities_report,
-            "establishments": establishments_report,
+            "establishments": denue_report | establishments_report,
         },
     }

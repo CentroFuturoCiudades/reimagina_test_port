@@ -82,7 +82,9 @@ _ATTRIBUTES_QUERY = sql.SQL(
     """
 ).format(**_TABLES)
 
-# Accessibility destinations: present elements whose effective amenity_type is set.
+# Accessibility destinations: present lots whose effective amenity_type is set.
+# Only lot.amenity_type: amenity elements carry the same key and hang from those
+# lots, so counting both would count each destination twice.
 # Starts from the amenity_type values (a few thousand) and only then looks up their
 # state, instead of resolving every element of the scenario first.
 _POIS_QUERY = sql.SQL(
@@ -92,7 +94,8 @@ _POIS_QUERY = sql.SQL(
         FROM {element_state_attribute_value} v
         WHERE v.scenario_id IN (%(scenario)s::uuid, %(baseline)s::uuid)
           AND v.attribute_id IN (
-              SELECT id FROM {attribute_catalog} WHERE key = 'amenity_type'
+              SELECT id FROM {attribute_catalog}
+              WHERE element_type = 'lot' AND key = 'amenity_type'
           )
         ORDER BY v.element_id, (v.scenario_id = %(scenario)s::uuid) DESC
     ),
