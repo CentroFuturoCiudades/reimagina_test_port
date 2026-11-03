@@ -12,6 +12,7 @@ from lyra.sdk import GraphExecutionError, LocalRunner
 from lyra.sdk.errors import MetricInputError
 
 from reimagina_test_port import plugin
+from reimagina_test_port.indicators.built_form import nodes as built_form_nodes
 from reimagina_test_port.local import run_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,9 +21,9 @@ EXPECTED = json.loads((ROOT / "tests/expected.json").read_text())
 
 def test_reference_parity_and_shared_acquisition(monkeypatch):
     reader = Mock(wraps=plugin.read_snapshot)
-    calculation = Mock(wraps=plugin.lot_indicators)
+    calculation = Mock(wraps=built_form_nodes.lot_indicators)
     monkeypatch.setattr(plugin, "read_snapshot", reader)
-    monkeypatch.setattr(plugin, "lot_indicators", calculation)
+    monkeypatch.setattr(built_form_nodes, "lot_indicators", calculation)
     runner = LocalRunner.from_definitions(
         {"reimagina-test-port": plugin.create_snapshot_plugin()}
     )
@@ -50,9 +51,9 @@ def test_reference_parity_and_shared_acquisition(monkeypatch):
 def test_handlers_preserve_inputs():
     source = plugin.read_snapshot("synthetic")
     copies = {key: value.copy(deep=True) for key, value in source.items()}
-    lots = plugin.lot_built_form(source["reimagina_prepared_lots"])
+    lots = built_form_nodes.lot_built_form(source["reimagina_prepared_lots"])
     before = lots.copy(deep=True)
-    plugin.built_form(lots, source["reimagina_prepared_blocks"])
+    built_form_nodes.built_form(lots, source["reimagina_prepared_blocks"])
     assert_geodataframe_equal(lots, before)
     for key in source:
         assert_geodataframe_equal(source[key], copies[key])

@@ -1,7 +1,7 @@
 """Element schema shared by ingestion and indicators: identity columns, the lot
 attributes indicators read, and the units of attributes and built-form keys."""
 
-from lyra.sdk import TableColumn, Unit
+from lyra.sdk import TableColumn, TableOutput, Unit
 
 IDENTITY = ["id", "parent_id", "source_record_ref"]
 ATTRIBUTES = [
@@ -39,3 +39,27 @@ def identity_columns() -> list[TableColumn]:
         )
         for k in IDENTITY
     ]
+
+
+def source_declaration(*, blocks: bool = False) -> TableOutput:
+    """A scenario or snapshot's elements: identity, lot attributes and geometry."""
+    columns = identity_columns()
+    for key in [] if blocks else ATTRIBUTES:
+        columns.append(
+            TableColumn(
+                name=key,
+                type="string" if key == "land_use" else "number",
+                unit=None
+                if key == "land_use"
+                else (
+                    {
+                        "people_per_household": Unit.COUNT,
+                        "occupancy_rate": Unit.RATIO,
+                    }
+                    | UNITS
+                )[key],
+                nullable=True,
+                description=key.replace("_", " "),
+            )
+        )
+    return TableOutput(columns=columns, geometry="geometry")
