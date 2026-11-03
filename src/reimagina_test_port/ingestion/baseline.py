@@ -4,9 +4,10 @@ Adapted from reimagina-lyra ``ingestion/pipeline.build_elements``: the same
 sources, block and lot preparation, building heights and element attributes
 (``prep``, ``footprints``, ``elements``, copied unchanged), returned as tables
 instead of written. Lot ids come from the cadastral key (``cadastral.lot_keys``)
-instead of the shapefile's row number. Amenities (equipment layer) and
-establishments (DENUE) hang from their lot, as in reimagina_pipelines_lab
-(``points``).
+instead of the shapefile's row number. Amenities (the DENUE by the SCIAN
+crosswalk, and the amenities file) and establishments (the rest of the DENUE) are
+placed in their lot first (``points``), and each lot's ``land_use`` is classified
+from what it holds.
 """
 
 import logging
@@ -20,18 +21,16 @@ from reimagina_test_port.common import lake
 from reimagina_test_port.ingestion import cadastral, footprints, points, prep
 from reimagina_test_port.ingestion.cities import CityPreset
 from reimagina_test_port.ingestion.elements import (
-    amenity_type_by_lot,
     classify_land_use,
     lot_attributes,
     occupancy_rate,
     people_per_household,
-    prepare_pois,
 )
 
 logger = logging.getLogger(__name__)
 
 Progress = Callable[[str, int, int], None]
-STAGES = ("download", "blocks", "lots", "footprints", "elements", "points")
+STAGES = ("download", "blocks", "lots", "footprints", "points", "elements")
 LOT_ATTRIBUTES = [
     "land_use",
     "cos",
@@ -40,10 +39,11 @@ LOT_ATTRIBUTES = [
     "unit_size_m2",
     "people_per_household",
     "occupancy_rate",
-    "amenity_type",
     "commerce_type",
 ]
-BLOCK_ATTRIBUTES = ["vivtot", "people_per_household"]
+# lot.size_m2 and lot.frontage_m are targets: unset when the city is loaded
+# bottom-up (urban_fabric.md), so these columns stay empty.
+BLOCK_ATTRIBUTES = ["vivtot", "people_per_household", "lot.size_m2", "lot.frontage_m"]
 
 
 def block_table(blocks: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -57,6 +57,8 @@ def block_table(blocks: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
             "people_per_household": [
                 people_per_household(value) for value in blocks["prom_ocup"]
             ],
+            "lot.size_m2": float("nan"),
+            "lot.frontage_m": float("nan"),
         }
     )
     return gpd.GeoDataFrame(
@@ -64,28 +66,55 @@ def block_table(blocks: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     )
 
 
+def lot_shapes(lots: gpd.GeoDataFrame, city: CityPreset) -> gpd.GeoDataFrame:
+    """Each lot's element ``id`` and cadastral ``lot_id``, EPSG:4326: what points
+    are placed in."""
+    return gpd.GeoDataFrame(
+        {
+            "id": [cadastral.lot_id(city.key, key) for key in lots["lot_id"]],
+            "lot_id": lots["lot_id"].to_numpy(),
+        },
+        geometry=lots.geometry.to_crs(4326).to_numpy(),
+        crs=4326,
+    )
+
+
+def lot_contents(shapes: gpd.GeoDataFrame, *tables: gpd.GeoDataFrame) -> pd.DataFrame:
+    """One row per amenity or establishment of ``tables``, by cadastral lot_id."""
+    lot_ids = dict(zip(shapes["id"], shapes["lot_id"], strict=True))
+    columns = ["category", "scian_code", "num_workers"]
+    return pd.concat(
+        [
+            pd.DataFrame(
+                {
+                    "lot_id": table["parent_id"].map(lot_ids),
+                    "element_type": element_type,
+                    **{column: table[column] for column in columns},
+                }
+            )
+            for element_type, table in zip(
+                ("amenity", "establishment"), tables, strict=True
+            )
+        ],
+        ignore_index=True,
+    )
+
+
 def lot_table(
     lots: gpd.GeoDataFrame,
     blocks: gpd.GeoDataFrame,
-    pois: gpd.GeoDataFrame,
+    contents: pd.DataFrame,
     city: CityPreset,
 ) -> gpd.GeoDataFrame:
-    """One row per lot (``elements.lot_elements`` with cadastral ids), EPSG:4326."""
+    """One row per lot, with cadastral ids and land use from ``contents``, EPSG:4326."""
     missing = sorted(set(lots["cvegeo"].dropna()) - set(blocks["cvegeo"]))
     if missing:
         msg = f"{len(missing)} lot cvegeo without a block, e.g. {missing[:5]}"
         raise ValueError(msg)
     lots = lots.to_crs(epsg=4326)
     zoning = lots["zoning"].astype(str).str.strip().str.lower()
-    amenity_types = amenity_type_by_lot(
-        lots,
-        zoning,
-        pois,
-        metric_crs=city.target_crs,
-        poi_max_distance_m=city.poi_max_distance_m,
-    )
     land_use, unit_size = classify_land_use(
-        lots, zoning, amenity_types, mf_min_units=city.mf_min_units
+        lots, zoning, contents, mf_min_units=city.mf_min_units
     )
     giro = lots["Giro"] if "Giro" in lots else pd.Series(None, index=lots.index)
     rows = [
@@ -98,10 +127,8 @@ def lot_table(
             prom,
             occupancy_rate(inhabited, vivtot),
             activity,
-            amenity_types.get(key),
         )
-        for key, use, cos, levels, area, size, prom, inhabited, vivtot, activity in zip(
-            lots["lot_id"],
+        for use, cos, levels, area, size, prom, inhabited, vivtot, activity in zip(
             land_use,
             lots["cos"],
             lots["num_levels"],
@@ -139,7 +166,8 @@ def build(
     The report has the cadastral keys (``lots``) and, for amenities and
     establishments, the source points, the elements kept and those outside
     every lot; for establishments also the DENUE rows of the state and of the
-    municipality, and those without coordinates.
+    municipality, those without coordinates, and how many of the municipality's
+    the crosswalk made amenities and establishments.
     """
     progress("download", 0, len(STAGES))
     lots_path = lake.download_shapefile(city.lots_uri, workdir / "lots")
@@ -201,18 +229,21 @@ def build(
         lots, stats, average_level_height=params.average_level_height
     )
 
-    progress("elements", 4, len(STAGES))
-    equipment = gpd.read_parquet(pois_path)
-    lot_rows = lot_table(lots, blocks, prepare_pois(equipment), city)
-
-    progress("points", 5, len(STAGES))
-    amenities, amenities_report = points.amenity_table(equipment, lot_rows, city)
-    businesses, denue_report = points.read_denue(
+    progress("points", 4, len(STAGES))
+    shapes = lot_shapes(lots, city)
+    denue, denue_report = points.read_denue(
         denue_path, city.denue_municipio, city.denue_encoding
     )
-    establishments, establishments_report = points.establishment_table(
-        businesses, lot_rows, city
+    amenities, amenities_report = points.amenity_table(
+        gpd.read_parquet(pois_path), denue, shapes, city
     )
+    establishments, establishments_report = points.establishment_table(
+        denue, shapes, city
+    )
+
+    progress("elements", 5, len(STAGES))
+    contents = lot_contents(shapes, amenities, establishments)
+    lot_rows = lot_table(lots, blocks, contents, city)
     return {
         "blocks": block_table(blocks),
         "lots": lot_rows,

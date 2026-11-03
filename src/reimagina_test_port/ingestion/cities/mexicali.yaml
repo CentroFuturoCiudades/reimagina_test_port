@@ -31,9 +31,9 @@ sources:
     params:
       year: "2023"
       manifests_uri: az://sandbox/projects/EXE/raw/open_buildings_temporal_data_v1_mx
-  equipment:   # DENUE + IMIP (cleaning/equipamientos): amenity elements and lot amenity_type
+  equipment:   # DENUE + IMIP (cleaning/equipamientos): its IMIP rows are the amenities file
     uri: az://sandbox/projects/EXE/cleaned/pois_accesibilidad/pois_02002.geoparquet
-  denue:   # INEGI DENUE 05_2025 as published: establishment elements
+  denue:   # INEGI DENUE 05_2025 as published: amenities and establishments by the SCIAN crosswalk
     uri: az://raw/inegi/denue/02_baja_california/denue_02_0525_csv/conjunto_de_datos/denue_inegi_02_.csv
     params: {municipio: Mexicali, encoding: latin-1}
 
@@ -43,9 +43,9 @@ params:
     height_percentile: 95.0
     average_level_height: 2.7
     gsd_pixel: 0.5
-    poi_max_distance_m: 20.0
     mf_min_units: 1.5
   amenities: {default_capacity: 1}
-  # An amenity or establishment hangs from the lot holding it, else the nearest
-  # lot within this distance (geocoded on the street in front); farther, it is dropped.
-  points: {lot_max_distance_m: 15.0}
+  # An amenity or establishment goes to the lot holding it, else the nearest lot
+  # within this distance (urban_fabric.md's placement distance), as a point at the
+  # lot's center; farther, it is not loaded.
+  points: {lot_max_distance_m: 50.0}

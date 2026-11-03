@@ -41,9 +41,10 @@ class CityPreset:
     tiles_uri: str
     manifests_uri: str
     year: str
-    # Cleaned equipment layer (DENUE + IMIP): amenities and lot amenity_type.
+    # Cleaned equipment layer: its IMIP rows are the amenities file.
     pois_uri: str
-    # Raw INEGI DENUE of the state, filtered to the municipality: establishments.
+    # Raw INEGI DENUE of the state, filtered to the municipality: amenities and
+    # establishments by the SCIAN crosswalk.
     denue_uri: str
     denue_municipio: str
     denue_encoding: str = "latin-1"
@@ -52,10 +53,10 @@ class CityPreset:
     height_percentile: float = 95.0
     average_level_height: float = 2.7
     gsd_pixel: float = 0.5
-    poi_max_distance_m: float = 20.0
     mf_min_units: float = 1.5
     default_capacity: float = 1.0
-    lot_max_distance_m: float = 15.0
+    # Placement distance (urban_fabric.md): farther from every lot, not loaded.
+    lot_max_distance_m: float = 50.0
 
     @property
     def cve_code(self) -> str:
@@ -163,7 +164,6 @@ def from_yaml(path: Path) -> CityPreset:
                 "height_percentile",
                 "average_level_height",
                 "gsd_pixel",
-                "poi_max_distance_m",
                 "mf_min_units",
             )
         },

@@ -43,6 +43,9 @@ SHOP = "b0000000-0000-0000-0000-000000000002"
 FLATS = "b0000000-0000-0000-0000-000000000003"
 NEW = "b0000000-0000-0000-0000-000000000004"
 GONE = "b0000000-0000-0000-0000-000000000005"
+CLINIC = "f0000000-0000-0000-0000-000000000001"
+PHARMACY = "f0000000-0000-0000-0000-000000000002"
+PARK = "f0000000-0000-0000-0000-000000000003"
 SQUARE = "POLYGON((0 0, 0 0.001, 0.001 0.001, 0.001 0, 0 0))"
 SMALL = "POLYGON((0 0, 0 0.0001, 0.0001 0.0001, 0.0001 0, 0 0))"
 
@@ -124,14 +127,19 @@ INSERT INTO attribute_catalog (element_type, key, value_type) VALUES
     ('lot', 'land_use', 'enum'), ('lot', 'cos', 'number'),
     ('lot', 'num_levels', 'integer'), ('lot', 'area', 'number'),
     ('lot', 'unit_size_m2', 'number'), ('lot', 'people_per_household', 'number'),
-    ('lot', 'occupancy_rate', 'number'), ('lot', 'amenity_type', 'enum'),
+    ('lot', 'occupancy_rate', 'number'),
     ('lot', 'commerce_type', 'text'), ('block', 'vivtot', 'number'),
-    ('block', 'people_per_household', 'number'),
-    ('amenity', 'amenity_type', 'enum'), ('amenity', 'capacity', 'number'),
-    ('establishment', 'scian_class', 'text'), ('establishment', 'scian_sector', 'text'),
-    ('establishment', 'employees', 'integer');
+    ('block', 'people_per_household', 'number'), ('block', 'lot.size_m2', 'number'),
+    ('block', 'lot.frontage_m', 'number'),
+    ('amenity', 'category', 'enum'), ('amenity', 'scian_code', 'text'),
+    ('amenity', 'num_workers', 'integer'), ('amenity', 'capacity', 'number'),
+    ('amenity', 'name', 'text'),
+    ('establishment', 'category', 'enum'), ('establishment', 'scian_code', 'text'),
+    ('establishment', 'scian_sector', 'text'),
+    ('establishment', 'num_workers', 'integer'), ('establishment', 'name', 'text');
 UPDATE attribute_catalog SET enum_values = ARRAY[
-    'single_family', 'multifamily', 'mixed_use', 'amenity', 'commerce', 'office'
+    'single_family', 'multifamily', 'mixed_use', 'amenity', 'commerce', 'office',
+    'industrial'
 ] WHERE key = 'land_use';
 """
 
@@ -218,9 +226,20 @@ def set_attrs(conn, scenario_id, element_id, attrs):
         conn.execute(
             "INSERT INTO element_state_attribute_value "
             "(scenario_id, element_id, attribute_id, value_num, value_text) "
-            "SELECT %s, %s, id, %s, %s FROM attribute_catalog WHERE key = %s",
-            (scenario_id, element_id, num, text, key),
+            "SELECT %s, %s, c.id, %s, %s FROM attribute_catalog c "
+            "JOIN elements e ON e.id = %s AND e.type::text = c.element_type::text "
+            "WHERE c.key = %s",
+            (scenario_id, element_id, num, text, element_id, key),
         )
+
+
+def add_point(conn, scenario_id, element_id, element_type, lot, attrs):
+    conn.execute(
+        "INSERT INTO elements VALUES (%s, %s, %s, NULL, NULL, NULL)",
+        (element_id, lot, element_type),
+    )
+    add_state(conn, scenario_id, element_id, parent=lot)
+    set_attrs(conn, scenario_id, element_id, attrs)
 
 
 def seed(conn, network_uri: str) -> None:
@@ -251,19 +270,25 @@ def seed(conn, network_uri: str) -> None:
         )
         add_state(conn, BASELINE, lot)
         set_attrs(conn, BASELINE, lot, attrs)
-    # Amenities: the flats hold a clinic, GONE a pharmacy.
-    set_attrs(conn, BASELINE, FLATS, {"amenity_type": "clinic"})
-    set_attrs(conn, BASELINE, GONE, {"amenity_type": "pharmacy"})
+    # Contents: the flats hold a clinic (an amenity), GONE a pharmacy (an
+    # establishment).
+    clinic = {"category": "primary_healthcare", "scian_code": "621112"}
+    add_point(conn, BASELINE, CLINIC, "amenity", FLATS, clinic)
+    pharmacy = {"category": "medicines", "scian_code": "464111"}
+    add_point(conn, BASELINE, PHARMACY, "establishment", GONE, pharmacy)
     # Fork: the shop becomes a house; the flats get an all-NULL unit size row; the
     # house moves to the second block with a new geometry; GONE is deleted; NEW is
     # a lot that exists only in the fork.
     add_state(conn, FORK, SHOP)
     set_attrs(conn, FORK, SHOP, {"land_use": "single_family", "num_levels": 2})
-    set_attrs(conn, FORK, SHOP, {"amenity_type": "park"})
+    add_point(conn, FORK, PARK, "amenity", SHOP, {"category": "public_space"})
     add_state(conn, FORK, FLATS)
-    set_attrs(conn, FORK, FLATS, {"unit_size_m2": None, "amenity_type": None})
+    set_attrs(conn, FORK, FLATS, {"unit_size_m2": None})
+    add_state(conn, FORK, CLINIC, parent=FLATS)
+    set_attrs(conn, FORK, CLINIC, {"category": None, "scian_code": None})
     add_state(conn, FORK, HOUSE, wkt=SMALL, parent=BLOCK_2)
     add_state(conn, FORK, GONE, deleted=True)
+    add_state(conn, FORK, PHARMACY, parent=GONE, deleted=True)
     conn.execute(
         "INSERT INTO elements VALUES (%s, %s, 'lot', NULL, NULL, NULL)", (NEW, BLOCK_2)
     )
@@ -402,12 +427,15 @@ def test_dsn_requires_tls_by_default(monkeypatch, dsn_value, expected):
 
 def test_pois_fall_back_to_baseline(dsn):
     baseline = scenario.read_pois(BASELINE).set_index("id")
-    assert baseline["amenity_type"].to_dict() == {FLATS: "clinic", GONE: "pharmacy"}
+    assert baseline["amenity_type"].to_dict() == {
+        CLINIC: "clinic",
+        PHARMACY: "pharmacy",
+    }
     assert baseline.crs == "EPSG:4326"
-    # Fork: SHOP gains a park, the flats' clinic is hidden by an all-NULL row and
-    # GONE is deleted.
+    # Fork: SHOP gains a park, the clinic is hidden by all-NULL rows and the
+    # pharmacy is deleted.
     fork = scenario.read_pois(FORK).set_index("id")
-    assert fork["amenity_type"].to_dict() == {SHOP: "park"}
+    assert fork["amenity_type"].to_dict() == {PARK: "park"}
     assert fork["capacity"].isna().all()
 
 
@@ -628,6 +656,8 @@ def new_tables(count: int = 4):
             "source_record_ref": ["cvegeo:1", "cvegeo:2"],
             "vivtot": [10.0, None],
             "people_per_household": [3.0, None],
+            "lot.size_m2": [None, None],
+            "lot.frontage_m": [None, None],
         },
         geometry=[box(0, 0, 0.004, 0.001), box(0.004, 0, 0.008, 0.001)],
         crs=4326,
@@ -644,7 +674,6 @@ def new_tables(count: int = 4):
             "unit_size_m2": [None, None, 80.0, None][:count],
             "people_per_household": [3.5, None, 3.0, None][:count],
             "occupancy_rate": [0.9, None, None, None][:count],
-            "amenity_type": [None, None, "clinic", None][:count],
             "commerce_type": [None, "shop", None, None][:count],
         },
         geometry=[lot_box(i, 0.00002) for i in range(count)],
@@ -655,9 +684,12 @@ def new_tables(count: int = 4):
         {
             "id": [NEW_AMENITY],
             "parent_id": [NEW_LOTS[0]],
-            "source_record_ref": ["DENUE:Farmacia:11"],
-            "amenity_type": ["pharmacy"],
+            "source_record_ref": ["denue:11"],
+            "category": ["primary_healthcare"],
+            "scian_code": ["621112"],
+            "num_workers": [3.0],
             "capacity": [1.0],
+            "name": [None],
         },
         geometry=[inside],
         crs=4326,
@@ -667,9 +699,11 @@ def new_tables(count: int = 4):
             "id": [NEW_ESTABLISHMENT],
             "parent_id": [NEW_LOTS[0]],
             "source_record_ref": ["denue:101"],
-            "scian_class": ["461110"],
+            "category": ["convenience_store"],
+            "scian_code": ["461110"],
             "scian_sector": ["46"],
-            "employees": [None],
+            "num_workers": [None],
+            "name": ["Tienda"],
         },
         geometry=[inside],
         crs=4326,
@@ -736,16 +770,16 @@ def test_write_new_baseline(new_baseline, dsn):
     assert dry["elements_created"] == 6
     assert counts(dsn, NEW_BASELINE) == (0, 0)
     first = write_new_baseline()
-    # The blocks already exist: reused, not created. 21 lot and block values, 2 of
-    # the amenity and 2 of the establishment (no employees).
+    # The blocks already exist: reused, not created. 20 lot and block values, 4 of
+    # the amenity (no name) and 4 of the establishment (no workers).
     assert first == {
         "elements": 8,
         "elements_created": 6,
-        "attribute_values": 25,
+        "attribute_values": 28,
         "elements_removed": 0,
         "by_type": {"block": 2, "lot": 4, "amenity": 1, "establishment": 1},
     }
-    assert counts(dsn, NEW_BASELINE) == (8, 25)
+    assert counts(dsn, NEW_BASELINE) == (8, 28)
     assert counts(dsn, BASELINE) == old
     tables = scenario_nodes.read_scenario(NEW_BASELINE)
     lots = by_id(tables["reimagina_scenario_lots"])
@@ -767,18 +801,18 @@ def test_write_new_baseline(new_baseline, dsn):
                 (NEW_BASELINE, NEW_AMENITY, NEW_ESTABLISHMENT),
             ).fetchall()
         )
-        pharmacy = conn.execute(
+        clinic = conn.execute(
             "SELECT v.value_text FROM reimagina_urbano.element_state_attribute_value v "
             "JOIN reimagina_urbano.attribute_catalog c ON c.id = v.attribute_id "
-            "WHERE v.scenario_id = %s AND v.element_id = %s AND c.key = 'amenity_type'",
+            "WHERE v.scenario_id = %s AND v.element_id = %s AND c.key = 'category'",
             (NEW_BASELINE, NEW_AMENITY),
         ).fetchone()[0]
     assert origin == NEW_BASELINE
     assert points == {"amenity": NEW_LOTS[0], "establishment": NEW_LOTS[0]}
-    assert pharmacy == "pharmacy"
-    # Accessibility destinations are lots only: the pharmacy amenity hangs from
-    # NEW_LOTS[0], which has no amenity_type, and is not a destination itself.
-    assert scenario.read_pois(NEW_BASELINE)["id"].tolist() == [NEW_LOTS[2]]
+    assert clinic == "primary_healthcare"
+    # Accessibility destinations are the amenity and establishment elements: the
+    # clinic counts; the convenience store has no accessibility type.
+    assert scenario.read_pois(NEW_BASELINE)["amenity_type"].to_dict() == {0: "clinic"}
     # Indicators then come from the scenario writer.
     assert write(NEW_BASELINE)["values_written"] > 0
     # Again without one lot: replaced, and its indicators go too.

@@ -1,9 +1,10 @@
-"""Count a city's baseline elements per type, and how many DENUE businesses make it.
+"""Count a city's baseline elements per type, and how many DENUE records make it.
 
 Builds the baseline from the data lake as ``reimagina_baseline`` does (``az login``
 locally) and prints, per element type, the elements built, and for amenities and
-establishments the source points and those outside every lot. Establishments also
-show the DENUE rows of the state and of the municipality.
+establishments the source points and those outside every lot. The DENUE shows the
+rows of the state and of the municipality, and how many the SCIAN crosswalk made
+amenities and establishments. Lots show their land use.
 
     uv run python scripts/baseline_counts.py mexicali [--workdir DIR]
 
@@ -98,8 +99,19 @@ def main() -> None:
     print(row("rows in state", denue["denue_state"]))
     print(row("in municipio", denue["denue_municipio"]))
     print(row("no coordinates", denue["without_coordinates"]))
-    print(row("outside lots", denue["outside_every_lot"]))
-    print(row("establishments", denue["elements"]))
+    print(row("-> amenities", denue["denue_amenities"]))
+    print(row("-> establishm.", denue["denue_establishments"]))
+    print(row("  outside lots", denue["outside_every_lot"]))
+    print(row("  written", denue["elements"]))
+    print()
+    print("Land use")
+    for use, count in tables["lot"]["land_use"].value_counts(dropna=False).items():
+        print(row(str(use), count))
+    for element_type in ("amenity", "establishment"):
+        print()
+        print(f"{element_type} category")
+        for category, count in tables[element_type]["category"].value_counts().items():
+            print(row(category, count))
     print()
     print(f"Cadastral keys: {report['lots']}")
 

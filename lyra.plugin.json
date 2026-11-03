@@ -2,7 +2,7 @@
   "factory": "reimagina_test_port.plugin:create_plugin",
   "nodes": [
     {
-      "description": "Walking accessibility per block, inherited by its lots (exe_reimagina model job). Blocks are origins weighted by the scenario's modelled population; destinations are elements with an amenity_type. Up to five nearest destinations per amenity within 10 km on the road network at 4.8 km/h. Null means none is reachable.",
+      "description": "Walking accessibility per block, inherited by its lots (exe_reimagina model job). Blocks are origins weighted by the scenario's modelled population; destinations are amenities and establishments, by the amenity_type their category and SCIAN code give. Up to five nearest destinations per amenity within 10 km on the road network at 4.8 km/h. Null means none is reachable.",
       "inputs": {
         "blocks": {
           "arguments": {},
@@ -511,7 +511,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's baseline elements from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights, the equipment layer and the DENUE. Blocks are keyed by CVEGEO; lots by their cadastral key; amenities (equipment) and establishments (DENUE) hang from the lot holding them.",
+      "description": "Build a city's baseline elements from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights, the amenities file and the DENUE. Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE record is an amenity or an establishment by the SCIAN crosswalk; with the amenities file's, they go to the nearest lot within 50 m as a point at its center, and each lot's land use follows from what it holds.",
       "inputs": {},
       "name": "reimagina_baseline",
       "outputs": {
@@ -539,11 +539,25 @@
               "unit": null
             },
             {
-              "description": "amenity type",
-              "name": "amenity_type",
+              "description": "category",
+              "name": "category",
               "nullable": true,
               "type": "string",
               "unit": null
+            },
+            {
+              "description": "scian code",
+              "name": "scian_code",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "num workers",
+              "name": "num_workers",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
             },
             {
               "description": "capacity",
@@ -551,6 +565,13 @@
               "nullable": true,
               "type": "number",
               "unit": "count"
+            },
+            {
+              "description": "name",
+              "name": "name",
+              "nullable": true,
+              "type": "string",
+              "unit": null
             }
           ],
           "geometry": "geometry",
@@ -592,6 +613,20 @@
               "nullable": true,
               "type": "number",
               "unit": "count"
+            },
+            {
+              "description": "Target area of each lot it is subdivided into (unset when loaded).",
+              "name": "lot.size_m2",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "Target lot frontage (unset when loaded).",
+              "name": "lot.frontage_m",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
             }
           ],
           "geometry": "geometry",
@@ -621,8 +656,15 @@
               "unit": null
             },
             {
-              "description": "scian class",
-              "name": "scian_class",
+              "description": "category",
+              "name": "category",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "scian code",
+              "name": "scian_code",
               "nullable": true,
               "type": "string",
               "unit": null
@@ -635,11 +677,18 @@
               "unit": null
             },
             {
-              "description": "employees",
-              "name": "employees",
+              "description": "num workers",
+              "name": "num_workers",
               "nullable": true,
               "type": "number",
               "unit": "count"
+            },
+            {
+              "description": "name",
+              "name": "name",
+              "nullable": true,
+              "type": "string",
+              "unit": null
             }
           ],
           "geometry": "geometry",
@@ -716,13 +765,6 @@
               "nullable": true,
               "type": "number",
               "unit": "ratio"
-            },
-            {
-              "description": "amenity type",
-              "name": "amenity_type",
-              "nullable": true,
-              "type": "string",
-              "unit": null
             },
             {
               "description": "commerce type",
@@ -818,11 +860,25 @@
               "unit": null
             },
             {
-              "description": "amenity type",
-              "name": "amenity_type",
+              "description": "category",
+              "name": "category",
               "nullable": true,
               "type": "string",
               "unit": null
+            },
+            {
+              "description": "scian code",
+              "name": "scian_code",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "num workers",
+              "name": "num_workers",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
             },
             {
               "description": "capacity",
@@ -830,6 +886,13 @@
               "nullable": true,
               "type": "number",
               "unit": "count"
+            },
+            {
+              "description": "name",
+              "name": "name",
+              "nullable": true,
+              "type": "string",
+              "unit": null
             }
           ],
           "geometry": "geometry",
@@ -871,6 +934,20 @@
               "nullable": true,
               "type": "number",
               "unit": "count"
+            },
+            {
+              "description": "Target area of each lot it is subdivided into (unset when loaded).",
+              "name": "lot.size_m2",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "Target lot frontage (unset when loaded).",
+              "name": "lot.frontage_m",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
             }
           ],
           "geometry": "geometry",
@@ -900,8 +977,15 @@
               "unit": null
             },
             {
-              "description": "scian class",
-              "name": "scian_class",
+              "description": "category",
+              "name": "category",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "scian code",
+              "name": "scian_code",
               "nullable": true,
               "type": "string",
               "unit": null
@@ -914,11 +998,18 @@
               "unit": null
             },
             {
-              "description": "employees",
-              "name": "employees",
+              "description": "num workers",
+              "name": "num_workers",
               "nullable": true,
               "type": "number",
               "unit": "count"
+            },
+            {
+              "description": "name",
+              "name": "name",
+              "nullable": true,
+              "type": "string",
+              "unit": null
             }
           ],
           "geometry": "geometry",
@@ -995,13 +1086,6 @@
               "nullable": true,
               "type": "number",
               "unit": "ratio"
-            },
-            {
-              "description": "amenity type",
-              "name": "amenity_type",
-              "nullable": true,
-              "type": "string",
-              "unit": null
             },
             {
               "description": "commerce type",
@@ -2011,7 +2095,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Acquire a scenario's present elements with an amenity_type.",
+      "description": "Acquire a scenario's present amenities and establishments, with the accessibility amenity_type their category and SCIAN code give.",
       "inputs": {},
       "name": "reimagina_scenario_pois",
       "outputs": {

@@ -40,7 +40,7 @@ class BaselineParameters(MetricParameters):
 
 def point_declaration(attributes: dict[str, str]) -> TableOutput:
     """Identity, amenity or establishment attributes and EPSG:4326 points."""
-    units = {"capacity": Unit.COUNT, "employees": Unit.COUNT}
+    units = {"capacity": Unit.COUNT, "num_workers": Unit.COUNT}
     return TableOutput(
         columns=[
             *identity_columns(),
@@ -74,6 +74,18 @@ def baseline_declaration(*, blocks: bool) -> TableOutput:
                 Unit.COUNT,
                 "Census average occupants per inhabited dwelling.",
             ),
+            column(
+                "lot.size_m2",
+                "number",
+                Unit.SQUARE_METRE,
+                "Target area of each lot it is subdivided into (unset when loaded).",
+            ),
+            column(
+                "lot.frontage_m",
+                "number",
+                Unit.METRE,
+                "Target lot frontage (unset when loaded).",
+            ),
         ]
     else:
         units = {"people_per_household": Unit.COUNT, "occupancy_rate": Unit.RATIO}
@@ -89,7 +101,7 @@ def baseline_declaration(*, blocks: bool) -> TableOutput:
     return TableOutput(columns=[*identity, *attributes], geometry="geometry")
 
 
-TEXT_ATTRIBUTES = {"land_use", "amenity_type", "commerce_type"}
+TEXT_ATTRIBUTES = {"land_use", "commerce_type"}
 BASELINE_LOT_ATTRIBUTES = [
     "land_use",
     "cos",
@@ -98,7 +110,6 @@ BASELINE_LOT_ATTRIBUTES = [
     "unit_size_m2",
     "people_per_household",
     "occupancy_rate",
-    "amenity_type",
     "commerce_type",
 ]
 
@@ -108,9 +119,11 @@ BASELINE_LOT_ATTRIBUTES = [
     description=(
         "Build a city's baseline elements from the CFC data lake with "
         "exe_reimagina's rules: INEGI blocks and census, cadastral lots, "
-        "normativa, Open Buildings heights, the equipment layer and the DENUE. "
-        "Blocks are keyed by CVEGEO; lots by their cadastral key; amenities "
-        "(equipment) and establishments (DENUE) hang from the lot holding them."
+        "normativa, Open Buildings heights, the amenities file and the DENUE. "
+        "Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE "
+        "record is an amenity or an establishment by the SCIAN crosswalk; with "
+        "the amenities file's, they go to the nearest lot within 50 m as a point "
+        "at its center, and each lot's land use follows from what it holds."
     ),
     outputs={
         "reimagina_baseline_lots": baseline_declaration(blocks=False),
@@ -201,7 +214,12 @@ BASELINE_ATTRIBUTES = {
         key: "text" if key in TEXT_ATTRIBUTES else "number"
         for key in BASELINE_LOT_ATTRIBUTES
     },
-    "block": {"vivtot": "number", "people_per_household": "number"},
+    "block": {
+        "vivtot": "number",
+        "people_per_household": "number",
+        "lot.size_m2": "number",
+        "lot.frontage_m": "number",
+    },
     "amenity": AMENITY_ATTRIBUTES,
     "establishment": ESTABLISHMENT_ATTRIBUTES,
 }

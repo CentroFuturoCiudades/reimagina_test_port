@@ -1,0 +1,58 @@
+scian_prefix,element,category,note
+61111,amenity,primary_education,Preescolar
+61112,amenity,primary_education,Primaria
+61113,amenity,secondary_education,Secundaria general
+61114,amenity,secondary_education,Secundaria técnica
+61115,amenity,secondary_education,Media técnica terminal
+61116,amenity,secondary_education,Media superior
+61117,amenity,secondary_education,"Combinan niveles (INEA, adultos); draft"
+61118,amenity,primary_education,Necesidades especiales (CAM); draft
+6112,amenity,tertiary_education,Técnica superior
+6113,amenity,tertiary_education,Superior
+621111,amenity,primary_healthcare,Consultorios de medicina general privados
+621112,amenity,primary_healthcare,Consultorios de medicina general públicos (centros de salud)
+621113,amenity,medical_clinic,Consultorios de medicina especializada privados
+621114,amenity,medical_clinic,Consultorios de medicina especializada públicos
+621115,amenity,medical_clinic,Clínicas de consultorios médicos privadas
+621116,amenity,medical_clinic,Clínicas de consultorios médicos públicas
+6214,amenity,primary_healthcare,Centros de atención a pacientes que no requieren hospitalización
+62191,amenity,emergency_services,Ambulancias; draft
+622,amenity,hospital,Hospitales
+623,amenity,care,Residencias de asistencia social y para el cuidado de la salud
+62411,amenity,care,"Orientación y trabajo social para la niñez"
+62412,amenity,care,Orientación y trabajo social para ancianos y discapacitados
+62419,amenity,community_facility,Otros servicios de orientación y trabajo social; draft
+62421,amenity,community_facility,Servicios de alimentación comunitarios; open question (care or community_facility)
+62422,amenity,community_facility,Refugios temporales comunitarios
+62423,amenity,emergency_services,Emergencia comunitarios (bomberos y rescate); draft
+6243,amenity,community_facility,Capacitación para el trabajo de personas desempleadas; draft
+6244,amenity,care,Guarderías
+5191,amenity,cultural_facility,Bibliotecas y archivos (SCIAN 2018)
+5192,amenity,cultural_facility,Bibliotecas y archivos (SCIAN 2023)
+7121,amenity,cultural_facility,"Museos, sitios históricos, jardines botánicos y zoológicos"
+711312,amenity,cultural_facility,Promotores públicos con instalaciones (teatros públicos)
+713942,amenity,sports_recreation,Clubes deportivos públicos (unidades deportivas)
+713944,amenity,sports_recreation,Centros de acondicionamiento físico públicos
+713999,amenity,sports_recreation,Otros servicios recreativos públicos
+931610,amenity,police,Impartición de justicia y seguridad pública; draft (also holds government warehouses)
+46112,establishment,fresh_food,"Carnes, aves y pescados; open question (46112–46115)"
+46113,establishment,fresh_food,Frutas y verduras frescas
+461110,establishment,convenience_store,Abarrotes y ultramarinos; draft
+4611,establishment,food_retail,"Otros alimentos al por menor (semillas, lácteos, dulces…); open question (46114, 46115)"
+462111,establishment,fresh_food,Supermercados; open question (4621)
+462112,establishment,convenience_store,Minisupers; open question (4621)
+462210,establishment,basic_household_goods,Tiendas departamentales; open question (4621); draft
+4651,establishment,basic_household_goods,Ropa; draft
+4661,establishment,basic_household_goods,Enseres domésticos y muebles; draft
+4671,establishment,basic_household_goods,Ferreterías y tlapalerías; draft
+46411,establishment,medicines,Farmacias
+522,establishment,financial,Instituciones de intermediación crediticia (bancos)
+468411,establishment,petrol_station,Gasolina y diésel; draft
+512130,establishment,cultural_facility,Cines
+7111,establishment,cultural_facility,Compañías de espectáculos artísticos
+711311,establishment,cultural_facility,Promotores privados con instalaciones
+7131,establishment,sports_recreation,Parques de diversiones
+7139,establishment,sports_recreation,"Clubes, gimnasios y otros recreativos privados"
+31,establishment,manufacturing,Industrias manufactureras
+32,establishment,manufacturing,Industrias manufactureras
+33,establishment,manufacturing,Industrias manufactureras

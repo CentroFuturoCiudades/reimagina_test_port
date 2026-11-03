@@ -151,29 +151,35 @@ def write_sources(root: Path) -> dict[str, str]:
         geometry=[box(-5, -5, 45, 45), box(55, -5, 105, 45)],
         crs=CRS,
     ).to_file(root / "normativa.geojson", engine="pyogrio")
-    # A pharmacy in a lot, a park 5 m from one and a cinema far from every lot.
+    # The equipment layer's DENUE rows are left out (the DENUE itself has them);
+    # of its IMIP rows, a park 5 m from a lot and a school far from every lot.
     gpd.GeoDataFrame(
         {
-            "category": ["Farmacia", "Parques", "Cine"],
-            "fuente": ["DENUE", "IMIP", "DENUE"],
+            "category": ["Farmacia", "Parques", "Educación Primaria"],
+            "fuente": ["DENUE", "IMIP", "IMIP"],
             "source_id": [11, 12, 13],
-            "capacity": [None, 3, 1],
+            "capacity": [None, 3, None],
         },
         # With Z, as the lake's layer.
         geometry=[Point(10, 30, 1), Point(105, 10, 1), Point(500, 500, 1)],
         crs=CRS,
     ).to_parquet(root / "pois_02002.geoparquet")
-    # Three Mexicali businesses (one far from every lot) and one elsewhere.
+    # Five Mexicali records (one far from every lot) and one elsewhere. The
+    # crosswalk makes the school an amenity; it is 30 m from the nearest lot.
     businesses = gpd.GeoDataFrame(
         {
-            "id": ["101", "102", "103", "104"],
-            "nom_estab": ["Tienda", "Taller", "Lejos", "Tijuana"],
-            "codigo_act": ["461110", "811111", "461110", "461110"],
+            "id": ["101", "102", "103", "104", "105", "106"],
+            "nom_estab": ["Tienda", "Taller", "Lejos", "Tijuana", "Farmacia",
+                          "Escuela"],
+            "codigo_act": ["461110", "811111", "461110", "461110", "464111",
+                           "611122"],
             "per_ocu": ["0 a 5 personas", "11 a 30 personas", "0 a 5 personas",
-                        "6 a 10 personas"],
-            "municipio": ["Mexicali", "Mexicali", "Mexicali", "Tijuana"],
+                        "6 a 10 personas", "6 a 10 personas", "31 a 50 personas"],
+            "municipio": ["Mexicali", "Mexicali", "Mexicali", "Tijuana", "Mexicali",
+                          "Mexicali"],
         },
-        geometry=[Point(70, 10), Point(15, 5), Point(500, 500), Point(70, 10)],
+        geometry=[Point(70, 10), Point(15, 5), Point(500, 500), Point(70, 10),
+                  Point(10, 30), Point(70, 50)],
         crs=CRS,
     ).to_crs(4326)  # fmt: skip
     businesses.assign(
@@ -245,14 +251,17 @@ def test_build(city, tmp_path):
             "lots_sharing_a_key": 2,
             "lots_without_key": 1,
         },
+        # Two IMIP rows and the DENUE school.
         "amenities": {"source": 3, "elements": 2, "outside_every_lot": 1},
-        # Four DENUE rows in the state, three of Mexicali.
+        # Six DENUE rows in the state, five of Mexicali: one amenity.
         "establishments": {
-            "denue_state": 4,
-            "denue_municipio": 3,
+            "denue_state": 6,
+            "denue_municipio": 5,
             "without_coordinates": 0,
-            "source": 3,
-            "elements": 2,
+            "denue_amenities": 1,
+            "denue_establishments": 4,
+            "source": 4,
+            "elements": 3,
             "outside_every_lot": 1,
         },
     }
@@ -273,12 +282,17 @@ def test_build(city, tmp_path):
     assert (
         lots.loc[["1-A-7-1", "1-A-7-2"], "parent_id"] == blocks.loc[CVEGEO[0], "id"]
     ).all()
-    # The pharmacy makes its residential lot mixed use; the shop zone is commerce.
-    # It is in box(0, 20, 20, 40): the first "1-A-7-2" by x.
-    assert lots.loc["1-A-7-2", "amenity_type"] == "pharmacy"
+    # Land use from contents. Homes and a business: mixed use ("1-A-7-2" is
+    # box(0, 20, 20, 40), the first by x, with the pharmacy). Homes only: single
+    # family. Only a business: commerce, whatever the school next to it. Only the
+    # park: amenity, though zoned for commerce.
+    assert "amenity_type" not in lots
+    assert lots.loc["1-A-7-1", "land_use"] == "mixed_use"
     assert lots.loc["1-A-7-2", "land_use"] == "mixed_use"
+    assert lots.loc["1-A-7-2#2", "land_use"] == "single_family"
     assert lots.loc["1-B-8-1", "land_use"] == "commerce"
     assert lots.loc["1-B-8-1", "commerce_type"] == "shop"
+    assert lots.loc["sin_clave", "land_use"] == "amenity"
     # Heights: 5 m everywhere is 2 floors over the whole lot.
     assert lots.loc["1-A-7-1", "cos"] == pytest.approx(1.0)
     # num_levels is an integer attribute: whole floors.
@@ -287,29 +301,46 @@ def test_build(city, tmp_path):
     assert lots.loc["1-A-7-1", "area"] == pytest.approx(400.0)
     assert lots.loc["1-A-7-1", "occupancy_rate"] == pytest.approx(0.75)
     assert blocks.loc[CVEGEO[0], "people_per_household"] == 3.25
-    # Amenities and establishments hang from the lot holding them, or the nearest
-    # within 15 m; farther ones are dropped.
+    # Targets: declared, unset when loaded.
+    assert blocks[["lot.size_m2", "lot.frontage_m"]].isna().all().all()
+    # Amenities and establishments go to the lot holding them, or the nearest
+    # within 50 m, as a point at its center; farther ones are not loaded.
+    centers = result["lots"].set_index("id").geometry.representative_point()
     amenities = result["amenities"].set_index("source_record_ref")
-    assert sorted(amenities.index) == ["DENUE:Farmacia:11", "IMIP:Parques:12"]
+    assert sorted(amenities.index) == ["IMIP:Parques:12", "denue:106"]
     assert amenities.crs == "EPSG:4326"
     assert not amenities.has_z.any()
-    assert amenities.loc["DENUE:Farmacia:11", "id"] == cadastral.stable_element_uuid(
-        "mexicali", "amenity", "DENUE:Farmacia:11"
+    park = amenities.loc["IMIP:Parques:12"]
+    assert park["id"] == cadastral.stable_element_uuid(
+        "mexicali", "amenity", "IMIP:Parques:12"
     )
-    assert amenities.loc["DENUE:Farmacia:11", "parent_id"] == lots.loc["1-A-7-2", "id"]
-    assert amenities.loc["DENUE:Farmacia:11", "amenity_type"] == "pharmacy"
-    assert amenities.loc["DENUE:Farmacia:11", "capacity"] == 1
     # 5 m east of the last lot, box(80, 0, 100, 20) ("sin_clave").
-    assert amenities.loc["IMIP:Parques:12", "parent_id"] == lots.loc["sin_clave", "id"]
-    assert amenities.loc["IMIP:Parques:12", "capacity"] == 3
+    assert park["parent_id"] == lots.loc["sin_clave", "id"]
+    assert park.geometry.equals_exact(centers[park["parent_id"]], 1e-12)
+    assert park["category"] == "public_space"
+    assert park["capacity"] == 3
+    assert pd.isna(park["scian_code"])
+    school = amenities.loc["denue:106"]
+    assert school["parent_id"] == lots.loc["1-B-8-1", "id"]
+    assert school["category"] == "primary_education"
+    assert school["scian_code"] == "611122"
+    assert school["num_workers"] == 40
+    assert school["name"] == "Escuela"
+    assert school["capacity"] == 1
     establishments = result["establishments"].set_index("source_record_ref")
-    assert sorted(establishments.index) == ["denue:101", "denue:102"]
-    assert establishments.loc["denue:101", "parent_id"] == lots.loc["1-B-8-1", "id"]
-    assert establishments.loc["denue:101", "scian_class"] == "461110"
-    assert establishments.loc["denue:101", "scian_sector"] == "46"
-    assert establishments.loc["denue:101", "employees"] == 3
-    assert establishments.loc["denue:102", "employees"] == 20
+    assert sorted(establishments.index) == ["denue:101", "denue:102", "denue:105"]
+    shop = establishments.loc["denue:101"]
+    assert shop["parent_id"] == lots.loc["1-B-8-1", "id"]
+    assert shop.geometry.equals_exact(centers[shop["parent_id"]], 1e-12)
+    assert shop["category"] == "convenience_store"
+    assert shop["scian_code"] == "461110"
+    assert shop["scian_sector"] == "46"
+    assert shop["num_workers"] == 3
+    assert shop["name"] == "Tienda"
+    assert establishments.loc["denue:102", "category"] == "other"
+    assert establishments.loc["denue:102", "num_workers"] == 20
     assert establishments.loc["denue:102", "parent_id"] == lots.loc["1-A-7-1", "id"]
+    assert establishments.loc["denue:105", "category"] == "medicines"
     # Same sources, same ids.
     again = baseline.build(city, tmp_path / "again", lambda *_: None)
     assert again["lots"]["id"].tolist() == result["lots"]["id"].tolist()
@@ -327,7 +358,7 @@ def test_baseline_metric(city, monkeypatch):
     assert len(tables["reimagina_baseline_elements_lots"]) == 5
     assert len(tables["reimagina_baseline_elements_blocks"]) == 2
     assert len(tables["reimagina_baseline_elements_amenities"]) == 2
-    assert len(tables["reimagina_baseline_elements_establishments"]) == 2
+    assert len(tables["reimagina_baseline_elements_establishments"]) == 3
 
 
 # ------------------------------------------------------------------ city YAMLs
@@ -341,7 +372,7 @@ def test_mexicali_yaml():
     assert city.key_columns == KEYS
     assert city.normativa_columns["USOSUELO24"] == "zoning"
     assert city.denue_municipio == "Mexicali"
-    assert city.lot_max_distance_m == 15.0
+    assert city.lot_max_distance_m == 50.0
     assert city.pois_uri.endswith("pois_02002.geoparquet")
 
 
