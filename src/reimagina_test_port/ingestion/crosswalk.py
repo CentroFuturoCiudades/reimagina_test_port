@@ -6,8 +6,6 @@ official table: ``crosswalk.csv``, one SCIAN prefix per row, the longest prefix
 winning (``461110`` before ``4611``). A code no prefix matches is an establishment
 of category ``other``: it counts only as jobs. Each DENUE record is one or the
 other, never both.
-
-Also the amenities file's own category -> category map.
 """
 
 import csv
@@ -30,19 +28,6 @@ ESTABLISHMENT_CATEGORIES = (
     "sports_recreation", "manufacturing", "other",
 )  # fmt: skip
 CATEGORIES = {"amenity": AMENITY_CATEGORIES, "establishment": ESTABLISHMENT_CATEGORIES}
-
-# The amenities file (IMIP, ``cleaning/equipamientos``) -> amenity category.
-AMENITY_FILE_CATEGORIES = {
-    "Parques": "public_space",
-    "Espacio público": "public_space",
-    "Deporte": "sports_recreation",
-    "Cultural recreativo": "cultural_facility",
-    "Educación Preescolar": "primary_education",
-    "Educación Primaria": "primary_education",
-    "Educación Secundaria": "secondary_education",
-    "Educación Media Superior": "secondary_education",
-    "Educación Superior": "tertiary_education",
-}
 
 
 @cache

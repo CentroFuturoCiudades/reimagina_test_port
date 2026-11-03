@@ -17,7 +17,13 @@ from shapely.geometry import Point, box
 
 from reimagina_test_port import plugin
 from reimagina_test_port.common import lake
-from reimagina_test_port.ingestion import baseline, cadastral, cities, prep
+from reimagina_test_port.ingestion import (
+    baseline,
+    cadastral,
+    cities,
+    prep,
+    raw_amenities,
+)
 from reimagina_test_port.ingestion.cities import CITIES
 
 CRS = "EPSG:32611"
@@ -92,6 +98,56 @@ def test_ids():
 # ------------------------------------------------------------- build from sources
 
 CVEGEO = ["020020001001a007", "020020001001a008"]
+# IMIP layer -> its name column (None: esp_pub has none).
+IMIP_NAMES = {
+    "edu_basica": "NOM_ESC", "edu_sup": "NOM_ESC", "med_sup": "NOM_ESC",
+    "deporte": "NOMBRE", "cult_rec": "NOMBRE", "esp_pub": None,
+}  # fmt: skip
+
+
+def write_imip(folder: Path, **layers: tuple[list, list, list]) -> None:
+    """IMIP's six layers, empty unless given as (OBJECTID, TIPO, points)."""
+    folder.mkdir()
+    for name, name_column in IMIP_NAMES.items():
+        ids, tipos, geometry = layers.get(name, ([], [], []))
+        columns = {"OBJECTID": ids, "TIPO": tipos}
+        if name_column:
+            columns[name_column] = [f"{name} {i}" for i in ids]
+        if name == "esp_pub":
+            columns["Sup_M2"] = [1500.0 + 100 * i for i in range(len(ids))]
+        # With Z, as the lake's layers.
+        points = [Point(p.x, p.y, 1) for p in geometry]
+        gpd.GeoDataFrame(columns, geometry=points, crs=CRS).to_parquet(
+            folder / f"{name}.geoparquet"
+        )
+
+
+def test_imip_normalizer(tmp_path):
+    write_imip(
+        tmp_path / "imip",
+        edu_basica=([1, 2, 3, 4, 5],
+                    ["PRIMARIA", "PREESCOLAR (JARDIN DE NIÑOS)",
+                     "ESCUELA SECUNDARIA TECNICA", "TELESECUNDARIA",
+                     "CENTRO DE DESARROLLO INFANTIL (CENDI)"],
+                    [Point(i, 0) for i in range(5)]),
+        esp_pub=([1, 2], ["PARQUE URBANO", "GLORIETAS"], [Point(0, 0), Point(1, 0)]),
+        deporte=([9], ["UNIDAD DEPORTIVA"], [Point(0, 0)]),
+    )  # fmt: skip
+    raw = raw_amenities.imip(tmp_path / "imip")
+    raw_amenities.check(raw)
+    table = raw.set_index("source_id")
+    assert table["category"].to_dict() == {
+        "edu_basica:1": "primary_education",
+        "edu_basica:3": "secondary_education",
+        "edu_basica:2": "primary_education",
+        "esp_pub:1": "public_space",
+        "deporte:9": "sports_recreation",
+    }
+    assert table.loc["edu_basica:1", "name"] == "edu_basica 1"
+    assert table.loc["esp_pub:1", "area_m2"] == 1500
+    assert pd.isna(table.loc["esp_pub:1", "name"])
+    assert pd.isna(table.loc["deporte:9", "area_m2"])
+    assert (table["source"] == "IMIP").all()
 
 
 def write_sources(root: Path) -> dict[str, str]:
@@ -151,19 +207,14 @@ def write_sources(root: Path) -> dict[str, str]:
         geometry=[box(-5, -5, 45, 45), box(55, -5, 105, 45)],
         crs=CRS,
     ).to_file(root / "normativa.geojson", engine="pyogrio")
-    # The equipment layer's DENUE rows are left out (the DENUE itself has them);
-    # of its IMIP rows, a park 5 m from a lot and a school far from every lot.
-    gpd.GeoDataFrame(
-        {
-            "category": ["Farmacia", "Parques", "Educación Primaria"],
-            "fuente": ["DENUE", "IMIP", "IMIP"],
-            "source_id": [11, 12, 13],
-            "capacity": [None, 3, None],
-        },
-        # With Z, as the lake's layer.
-        geometry=[Point(10, 30, 1), Point(105, 10, 1), Point(500, 500, 1)],
-        crs=CRS,
-    ).to_parquet(root / "pois_02002.geoparquet")
+    # IMIP's layers: a garden 5 m from a lot and a school far from every lot; a
+    # median and a CENDI, which no rule keeps.
+    write_imip(
+        root / "imip",
+        esp_pub=([12, 13], ["JARDIN VECINAL", "CAMELLONES"], [Point(105, 10), Point(10, 10)]),
+        edu_basica=([7, 8], ["PRIMARIA", "CENTRO DE DESARROLLO INFANTIL (CENDI)"],
+                    [Point(500, 500), Point(10, 10)]),
+    )  # fmt: skip
     # Five Mexicali records (one far from every lot) and one elsewhere. The
     # crosswalk makes the school an amenity; it is 30 m from the nearest lot.
     businesses = gpd.GeoDataFrame(
@@ -216,7 +267,7 @@ def write_sources(root: Path) -> dict[str, str]:
     return {
         "lots_uri": str(root / "lots" / "PREDIOS.shp"),
         "normativa_uri": str(root / "normativa.geojson"),
-        "pois_uri": str(root / "pois_02002.geoparquet"),
+        "amenities_uri": str(root / "imip"),
         "denue_uri": str(root / "denue.csv"),
         "tiles_uri": str(root / "tiles"),
         "manifests_uri": str(root / "manifests"),
@@ -251,8 +302,15 @@ def test_build(city, tmp_path):
             "lots_sharing_a_key": 2,
             "lots_without_key": 1,
         },
+        "amenities_file": {"public_space": 1, "primary_education": 1},
         # Two IMIP rows and the DENUE school.
-        "amenities": {"source": 3, "elements": 2, "outside_every_lot": 1},
+        "amenities": {
+            "from_file": 2,
+            "from_denue": 1,
+            "source": 3,
+            "elements": 2,
+            "outside_every_lot": 1,
+        },
         # Six DENUE rows in the state, five of Mexicali: one amenity.
         "establishments": {
             "denue_state": 6,
@@ -311,18 +369,20 @@ def test_build(city, tmp_path):
     # within 50 m, as a point at its center; farther ones are not loaded.
     centers = result["lots"].set_index("id").geometry.representative_point()
     amenities = result["amenities"].set_index("source_record_ref")
-    assert sorted(amenities.index) == ["IMIP:Parques:12", "denue:106"]
+    assert sorted(amenities.index) == ["IMIP:esp_pub:12", "denue:106"]
     assert amenities.crs == "EPSG:4326"
     assert not amenities.has_z.any()
-    park = amenities.loc["IMIP:Parques:12"]
+    park = amenities.loc["IMIP:esp_pub:12"]
     assert park["id"] == cadastral.stable_element_uuid(
-        "mexicali", "amenity", "IMIP:Parques:12"
+        "mexicali", "amenity", "IMIP:esp_pub:12"
     )
     # 5 m east of the last lot, box(80, 0, 100, 20) ("sin_clave").
     assert park["parent_id"] == lots.loc["sin_clave", "id"]
     assert park.geometry.equals_exact(centers[park["parent_id"]], 1e-12)
     assert park["category"] == "public_space"
-    assert park["capacity"] == 3
+    assert park["area_m2"] == 1500
+    assert pd.isna(park["name"])
+    assert park["capacity"] == 1
     assert pd.isna(park["scian_code"])
     school = amenities.loc["denue:106"]
     assert school["parent_id"] == lots.loc["1-B-8-1", "id"]
@@ -378,7 +438,8 @@ def test_mexicali_yaml():
     assert city.denue_municipio == "Mexicali"
     assert city.lot_max_distance_m == 50.0
     assert city.floor_share_by_land_use["mixed_use"] == 80
-    assert city.pois_uri.endswith("pois_02002.geoparquet")
+    assert city.amenities_uri.endswith("imip/equipamiento")
+    assert city.amenities_normalizer == "imip"
 
 
 def write_city(tmp_path: Path, name: str, change) -> Path:
@@ -394,6 +455,8 @@ def write_city(tmp_path: Path, name: str, change) -> Path:
     [
         (lambda c: c["sources"].pop("denue"), "sources.denue: uri is required"),
         (lambda c: c["params"].pop("space_allocation"), "housing.floor_share is required"),
+        (lambda c: c["sources"]["amenities"]["params"].update(normalizer="sigcdmx"),
+         "unknown normalizer 'sigcdmx'"),
         (lambda c: c["params"]["space_allocation"]["housing.floor_share"].update(park=1),
          r"unknown land uses \['park'\]"),
         (lambda c: c["params"]["space_allocation"]["housing.floor_share"].update(amenity=120),

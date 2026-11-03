@@ -511,7 +511,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's baseline elements from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights, the amenities file and the DENUE. Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE record is an amenity or an establishment by the SCIAN crosswalk; with the amenities file's, they go to the nearest lot within 50 m as a point at its center, and each lot's land use follows from what it holds.",
+      "description": "Build a city's baseline elements from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights, the city's amenity layers (normalized into the amenities file) and the DENUE. Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE record is an amenity or an establishment by the SCIAN crosswalk; with the amenities file's, they go to the nearest lot within 50 m as a point at its center, and each lot's land use follows from what it holds.",
       "inputs": {},
       "name": "reimagina_baseline",
       "outputs": {
@@ -572,6 +572,13 @@
               "nullable": true,
               "type": "string",
               "unit": null
+            },
+            {
+              "description": "area m2",
+              "name": "area_m2",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
             }
           ],
           "geometry": "geometry",
@@ -900,6 +907,13 @@
               "nullable": true,
               "type": "string",
               "unit": null
+            },
+            {
+              "description": "area m2",
+              "name": "area_m2",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
             }
           ],
           "geometry": "geometry",

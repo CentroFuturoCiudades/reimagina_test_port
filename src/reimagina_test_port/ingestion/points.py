@@ -4,8 +4,8 @@ From reimagina_pipelines_lab ``reimagina_ingestion`` (the ``equipment_layer`` an
 ``denue`` normalizers, ``amenities.catalog``, ``establishments.registry``), placed
 as reimagina_urbano_api ``urban_fabric.md`` says: every DENUE record of the
 municipality is an amenity or an establishment by the SCIAN crosswalk
-(``crosswalk``), never both; the amenities file (the IMIP rows of the equipment
-layer) adds amenities by its own categories. Each goes to the lot holding it, else
+(``crosswalk``), never both; the amenities file (the raw_amenities step's output:
+Mexicali's IMIP layers) adds amenities with their own categories. Each goes to the lot holding it, else
 the nearest within ``lot_max_distance_m`` (50 m), as a point at that lot's center;
 farther, it is not loaded.
 """
@@ -16,7 +16,7 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 
-from reimagina_test_port.ingestion import crosswalk
+from reimagina_test_port.ingestion import crosswalk, raw_amenities
 from reimagina_test_port.ingestion.cadastral import stable_element_uuid
 from reimagina_test_port.ingestion.cities import CityPreset
 
@@ -28,6 +28,7 @@ AMENITY_ATTRIBUTES = {
     "num_workers": "number",
     "capacity": "number",
     "name": "text",
+    "area_m2": "number",
 }
 ESTABLISHMENT_ATTRIBUTES = {
     "category": "text",
@@ -49,8 +50,6 @@ DENUE_WORKERS = {
     "101 a 250 personas": 175,
     "251 y más personas": 251,
 }
-# The equipment layer's own rows; its DENUE rows come from the DENUE itself.
-AMENITY_FILE_SOURCES = {"IMIP"}
 
 
 def read_denue(
@@ -172,49 +171,45 @@ def _point_table(
 
 
 def amenity_table(
-    equipment: gpd.GeoDataFrame,
+    amenities_file: gpd.GeoDataFrame,
     denue: gpd.GeoDataFrame,
     lots: gpd.GeoDataFrame,
     city: CityPreset,
 ) -> tuple[gpd.GeoDataFrame, dict[str, int]]:
-    """One amenity per amenities-file point and DENUE amenity near a lot, and a report.
+    """One amenity per amenities-file row and DENUE amenity near a lot, and a report.
 
-    Amenities-file keys are ``fuente:category:source_id`` (the lab's ``poi_key``),
-    with the file's category mapped and no SCIAN code, workers or name; DENUE ones
-    are ``denue:<id>``. A missing capacity is ``default_capacity``.
+    ``amenities_file`` is the raw_amenities step's output
+    (``raw_amenities.AMENITIES_FILE_COLUMNS``): keys ``source:source_id``, with
+    its category, name and area and no SCIAN code or workers. DENUE amenities are
+    ``denue:<id>``, without area. Capacity is ``default_capacity``. The report adds
+    the rows of each source (``from_file``, ``from_denue``).
     """
-    equipment = equipment[equipment["fuente"].isin(AMENITY_FILE_SOURCES)]
-    raw = equipment["category"].astype(str)
-    if unknown := sorted(set(raw) - set(crosswalk.AMENITY_FILE_CATEGORIES)):
-        msg = f"Amenities file categories without a category: {unknown}"
-        raise ValueError(msg)
-    source_id = equipment["source_id"] if "source_id" in equipment else equipment["id"]
-    capacity = (
-        pd.to_numeric(equipment["capacity"], errors="coerce")
-        if "capacity" in equipment
-        else pd.Series(float("nan"), index=equipment.index)
-    )
+    raw_amenities.check(amenities_file)
     from_file = pd.DataFrame(
         {
-            "key": equipment["fuente"].astype(str) + ":" + raw + ":"
-            + source_id.astype(str),
-            "category": raw.map(crosswalk.AMENITY_FILE_CATEGORIES),
-            "capacity": capacity,
+            "key": amenities_file["source"].astype(str)
+            + ":"
+            + amenities_file["source_id"].astype(str),
+            "category": amenities_file["category"],
+            "name": amenities_file["name"],
+            "area_m2": pd.to_numeric(amenities_file["area_m2"], errors="coerce"),
         }
-    )  # fmt: skip
+    )
     denue = denue[denue["element"] == "amenity"]
     from_denue = _denue_attributes(denue).drop(columns="scian_sector")
     from_denue.insert(0, "key", "denue:" + denue["id"].astype(str).str.strip())
     attributes = pd.concat([from_file, from_denue], ignore_index=True)
-    attributes["capacity"] = attributes["capacity"].fillna(city.default_capacity)
+    attributes["capacity"] = float(city.default_capacity)
+    attributes = attributes[["key", *AMENITY_ATTRIBUTES]]
     points = gpd.GeoDataFrame(
         geometry=pd.concat(
-            [equipment.geometry.to_crs(4326), denue.geometry], ignore_index=True
+            [amenities_file.geometry.to_crs(4326), denue.geometry], ignore_index=True
         ),
         crs=4326,
     )
     keys = attributes.pop("key")
-    return _point_table(points, "amenity", keys, attributes, lots, city)
+    table, report = _point_table(points, "amenity", keys, attributes, lots, city)
+    return table, {"from_file": len(from_file), "from_denue": len(from_denue)} | report
 
 
 def establishment_table(

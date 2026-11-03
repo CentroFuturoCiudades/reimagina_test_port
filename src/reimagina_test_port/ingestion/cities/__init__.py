@@ -43,8 +43,10 @@ class CityPreset:
     tiles_uri: str
     manifests_uri: str
     year: str
-    # Cleaned equipment layer: its IMIP rows are the amenities file.
-    pois_uri: str
+    # Folder of the city's raw amenity layers, and the raw_amenities normalizer
+    # that turns them into the amenities file (raw_amenities.NORMALIZERS).
+    amenities_uri: str
+    amenities_normalizer: str
     # Raw INEGI DENUE of the state, filtered to the municipality: amenities and
     # establishments by the SCIAN crosswalk.
     denue_uri: str
@@ -124,7 +126,7 @@ def from_yaml(path: Path) -> CityPreset:
     lots_uri, parcels = source("parcels")
     normativa_uri, zoning = source("zoning")
     tiles_uri, heights = source("heights")
-    pois_uri, equipment = source("equipment")
+    amenities_uri, raw_amenities = source("amenities")
     denue_uri, denue = source("denue")
     lots, amenities, points, space_allocation = (
         params.section("lots"),
@@ -166,7 +168,8 @@ def from_yaml(path: Path) -> CityPreset:
         tiles_uri=tiles_uri,
         manifests_uri=str(heights.required("manifests_uri")),
         year=str(heights.required("year")),
-        pois_uri=pois_uri,
+        amenities_uri=amenities_uri,
+        amenities_normalizer=str(raw_amenities.required("normalizer")),
         denue_uri=denue_uri,
         denue_municipio=str(denue.required("municipio")),
         denue_encoding=str(denue.optional("encoding", default("denue_encoding"))),
@@ -189,10 +192,19 @@ def from_yaml(path: Path) -> CityPreset:
         },
     )
     for section in (
-        blocks, census, parcels, zoning, heights, equipment, denue,
+        blocks, census, parcels, zoning, heights, raw_amenities, denue,
         lots, amenities, points, space_allocation, sources, params, config,
     ):  # fmt: skip
         section.done()
+    # Imported here: raw_amenities needs geopandas, the presets do not.
+    from reimagina_test_port.ingestion.raw_amenities import NORMALIZERS
+
+    if preset.amenities_normalizer not in NORMALIZERS:
+        msg = (
+            f"{path.name}: sources.amenities: unknown normalizer "
+            f"{preset.amenities_normalizer!r}; known: {sorted(NORMALIZERS)}"
+        )
+        raise CityConfigError(msg)
     if preset.key != path.stem:
         msg = f"{path.name}: city is {preset.key!r}, the file must be {preset.key}.yaml"
         raise CityConfigError(msg)

@@ -13,7 +13,8 @@ src/reimagina_test_port/
 ├── snapshot.py    prepared GeoParquet snapshots, the offline sources
 ├── ingestion/     a city's baseline from the data lake (data, not indicators):
 │                  cities/*.yaml, prep, footprints, cadastral, elements,
-│                  crosswalk (+ crosswalk.csv), points, baseline, catalogs,
+│                  crosswalk (+ crosswalk.csv), raw_amenities, points,
+│                  baseline, catalogs,
 │                  baseline_writer, nodes.py (reimagina_baseline*)
 ├── indicators/    one subpackage per indicator type, each with its nodes.py
 │   ├── built_form/      calculation.py
@@ -154,7 +155,7 @@ job's logger.
 Adapted from reimagina-lyra `ingestion/pipeline.build_elements`, with the same
 sources (CFC lake, `DefaultAzureCredential`): INEGI 2024 urban blocks and the
 2020 census, the IMIP cadastre, the zoning normativa, Open Buildings 2.5D
-heights, the IMIP amenities file and the INEGI DENUE. The code lives in
+heights, IMIP's equipment layers and the INEGI DENUE. The code lives in
 `ingestion/` (data only; indicators are computed elsewhere). `ingestion/prep.py`
 and `footprints.py` are copied unchanged (excluded from ruff): blocks join census
 by CVEGEO; lots get area, normativa (containing polygon, else nearest within 3 m)
@@ -186,7 +187,7 @@ raster's average floors to whole floors, as the API's integer decoding does.
 
 Each city is a YAML in `ingestion/cities/` (`<city>.yaml`, the city key), laid
 out as reimagina_pipelines_lab's `pipelines/ingestion/cities`: codes and CRS,
-`sources` (`blocks`, `census`, `parcels`, `zoning`, `heights`, `equipment`,
+`sources` (`blocks`, `census`, `parcels`, `zoning`, `heights`, `amenities`,
 `denue`; a `uri` and its `params` each) and the builders' `params` (`lots`,
 `amenities`, `points`). Values come from exe_reimagina's
 `src/pipeline/cities/*.toml`. A missing or unknown key fails at import, and the
@@ -201,19 +202,37 @@ SCIAN crosswalk (`ingestion/crosswalk.csv`: a prefix, an element type and a
 category, the longest prefix winning; no match is an establishment of category
 `other`). The crosswalk is a **draft** written from SCIAN 2018 until the API
 repository has the official table; rows marked "draft" or "open question" in its
-`note` column are guesses. The amenities file is the equipment layer's IMIP rows
-(its DENUE rows come from the DENUE itself), with its categories mapped
-(`crosswalk.AMENITY_FILE_CATEGORIES`: *Parques* `public_space`, *Deporte*
-`sports_recreation`, schools by level).
+`note` column are guesses.
+
+The other amenities come from each city's own layers, in two steps. The
+`raw_amenities` step (`ingestion/raw_amenities.py`) reads the raw layers of
+`sources.amenities` (a folder) with the normalizer the YAML names
+(`params.normalizer`) and returns the **amenities file**: one point per amenity
+with `source`, `source_id`, `category` (an amenity category), `name` and
+`area_m2`. The `points` step then places it like the DENUE. A new city with
+another source adds a normalizer to `raw_amenities.NORMALIZERS`.
+
+Mexicali's normalizer, `imip`, reads IMIP's equipment layers
+(`az://cleaned/por_estado/02_baja_california/002_mexicali/imip/equipamiento/`)
+with exe_reimagina's `2_equip_for_exe.ipynb` rules: six of its 15 layers,
+`edu_basica` split by `TIPO` (primary and preschool `primary_education`, general
+and technical secondary `secondary_education`; CENDI and telesecundaria left
+out), `med_sup` `secondary_education`, `edu_sup` `tertiary_education`, `deporte`
+`sports_recreation`, `cult_rec` `cultural_facility`, and `esp_pub` filtered to
+sports spaces, neighbourhood gardens and parks, all `public_space` (as exe
+does). Names come from `NOM_ESC` or `NOMBRE` (`esp_pub` has none); `area_m2`,
+of public spaces only, from `esp_pub`'s `Sup_M2`. It replaces the copy of that
+notebook's output exe_reimagina read (`pois_accesibilidad/pois_02002`), which
+also lost names and areas.
 
 DENUE records are keyed `denue:<id>`, with `category`, `scian_code`
 (`codigo_act`), `num_workers` (the `per_ocu` range's midpoint; the top range, its
 floor; required, so an unknown range fails) and `name` (`nom_estab`);
 establishments add `scian_sector` (the code's first two digits). Amenities-file
-records are keyed `fuente:category:source_id`, with `category` only. Amenities
-also carry `capacity` (missing: `default_capacity`). `area_m2` and
-`tree_coverage` of public spaces are not loaded: the layer has points, not
-polygons, and Meta's canopy height is not a source yet. Each record goes to the
+records are keyed `source:source_id` (Mexicali: `IMIP:<layer>:<OBJECTID>`), with
+`category`, `name` and `area_m2`. Amenities also carry `capacity`
+(`default_capacity`). `tree_coverage` of public spaces is not loaded: Meta's
+canopy height is not a source yet. Each record goes to the
 lot containing it, else the nearest lot within `lot_max_distance_m` (50 m), as a
 point at that lot's representative point; farther ones are not loaded and are
 counted in the report. Ids are `uuid5(NS, "<city>:amenity:<key>")` and

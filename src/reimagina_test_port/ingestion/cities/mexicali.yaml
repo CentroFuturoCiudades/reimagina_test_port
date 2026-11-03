@@ -31,8 +31,11 @@ sources:
     params:
       year: "2023"
       manifests_uri: az://sandbox/projects/EXE/raw/open_buildings_temporal_data_v1_mx
-  equipment:   # DENUE + IMIP (cleaning/equipamientos): its IMIP rows are the amenities file
-    uri: az://sandbox/projects/EXE/cleaned/pois_accesibilidad/pois_02002.geoparquet
+  # Raw amenity layers, turned into the amenities file by the raw_amenities step's
+  # normalizer: IMIP's equipment layers, one geoparquet each (edu_basica, esp_pub...).
+  amenities:
+    uri: az://cleaned/por_estado/02_baja_california/002_mexicali/imip/equipamiento
+    params: {normalizer: imip}
   denue:   # INEGI DENUE 05_2025 as published: amenities and establishments by the SCIAN crosswalk
     uri: az://raw/inegi/denue/02_baja_california/denue_02_0525_csv/conjunto_de_datos/denue_inegi_02_.csv
     params: {municipio: Mexicali, encoding: latin-1}

@@ -40,7 +40,11 @@ class BaselineParameters(MetricParameters):
 
 def point_declaration(attributes: dict[str, str]) -> TableOutput:
     """Identity, amenity or establishment attributes and EPSG:4326 points."""
-    units = {"capacity": Unit.COUNT, "num_workers": Unit.COUNT}
+    units = {
+        "capacity": Unit.COUNT,
+        "num_workers": Unit.COUNT,
+        "area_m2": Unit.SQUARE_METRE,
+    }
     return TableOutput(
         columns=[
             *identity_columns(),
@@ -124,7 +128,8 @@ BASELINE_LOT_ATTRIBUTES = [
     description=(
         "Build a city's baseline elements from the CFC data lake with "
         "exe_reimagina's rules: INEGI blocks and census, cadastral lots, "
-        "normativa, Open Buildings heights, the amenities file and the DENUE. "
+        "normativa, Open Buildings heights, the city's amenity layers (normalized "
+        "into the amenities file) and the DENUE. "
         "Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE "
         "record is an amenity or an establishment by the SCIAN crosswalk; with "
         "the amenities file's, they go to the nearest lot within 50 m as a point "

@@ -695,6 +695,7 @@ def new_tables(count: int = 4):
             "num_workers": [3.0],
             "capacity": [1.0],
             "name": [None],
+            "area_m2": [None],
         },
         geometry=[inside],
         crs=4326,
@@ -795,15 +796,15 @@ def test_write_new_baseline(new_baseline, dsn):
     first = write_new_baseline()
     # The blocks already exist: reused, not created. 23 lot and block values, 4 of
     # the amenity (no name) and 4 of the establishment (no workers). The catalogs
-    # get the 9 attributes they lacked (housing.floor_share, the block's targets,
-    # 3 of the amenity and 3 of the establishment) and block.density; the dry run
+    # get the 10 attributes they lacked (housing.floor_share, the block's targets,
+    # 4 of the amenity and 3 of the establishment) and block.density; the dry run
     # rolled its rows back.
     assert first == {
         "elements": 8,
         "elements_created": 6,
         "attribute_values": 31,
         "elements_removed": 0,
-        "attributes_added": 9,
+        "attributes_added": 10,
         "indicators_added": 1,
         "by_type": {"block": 2, "lot": 4, "amenity": 1, "establishment": 1},
     }
@@ -830,6 +831,7 @@ def test_write_new_baseline(new_baseline, dsn):
     assert rows["lot.housing.floor_share"] == ("number", "%", None)
     assert rows["block.lot.size_m2"] == ("number", "m2", None)
     assert rows["establishment.num_workers"] == ("integer", None, None)
+    assert rows["amenity.area_m2"] == ("number", "m2", None)
     assert density == ("Densidad", "viv/ha", "indicators")
     assert counts(dsn, BASELINE) == old
     tables = scenario_nodes.read_scenario(NEW_BASELINE)

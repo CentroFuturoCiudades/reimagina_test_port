@@ -18,7 +18,13 @@ import geopandas as gpd
 import pandas as pd
 
 from reimagina_test_port.common import lake
-from reimagina_test_port.ingestion import cadastral, footprints, points, prep
+from reimagina_test_port.ingestion import (
+    cadastral,
+    footprints,
+    points,
+    prep,
+    raw_amenities,
+)
 from reimagina_test_port.ingestion.cities import CityPreset
 from reimagina_test_port.ingestion.elements import (
     classify_land_use,
@@ -30,7 +36,9 @@ from reimagina_test_port.ingestion.elements import (
 logger = logging.getLogger(__name__)
 
 Progress = Callable[[str, int, int], None]
-STAGES = ("download", "blocks", "lots", "footprints", "points", "elements")
+STAGES = (
+    "download", "blocks", "lots", "footprints", "raw_amenities", "points", "elements",
+)  # fmt: skip
 LOT_ATTRIBUTES = [
     "land_use",
     "cos",
@@ -166,7 +174,8 @@ def build(
 ) -> dict[str, gpd.GeoDataFrame | dict]:
     """``lots``, ``blocks``, ``amenities``, ``establishments`` and a ``report``.
 
-    The report has the cadastral keys (``lots``) and, for amenities and
+    The report has the cadastral keys (``lots``), the amenities file's rows per
+    category (``amenities_file``) and, for amenities and
     establishments, the source points, the elements kept and those outside
     every lot; for establishments also the DENUE rows of the state and of the
     municipality, those without coordinates, and how many of the municipality's
@@ -175,7 +184,6 @@ def build(
     progress("download", 0, len(STAGES))
     lots_path = lake.download_shapefile(city.lots_uri, workdir / "lots")
     normativa_path = lake.download(city.normativa_uri, workdir)
-    pois_path = lake.download(city.pois_uri, workdir)
     denue_path = lake.download(city.denue_uri, workdir)
     manifests_uri = f"{city.manifests_uri}/{city.year}/manifests"
     manifest_paths = [
@@ -232,19 +240,24 @@ def build(
         lots, stats, average_level_height=params.average_level_height
     )
 
-    progress("points", 4, len(STAGES))
+    progress("raw_amenities", 4, len(STAGES))
+    amenities_file, file_report = raw_amenities.build(
+        city.amenities_normalizer, city.amenities_uri, workdir / "amenities"
+    )
+
+    progress("points", 5, len(STAGES))
     shapes = lot_shapes(lots, city)
     denue, denue_report = points.read_denue(
         denue_path, city.denue_municipio, city.denue_encoding
     )
     amenities, amenities_report = points.amenity_table(
-        gpd.read_parquet(pois_path), denue, shapes, city
+        amenities_file, denue, shapes, city
     )
     establishments, establishments_report = points.establishment_table(
         denue, shapes, city
     )
 
-    progress("elements", 5, len(STAGES))
+    progress("elements", 6, len(STAGES))
     contents = lot_contents(shapes, amenities, establishments)
     lot_rows = lot_table(lots, blocks, contents, city)
     return {
@@ -254,6 +267,7 @@ def build(
         "establishments": establishments,
         "report": {
             "lots": keys_report,
+            "amenities_file": file_report,
             "amenities": amenities_report,
             "establishments": denue_report | establishments_report,
         },

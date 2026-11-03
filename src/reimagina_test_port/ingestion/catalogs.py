@@ -38,6 +38,7 @@ ATTRIBUTES = {
     ("block", "lot.frontage_m"): ("number", None, "m"),
     ("amenity", "category"): ("enum", AMENITY_CATEGORIES, None),
     ("amenity", "num_workers"): ("integer", None, None),
+    ("amenity", "area_m2"): ("number", None, "m2"),
     ("establishment", "category"): ("enum", ESTABLISHMENT_CATEGORIES, None),
     ("establishment", "num_workers"): ("integer", None, None),
 }
