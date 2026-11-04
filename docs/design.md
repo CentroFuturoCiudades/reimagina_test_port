@@ -12,7 +12,9 @@ src/reimagina_test_port/
 │                  contract.py, nodes.py (reimagina_scenario*, road network, POIs)
 ├── snapshot.py    prepared GeoParquet snapshots, the offline sources
 ├── ingestion/     a city's baseline from the data lake (data, not indicators):
-│                  cities, prep, footprints, cadastral, elements, baseline,
+│                  cities/*.yaml, prep, footprints, cadastral, elements,
+│                  crosswalk (+ crosswalk.csv), raw_amenities, points,
+│                  baseline, catalogs,
 │                  baseline_writer, nodes.py (reimagina_baseline*)
 ├── indicators/    one subpackage per indicator type, each with its nodes.py
 │   ├── built_form/      calculation.py
@@ -32,7 +34,7 @@ its lot output and computes all lot indicators. `reimagina_built_form` depends o
 that metric's result and on the source block output, aggregates lots by parent
 ID, and returns both tables. `reimagina_accessibility` depends on both
 built-form tables and on two more datasets: `reimagina_scenario_pois` (present
-elements with an `amenity_type`) and `reimagina_road_network` (the project's road
+amenities and establishments with an accessibility `amenity_type`) and `reimagina_road_network` (the project's road
 network as node and edge tables). `reimagina_scenario_indicators` writes the
 built-form tables and `reimagina_scenario_accessibility` the accessibility
 tables to Reimagina's database; `reimagina_scenario_write` is the final node and
@@ -90,9 +92,14 @@ from ruff so they stay diffable; `model.py` adapts the orchestration to
 tables.
 
 Blocks are the origins, weighted by this run's built-form `population` (blocks
-without demand are weight 0, not excluded). Destinations are elements with an
-`amenity_type` in the 13-type vocabulary, at their polygon centroid; others are
-logged and ignored. The model routes up to five nearest destinations per type
+without demand are weight 0, not excluded). Destinations are the present amenity
+and establishment elements, at their point. Their `category` and `scian_code` give
+one of the model's 13 types (`vocabulary.amenity_type_of`): the longest SCIAN
+prefix first (`61112` primary school, `46411` pharmacy, `512130` cinema...), else
+the category (`public_space` park, `sports_recreation` gym, `cultural_facility`
+recreation). Schools without a SCIAN code are left out, as their level is
+unknown (Mexicali loads none: its schools come from the DENUE). Elements with no type are ignored. Until the model's
+indicators move to the categories, its keys and radii are unchanged. The model routes up to five nearest destinations per type
 within 10 km at 4.8 km/h, with radii capped at 10 km and the POI-to-network snap
 distance included. The metric CRS is `ACCESS_CRS`, else the blocks' UTM zone;
 it fails if fewer than half the blocks fall within the network's extent.
@@ -148,13 +155,15 @@ job's logger.
 Adapted from reimagina-lyra `ingestion/pipeline.build_elements`, with the same
 sources (CFC lake, `DefaultAzureCredential`): INEGI 2024 urban blocks and the
 2020 census, the IMIP cadastre, the zoning normativa, Open Buildings 2.5D
-heights and the accessibility POIs. The code lives in `ingestion/` (data only;
-indicators are computed elsewhere). `ingestion/prep.py`, `footprints.py` and
-`elements.py` are copied unchanged (excluded from ruff): blocks join census by
-CVEGEO; lots get area, normativa (containing polygon, else nearest within 3 m)
+heights, IMIP's equipment layers and the INEGI DENUE. The code lives in
+`ingestion/` (data only; indicators are computed elsewhere). `ingestion/prep.py`
+and `footprints.py` are copied unchanged (excluded from ruff): blocks join census
+by CVEGEO; lots get area, normativa (containing polygon, else nearest within 3 m)
 and the block of their nearest representative point; heights give `cos`,
-`num_levels` and built-up area; POIs and zoning give `land_use`,
-`amenity_type`, `commerce_type` and the multifamily `unit_size_m2`.
+`num_levels` and built-up area. `elements.py` gives `commerce_type`, the
+multifamily `unit_size_m2` and `land_use`, classified from what each lot holds
+(below). Blocks also declare `lot.size_m2` and `lot.frontage_m`, targets that stay
+unset when the city is loaded (reimagina_urbano_api `urban_fabric.md`).
 
 Ids use exe_reimagina's namespace. A block is `uuid5(NS, "block:<cvegeo>")`,
 unchanged. A lot is `uuid5(NS, "<city>:lot:<key>")` (`city` is the preset key,
@@ -176,13 +185,107 @@ be compared.
 `num_levels` is an integer in `attribute_catalog`, so the baseline rounds the
 raster's average floors to whole floors, as the API's integer decoding does.
 
+Each city is a YAML in `ingestion/cities/` (`<city>.yaml`, the city key), laid
+out as reimagina_pipelines_lab's `pipelines/ingestion/cities`: codes and CRS,
+`sources` (`blocks`, `census`, `parcels`, `zoning`, `heights`, `amenities`,
+`denue`; a `uri` and its `params` each) and the builders' `params` (`lots`,
+`amenities`, `points`). Values come from exe_reimagina's
+`src/pipeline/cities/*.toml`. A missing or unknown key fails at import, and the
+`city` parameter of the baseline nodes accepts every YAML in the folder. Only
+Mexicali is configured: Tlalpan's normativa derives its maxima from levels and
+open area, which `prep.prepare_normativa` does not do.
+
+Amenities and establishments are elements of their own (`ingestion/points.py`),
+placed as `urban_fabric.md` says. Every record of the raw INEGI DENUE CSV whose
+`municipio` is the city's is an amenity or an establishment, never both, by the
+SCIAN crosswalk (`ingestion/crosswalk.csv`: a prefix, an element type and a
+category, the longest prefix winning; no match is an establishment of category
+`other`). The crosswalk is a **draft** written from SCIAN 2018 until the API
+repository has the official table; rows marked "draft" or "open question" in its
+`note` column are guesses.
+
+The other amenities come from each city's own layers, in two steps. The
+`raw_amenities` step (`ingestion/raw_amenities.py`) reads the raw layers of
+`sources.amenities` (a folder) with the normalizer the YAML names
+(`params.normalizer`) and returns the **amenities file**: one point per amenity
+with `source`, `source_id`, `category` (an amenity category), `name` and
+`area_m2`. The `points` step then places it like the DENUE. A new city with
+another source adds a normalizer to `raw_amenities.NORMALIZERS`.
+
+Each amenity category comes from one source only, as exe_reimagina did, so no
+amenity is loaded twice: the categories in `sources.amenities.params.categories`
+come only from the amenities file, every other one only from the DENUE; the
+report counts the rows each source left to the other (`file_skipped`,
+`denue_skipped`). Mexicali takes `public_space`, `sports_recreation` and
+`cultural_facility` from IMIP (366 sports and 339 culture places, against the
+DENUE's 18 and 47) and schools from the DENUE (with their SCIAN level and
+workers). Matched within 100 m, about 214 IMIP schools have no DENUE school of
+the same level nearby, and about 40 DENUE sports and culture places no IMIP one.
+
+Mexicali's normalizer, `imip`, reads IMIP's equipment layers
+(`az://cleaned/por_estado/02_baja_california/002_mexicali/imip/equipamiento/`)
+with exe_reimagina's `2_equip_for_exe.ipynb` rules: six of its 15 layers,
+`edu_basica` split by `TIPO` (primary and preschool `primary_education`, general
+and technical secondary `secondary_education`; CENDI and telesecundaria left
+out), `med_sup` `secondary_education`, `edu_sup` `tertiary_education`, `deporte`
+`sports_recreation`, `cult_rec` `cultural_facility`, and `esp_pub` filtered to
+neighbourhood gardens and parks (`public_space`) and sports spaces
+(`sports_recreation`; exe counted them as parks). Names come from `NOM_ESC` or `NOMBRE` (`esp_pub` has none); `area_m2`,
+of public spaces only, from `esp_pub`'s `Sup_M2`. It replaces the copy of that
+notebook's output exe_reimagina read (`pois_accesibilidad/pois_02002`), which
+also lost names and areas.
+
+DENUE records are keyed `denue:<id>`, with `category`, `scian_code`
+(`codigo_act`), `num_workers` (the `per_ocu` range's midpoint; the top range, its
+floor; required, so an unknown range fails) and `name` (`nom_estab`);
+establishments add `scian_sector` (the code's first two digits). Amenities-file
+records are keyed `source:source_id` (Mexicali: `IMIP:<layer>:<OBJECTID>`), with
+`category`, `name` and `area_m2`. Amenities also carry `capacity`
+(`default_capacity`). `tree_coverage` of public spaces is not loaded: Meta's
+canopy height is not a source yet. Each record goes to the
+lot containing it, else the nearest lot within `lot_max_distance_m` (50 m), as a
+point at that lot's representative point; farther ones are not loaded and are
+counted in the report. Ids are `uuid5(NS, "<city>:amenity:<key>")` and
+`uuid5(NS, "<city>:establishment:<key>")`, the lab's `element_id`.
+
+`land_use` follows `ingestion_pipelines.md` (*Land use from contents*), with
+homes estimated from the census until the space allocation exists: a built lot
+(over 20 m²) zoned for housing holds homes when its block has any, its share of
+the block's homes by built-up area. With homes and establishments a lot is
+`mixed_use`; with homes only, `multifamily` from `mf_min_units` homes or one home
+in a building of 600 m² and 2.5 floors, else `single_family`; with establishments
+only, `industrial` if most workers are in manufacturing, else `commerce`
+(`office`, "all offices", is not assigned: the design does not say which
+establishments are offices); with amenities only,
+`amenity`; with nothing, its zone's use. Amenities don't change the class of a lot
+that also holds homes or establishments. Lots no longer carry `amenity_type`: an
+amenity's category lives on the amenity element.
+
+`housing.floor_share` (0-100) is the space allocation by lot type, a stand-in
+for the per-lot space allocation of `ingestion_pipelines.md` until it is
+computed: each city's YAML gives a share per land use
+(`params.space_allocation.housing.floor_share`), and each lot takes its land
+use's. A land use not listed, or a lot without land use, has no value. Mexicali:
+`mixed_use` 80 (80 housing, 20 other), every other land use 100.
+
 ## Baseline writer
 
 `reimagina_baseline_write(city, project_id, scenario_id)` fills an existing
 baseline scenario (created in the API, without forks) in one transaction:
 `elements` (new ids only; an existing element, such as a block shared with
 another baseline, is reused unchanged), `element_state` and
-`element_state_attribute_value`. Running it again replaces the scenario's own
+`element_state_attribute_value`, for blocks, lots, amenities and
+establishments. The API's `element_type` enum must include `amenity` (it has
+`establishment`); otherwise the write fails naming the missing types. Before
+writing, `ingestion/catalogs.py` adds the `attribute_catalog` rows of
+`BASELINE_ATTRIBUTES` and the `indicator_catalog` rows of every built-form and
+accessibility indicator (lots and blocks) that are missing, with the API seed's
+types, units and names and the categories as enum values (`ON CONFLICT DO
+NOTHING`). Rows already there are left as they are, so an existing row that is
+deprecated, of another type or whose enum lacks a value the baseline uses (for
+example `lot.land_use` without `industrial`) still fails the contract check,
+naming it. The write returns `attributes_added` and `indicators_added`; a dry run
+rolls them back too. Running it again replaces the scenario's own
 rows, removing elements no longer present and their indicator values. Then
 `reimagina_scenario_write` computes the baseline's indicators, and after it
 each fork's.

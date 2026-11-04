@@ -9,9 +9,10 @@ import pandas as pd
 import pytest
 import rasterio
 from rasterio.transform import from_origin
-from shapely.geometry import Point, box
+from shapely.geometry import box
 
-from reimagina_test_port.ingestion import elements, footprints, prep
+from reimagina_test_port.common import vocabulary
+from reimagina_test_port.ingestion import crosswalk, elements, footprints, prep
 
 CRS = "EPSG:32611"
 PARAMS = footprints.FootprintParams()
@@ -185,46 +186,59 @@ def lots_frame(**columns: list) -> gpd.GeoDataFrame:
     return gpd.GeoDataFrame(columns, geometry=geometry, crs=CRS)
 
 
-def test_classify_land_use_rules() -> None:
+def contents_frame(*rows: tuple) -> pd.DataFrame:
+    return pd.DataFrame(
+        rows,
+        columns=["lot_id", "element_type", "category", "scian_code", "num_workers"],
+    )
+
+
+def test_classify_land_use_from_contents() -> None:
     lots = lots_frame(
-        lot_id=["sf", "mf", "school", "clinic", "shop"],
-        cvegeo=["b1", "b1", "b2", "b2", "b3"],
-        vivtot=[10, 10, 2, 2, 0],
-        builtup_area=[100.0, 900.0, 300.0, 200.0, 50.0],
+        lot_id=["sf", "mf", "mixed", "school", "shop", "office", "plant", "big",
+                "empty", "vacant"],
+        cvegeo=["b1", "b1", "b2", "b3", "b3", "b3", "b3", "b4", "b5", "b6"],
+        vivtot=[10, 10, 2, 0, 0, 0, 0, 1, 5, 0],
+        builtup_area=[100.0, 900.0, 300.0, 300.0, 50.0, 80.0, 500.0, 900.0, 10.0,
+                      200.0],
+        num_levels=[1.0, 3.0, 2.0, 1.0, 1.0, 2.0, 1.0, 3.0, 1.0, 1.0],
+    )  # fmt: skip
+    zoning = pd.Series(
+        ["habitacional"] * 3 + ["comercio y servicios"] * 4 + ["habitacional"] * 2
+        + ["industrial"]
+    )  # fmt: skip
+    contents = contents_frame(
+        # A clinic doesn't change the class of a lot with homes. Offices are not
+        # classified: the design does not say which establishments are offices.
+        ("sf", "amenity", "primary_healthcare", "621112", 3),
+        ("mixed", "establishment", "medicines", "464111", 3),
+        ("school", "amenity", "primary_education", "611122", 40),
+        ("shop", "establishment", "convenience_store", "461110", 3),
+        ("shop", "amenity", "care", "624411", 8),
+        ("office", "establishment", "financial", "522110", 8),
+        ("office", "establishment", "other", "541110", 3),
+        ("plant", "establishment", "manufacturing", "311830", 20),
+        ("plant", "establishment", "food_retail", "461150", 3),
     )
-    zoning = pd.Series(["habitacional"] * 4 + ["comercio y servicios"])
-    poi = {"school": "primary_school", "clinic": "clinic"}
     land_use, unit_size = elements.classify_land_use(
-        lots, zoning, poi, mf_min_units=1.5
+        lots, zoning, contents, mf_min_units=1.5
     )
-    # b1: 10 homes over 2 built lots; the big one gets 9 -> multifamily.
+    # b1: 10 homes over 2 built lots; the big one gets 9 -> multifamily. "big" has
+    # one home in 900 m² over 3 floors -> multifamily. "empty" is unbuilt with
+    # nothing: its zone's use; "vacant" is built with nothing: industrial zone.
     expect_equal(
         land_use.tolist(),
-        ["single_family", "multifamily", "amenity", "mixed_use", "commerce"],
-    )
+        ["single_family", "multifamily", "mixed_use", "amenity", "commerce", "commerce",
+         "industrial", "multifamily", "single_family", "industrial"],
+    )  # fmt: skip
     # Remaining homes = 10 - 1 reserved for the single-family lot -> 900 / 9 m².
     expect_equal(unit_size.iloc[1], 100.0)
     expect_equal(pd.isna(unit_size.iloc[0]), True)
 
 
-def test_amenity_type_by_lot_inside_near_and_green() -> None:
-    lots = lots_frame(lot_id=["a", "b", "park"]).to_crs(epsg=4326)
-    pois = gpd.GeoDataFrame(
-        {"amenity_type": ["pharmacy", "hospital", "hospital"]},
-        geometry=[Point(5, 5), Point(25, 15), Point(25, 300)],
-        crs=CRS,
-    ).to_crs(epsg=4326)
-    zoning = pd.Series(["habitacional", "habitacional", "área verde"])
-    by_lot = elements.amenity_type_by_lot(
-        lots, zoning, pois, metric_crs=CRS, poi_max_distance_m=20.0
-    )
-    # Inside lot a; 5 m from lot b; 290 m from everything (dropped); green -> park.
-    expect_equal(by_lot, {"a": "pharmacy", "b": "hospital", "park": "park"})
-
-
 def test_lot_attributes_keep_conditional_keys() -> None:
     residential = elements.lot_attributes(
-        "multifamily", 0.6, 3.2, 200.0, 75.0, 3.456, 0.9, "CASA HABITACION", None
+        "multifamily", 0.6, 3.2, 200.0, 75.0, 3.456, 0.9, "CASA HABITACION"
     )
     expect_equal(
         residential,
@@ -232,18 +246,38 @@ def test_lot_attributes_keep_conditional_keys() -> None:
          "unit_size_m2": 75.0, "people_per_household": 3.46, "occupancy_rate": 0.9},
     )  # fmt: skip
     commerce = elements.lot_attributes(
-        "commerce", 0.5, 1.0, 100.0, 80.0, 3.0, 0.9, "tienda comercial", None
+        "commerce", 0.5, 1.0, 100.0, 80.0, 3.0, 0.9, "tienda comercial"
     )
     expect_equal(commerce["commerce_type"], "shop")
     expect_equal(set(commerce) & {"unit_size_m2", "people_per_household"}, set())
 
 
-def test_prepare_pois_normalizes_categories() -> None:
-    pois = gpd.GeoDataFrame(
-        {"category": ["Farmacia", "Parques"]},
-        geometry=[Point(1, 1), Point(2, 2)],
-        crs=CRS,
-    )
-    out = elements.prepare_pois(pois)
-    expect_equal(out["amenity_type"].tolist(), ["pharmacy", "park"])
-    expect_equal(str(out.crs), "EPSG:4326")
+# ---------------------------------------------------------------------- crosswalk
+
+
+def test_crosswalk_longest_prefix_and_other() -> None:
+    codes = pd.Series(["461110", "461150", "611122", "311830", "811111", " 464111"])
+    out = crosswalk.classify(codes)
+    expect_equal(
+        list(zip(out["element"], out["category"], strict=True)),
+        [("establishment", "convenience_store"), ("establishment", "food_retail"),
+         ("amenity", "primary_education"), ("establishment", "manufacturing"),
+         ("establishment", "other"), ("establishment", "medicines")],
+    )  # fmt: skip
+
+
+def test_crosswalk_rejects_unknown_category(tmp_path: Path) -> None:
+    path = tmp_path / "crosswalk.csv"
+    path.write_text("scian_prefix,element,category,note\n61,amenity,school,x\n")
+    with pytest.raises(ValueError, match="school"):
+        crosswalk.table(path)
+
+
+def test_amenity_type_of_scian_then_category() -> None:
+    expect_equal(vocabulary.amenity_type_of("primary_education", "611112"), "preschool")
+    expect_equal(vocabulary.amenity_type_of("medicines", "464111"), "pharmacy")
+    expect_equal(vocabulary.amenity_type_of("public_space", None), "park")
+    expect_equal(vocabulary.amenity_type_of("sports_recreation", "713943"), "gym")
+    # Schools of the amenities file: the DENUE already has them.
+    expect_equal(vocabulary.amenity_type_of("primary_education", None), None)
+    expect_equal(vocabulary.amenity_type_of("other", "811111"), None)

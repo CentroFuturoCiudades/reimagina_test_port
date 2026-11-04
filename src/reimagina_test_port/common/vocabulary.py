@@ -1,8 +1,9 @@
 """
 Vocabulario canónico de amenidades.
 
-Una sola definición para todo el sistema: `lot.amenity_type`, `points_of_interest.type`
-y las categorías del modelo de accesibilidad. Antes había dos vocabularios — los slugs
+Una sola definición para el modelo de accesibilidad: sus 13 tipos, y cómo se derivan
+de la `category` y el `scian_code` de los elementos amenity y establishment
+(`amenity_type_of`). Antes había dos vocabularios — los slugs
 de `POIS_CONFIG` (`Parques_recreativos`, `Educacion_primaria`) en los datos, y el enum
 de `elements.md` (`park`, `hospital`, `school`) en la documentación.
 
@@ -22,6 +23,7 @@ __all__ = [
     "LEGACY_SLUG_BY_AMENITY_TYPE",
     "AMENITY_ACCESSIBILITY_PARAMS",
     "normalize_amenity_type",
+    "amenity_type_of",
 ]
 
 
@@ -144,11 +146,57 @@ def normalize_amenity_type(value: str | None) -> str | None:
     )
 
 
+# =============================================================================
+# Puente: elementos amenity / establishment -> tipo de accesibilidad
+#
+# Los elementos usan las categorías de urban_fabric.md (`category`) y su código SCIAN;
+# el modelo de accesibilidad sigue con los 13 tipos de arriba hasta que sus
+# indicadores pasen a categorías. Gana el prefijo SCIAN más largo; sin código (el
+# archivo de equipamientos), decide la categoría. La educación sin código SCIAN no
+# cuenta: el DENUE ya trae las escuelas y contarlas dos veces duplicaría destinos.
+# =============================================================================
+
+AMENITY_TYPE_BY_SCIAN_PREFIX = {
+    "61111": "preschool",
+    "61112": "primary_school",
+    "61113": "secondary_school",
+    "61114": "secondary_school",
+    "61115": "high_school",
+    "61116": "high_school",
+    "6112": "university",
+    "6113": "university",
+    "6244": "daycare",
+    "622": "hospital",
+    "6211": "clinic",
+    "6214": "clinic",
+    "46411": "pharmacy",
+    "512130": "cinema",
+}
+AMENITY_TYPE_BY_CATEGORY = {
+    "public_space": "park",
+    "sports_recreation": "gym",
+    "cultural_facility": "recreation",
+}
+_SCIAN_PREFIXES = sorted(AMENITY_TYPE_BY_SCIAN_PREFIX, key=len, reverse=True)
+
+
+def amenity_type_of(category: str | None, scian_code: str | None) -> str | None:
+    """Tipo de accesibilidad de un elemento amenity o establishment, o None."""
+    code = "" if scian_code is None else str(scian_code).strip()
+    for prefix in _SCIAN_PREFIXES:
+        if code.startswith(prefix):
+            return AMENITY_TYPE_BY_SCIAN_PREFIX[prefix]
+    return AMENITY_TYPE_BY_CATEGORY.get(category or "")
+
+
 # Coherencia interna: si alguien añade una amenidad, tiene que declararla en los tres
 # lugares. Falla al importar, no en producción.
 _missing_params = set(AMENITY_TYPES) - set(AMENITY_ACCESSIBILITY_PARAMS)
 _unknown_targets = (
-    set(AMENITY_TYPE_BY_RAW_CATEGORY.values()) | set(AMENITY_TYPE_BY_LEGACY_SLUG.values())
+    set(AMENITY_TYPE_BY_RAW_CATEGORY.values())
+    | set(AMENITY_TYPE_BY_LEGACY_SLUG.values())
+    | set(AMENITY_TYPE_BY_SCIAN_PREFIX.values())
+    | set(AMENITY_TYPE_BY_CATEGORY.values())
 ) - set(AMENITY_TYPES)
 if _missing_params:
     raise RuntimeError(f"Amenidades sin parámetros de accesibilidad: {sorted(_missing_params)}")

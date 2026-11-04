@@ -9,7 +9,7 @@ from typing import Any
 
 from reimagina_test_port.common.rules import MIN_BUILT_M2
 
-NON_RESIDENTIAL = {"amenity", "commerce", "office"}
+NON_RESIDENTIAL = {"amenity", "commerce", "office", "industrial"}
 BLOCK_SUM = ["num_housing_units", "population", "area"]
 BLOCK_AVERAGE = ["num_levels", "unit_size_m2"]
 BLOCK_AREA_WEIGHTED = ["cos", "cus", "density"]

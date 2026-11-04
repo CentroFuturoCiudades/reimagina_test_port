@@ -89,7 +89,10 @@ def scenario_dataset(
 
 @dataset(
     name="reimagina_scenario_pois",
-    description="Acquire a scenario's present elements with an amenity_type.",
+    description=(
+        "Acquire a scenario's present amenities and establishments, with the "
+        "accessibility amenity_type their category and SCIAN code give."
+    ),
     outputs={"reimagina_scenario_pois": POIS_DECLARATION},
 )
 def scenario_pois(

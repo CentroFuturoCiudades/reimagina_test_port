@@ -1,4 +1,9 @@
-"""Write a city's baseline lots and blocks as a Reimagina baseline scenario.
+"""Write a city's baseline elements as a Reimagina baseline scenario.
+
+The elements are blocks, lots, amenities and establishments; each element type
+must exist in the database's ``element_type`` enum. Missing ``attribute_catalog``
+and ``indicator_catalog`` rows are added first (``catalogs.upsert``), existing
+ones left as they are.
 
 Fills an existing baseline scenario (created in the API) with ``elements``,
 ``element_state`` and ``element_state_attribute_value`` rows, in one
@@ -16,6 +21,7 @@ import psycopg
 import shapely
 from psycopg import sql
 
+from reimagina_test_port.ingestion import catalogs
 from reimagina_test_port.scenario import contract
 from reimagina_test_port.scenario.source import SCHEMA, resolve_dsn
 
@@ -91,6 +97,17 @@ _INSERT_ATTRIBUTES = sql.SQL(
 ).format(**_TABLES)
 
 
+# What the scenario holds once written, read back from the database.
+_COUNT_BY_TYPE = sql.SQL(
+    """
+    SELECT e.type::text, count(*) FROM {element_state} s
+    JOIN {elements} e ON e.id = s.element_id
+    WHERE s.scenario_id = %(scenario)s::uuid AND s.deleted_at IS NULL
+    GROUP BY 1
+    """
+).format(**_TABLES)
+
+
 class BaselineScenarioError(ValueError):
     """The target is not an existing, fork-free baseline of the project."""
 
@@ -145,14 +162,17 @@ def write_baseline(
     *,
     dry_run: bool = False,
 ) -> dict[str, int]:
-    """Write ``tables`` (``{"lot": ..., "block": ...}``) into the baseline.
+    """Write ``tables`` (``{element_type: table}``) into the baseline.
 
     ``attributes`` maps each element type to ``{column: kind}``, the columns
     written as attribute values. A dry run rolls everything back.
 
     Returns:
-        Counts: ``elements``, ``elements_created``, ``attribute_values`` and
-        ``elements_removed`` (state rows of elements no longer present).
+        Counts: ``elements``, ``elements_created``, ``attribute_values``,
+        ``elements_removed`` (state rows of elements no longer present),
+        ``attributes_added`` and ``indicators_added`` (catalog rows added) and
+        ``by_type`` (``{element_type: elements}``, the scenario's state rows of
+        each type of ``tables`` after the write, read back from the database).
     """
     required = {
         (element_type, key): kind
@@ -168,6 +188,7 @@ def write_baseline(
     }
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
         _check_scenario(cur, project_id, scenario_id)
+        added = catalogs.upsert(cur, attributes)
         ids = contract.check(cur, "attribute_catalog", required, enums)
         cur.execute(
             "CREATE TEMP TABLE baseline_elements (id uuid PRIMARY KEY, type text, "
@@ -218,6 +239,8 @@ def write_baseline(
         removed = cur.rowcount
         cur.execute(_UPSERT_STATE, params)
         cur.execute(_INSERT_ATTRIBUTES, params)
+        cur.execute(_COUNT_BY_TYPE, params)
+        stored = dict(cur.fetchall())
         if dry_run:
             conn.rollback()
         else:
@@ -227,4 +250,8 @@ def write_baseline(
         "elements_created": created,
         "attribute_values": values,
         "elements_removed": removed,
+        **added,
+        "by_type": {
+            element_type: stored.get(element_type, 0) for element_type in tables
+        },
     }

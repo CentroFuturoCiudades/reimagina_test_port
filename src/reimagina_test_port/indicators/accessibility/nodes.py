@@ -160,7 +160,8 @@ def accessibility_metric(
         description=(
             "Walking accessibility per block, inherited by its lots (exe_reimagina "
             "model job). Blocks are origins weighted by the scenario's modelled "
-            "population; destinations are elements with an amenity_type. Up to five "
+            "population; destinations are amenities and establishments, by the "
+            "amenity_type their category and SCIAN code give. Up to five "
             "nearest destinations per amenity within 10 km on the road network at "
             "4.8 km/h. Null means none is reachable."
         ),
