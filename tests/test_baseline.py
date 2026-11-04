@@ -23,6 +23,7 @@ from reimagina_test_port.ingestion import (
     cities,
     prep,
     raw_amenities,
+    zoning_fallback,
 )
 from reimagina_test_port.ingestion.cities import CITIES
 
@@ -122,6 +123,36 @@ def write_imip(folder: Path, **layers: tuple[list, list, list]) -> None:
         )
 
 
+def test_zoning_fallback_outside_the_plan_only():
+    # The plan covers x 0-20; lots at x 0, 10 (inside) and 50, 70, 90 (outside).
+    lots = gpd.GeoDataFrame(
+        {"zoning": ["Habitacional", None, None, None, None]},
+        geometry=[box(x, 0, x + 5, 5) for x in (0, 10, 50, 70, 90)],
+        crs=CRS,
+    )
+    plan = gpd.GeoSeries([box(0, 0, 20, 5)], crs=CRS)
+    raw = pd.Series(
+        ["Casa Habitacion", "CASA HABITACION", "casa habitacion", "OTRO", None]
+    )
+    fallback = cities.ZoningFallback("Giro", {"CASA_HABITACION": "habitacional"})
+    zoning, report = zoning_fallback.apply(lots, raw, plan, fallback, metric_crs=CRS)
+    # Inside the plan's area: its zoning or none, never the fallback.
+    assert zoning.fillna("-").tolist() == [
+        "Habitacional",
+        "-",
+        "habitacional",
+        "-",
+        "-",
+    ]
+    assert report == {
+        "from_zoning_plan": 1,
+        "outside_plan_area": 3,
+        "from_fallback": 1,
+        "fallback_value_empty": 1,
+        "fallback_value_unlisted": 1,
+    }
+
+
 def test_imip_normalizer(tmp_path):
     write_imip(
         tmp_path / "imip",
@@ -201,14 +232,16 @@ def write_sources(root: Path) -> dict[str, str]:
     lots = pd.concat([lots, lots.iloc[[1]]], ignore_index=True)
     (root / "lots").mkdir()
     lots.to_file(root / "lots" / "PREDIOS.shp", engine="pyogrio")
+    # The zoning plan covers the first block only; the second block's lots take
+    # their zoning from Giro (the shop) or none (sin_clave, without Giro).
     gpd.GeoDataFrame(
         {
-            "USOSUELO24": ["Habitacional", "Comercio y servicios"],
-            "Max_cos": [0.8, 1.0],
-            "Max_cus": [1.6, 3.0],
-            "Dens_U_max": [60.0, None],
+            "USOSUELO24": ["Habitacional"],
+            "Max_cos": [0.8],
+            "Max_cus": [1.6],
+            "Dens_U_max": [60.0],
         },
-        geometry=[box(-5, -5, 45, 45), box(55, -5, 105, 45)],
+        geometry=[box(-5, -5, 45, 45)],
         crs=CRS,
     ).to_file(root / "normativa.geojson", engine="pyogrio")
     # IMIP's layers: a garden 5 m from a lot and a school far from every lot; a
@@ -306,6 +339,14 @@ def test_build(city, tmp_path):
             "exact_copies_dropped": 1,
             "lots_sharing_a_key": 2,
             "lots_without_key": 1,
+        },
+        "heights": "computed",
+        "zoning": {
+            "from_zoning_plan": 3,
+            "outside_plan_area": 2,
+            "from_fallback": 1,
+            "fallback_value_empty": 1,
+            "fallback_value_unlisted": 0,
         },
         "amenities_file": {"public_space": 1, "primary_education": 1},
         # One source per kind: the IMIP park, not its school; the DENUE school,
@@ -415,6 +456,12 @@ def test_build(city, tmp_path):
     assert establishments.loc["denue:105", "category"] == "medicines"
     # Same sources, same ids.
     again = baseline.build(city, tmp_path / "again", lambda *_: None)
+    # The same workdir reuses the height statistics, with the same result.
+    reused = baseline.build(city, tmp_path / "job", lambda *_: None)
+    assert reused["report"]["heights"] == "cached"
+    pd.testing.assert_frame_equal(
+        reused["lots"].drop(columns="geometry"), result["lots"].drop(columns="geometry")
+    )
     assert again["lots"]["id"].tolist() == result["lots"]["id"].tolist()
     assert again["amenities"]["id"].tolist() == result["amenities"]["id"].tolist()
 
@@ -455,6 +502,10 @@ def write_city(tmp_path: Path, name: str, change) -> Path:
     change(config)
     path = tmp_path / f"{name}.yaml"
     path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    giro = cities.FOLDER / "mexicali_giro.csv"
+    (tmp_path / giro.name).write_text(
+        giro.read_text(encoding="utf-8"), encoding="utf-8"
+    )
     return path
 
 
@@ -463,6 +514,10 @@ def write_city(tmp_path: Path, name: str, change) -> Path:
     [
         (lambda c: c["sources"].pop("denue"), "sources.denue: uri is required"),
         (lambda c: c["params"].pop("space_allocation"), "housing.floor_share is required"),
+        (lambda c: c["sources"]["parcels"]["params"]["zoning_fallback"].pop("column"),
+         "zoning_fallback: column is required"),
+        (lambda c: c["sources"]["parcels"]["params"]["zoning_fallback"].update(values="x.csv"),
+         "x.csv does not exist"),
         (lambda c: c["sources"]["amenities"]["params"].update(normalizer="sigcdmx"),
          "unknown normalizer 'sigcdmx'"),
         (lambda c: c["sources"]["amenities"]["params"].update(categories=["parks"]),

@@ -13,7 +13,7 @@ src/reimagina_test_port/
 ├── snapshot.py    prepared GeoParquet snapshots, the offline sources
 ├── ingestion/     a city's baseline from the data lake (data, not indicators):
 │                  cities/*.yaml, prep, footprints, cadastral, elements,
-│                  crosswalk (+ crosswalk.csv), raw_amenities, points,
+│                  crosswalk (+ crosswalk.csv), zoning_fallback, raw_amenities, points,
 │                  baseline, catalogs,
 │                  baseline_writer, nodes.py (reimagina_baseline*)
 ├── indicators/    one subpackage per indicator type, each with its nodes.py
@@ -194,6 +194,21 @@ out as reimagina_pipelines_lab's `pipelines/ingestion/cities`: codes and CRS,
 `city` parameter of the baseline nodes accepts every YAML in the folder. Only
 Mexicali is configured: Tlalpan's normativa derives its maxima from levels and
 open area, which `prep.prepare_normativa` does not do.
+
+A zoning plan may cover only part of a city. `sources.parcels.params.zoning_fallback`
+(`ingestion/zoning_fallback.py`, optional) gives lots outside the plan's area (the
+convex hull of its polygons) a zoning from a cadastral column, mapped by a CSV
+next to the YAML (`<value>,zoning`) to the plan's vocabulary, so `land_use` and
+where homes go read it like any zone. Lots inside the area keep the plan's zoning
+or none; values the CSV does not list give none. The report's `zoning` counts the
+lots zoned by the plan, those outside its area, those zoned by the fallback and
+those with an empty or unlisted value. Mexicali's plan (*Normativa síntesis*)
+covers Condesa only, 65,884 of 388,007 lots within 3 m (exe_reimagina
+`doc/CITIES.md`: 17 %); outside it, lots take the cadastre's `Giro`
+(`cities/mexicali_giro.csv`: its 99 most frequent values, 99.8 % of the lots,
+93 mapped; empty, `OTRO`, `OTROS`, `VIALIDAD`, `VARIOS_NIVELES` and
+`PARTICULAR` give none). The mapping is ours, not the design's. Tlalpan would
+not need it: its normativa is the cadastre with zoning per lot.
 
 Amenities and establishments are elements of their own (`ingestion/points.py`),
 placed as `urban_fabric.md` says. Every record of the raw INEGI DENUE CSV whose
