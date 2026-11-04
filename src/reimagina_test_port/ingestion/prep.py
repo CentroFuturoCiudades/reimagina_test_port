@@ -161,6 +161,36 @@ def assign_normativa(
     return lots
 
 
+def assign_existing_land_use(
+    lots: gpd.GeoDataFrame,
+    existing: gpd.GeoDataFrame,
+    *,
+    column: str,
+    target_crs: str,
+    max_distance: float,
+) -> tuple[pd.Series, dict[str, int]]:
+    """``lots["zoning"]`` from the existing land use, the plan's where it has none.
+
+    Lots take the existing use's polygon as the normativa's (containment, else the
+    nearest within ``max_distance``). Returns the zoning and the lots zoned by the
+    existing use, by the zoning plan, and by neither.
+    """
+    existing = prepare_normativa(
+        existing, target_crs=target_crs, columns={column: "zoning"}
+    )
+    assigned = assign_normativa(
+        lots[["lot_id", "geometry"]], existing, max_distance=max_distance
+    )["zoning"]
+    zoning = assigned.where(assigned.notna(), lots["zoning"])
+    report = {
+        "from_existing_land_use": int(assigned.notna().sum()),
+        "from_zoning_plan": int((assigned.isna() & lots["zoning"].notna()).sum()),
+        "without_zoning": int(zoning.isna().sum()),
+    }
+    logger.info("Zoning: %s", report)
+    return zoning, report
+
+
 # -------------------------------------------------------------------------- lots
 
 

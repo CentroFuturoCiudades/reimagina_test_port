@@ -20,19 +20,22 @@ sources:
     params:
       # Cadastral columns joined with "-" into each lot's key.
       key_columns: [Numdel, Colonia, Manzana, Lote, Fraccion]
-      # The zoning plan covers Condesa only (17 % of the lots). Lots outside its
-      # area (the convex hull of its polygons) take their zoning from the
-      # cadastre's Giro, mapped to the plan's vocabulary by mexicali_giro.csv;
-      # inside it, the plan's zoning or none. Remove to use the plan only.
-      zoning_fallback:
-        column: Giro
-        values: mexicali_giro.csv
   zoning:
     uri: az://sandbox/projects/EXE/raw/normativa/Predios (Normativa sintesis).geojson
     # Source column -> internal name; a lot takes the containing polygon, else the
     # nearest within max_distance_m.
     params:
       columns: {USOSUELO24: zoning, Max_cos: max_cos, Max_cus: max_cus, Dens_U_max: max_density}
+      max_distance_m: 3.0
+  # IMIP's existing land use 2024 (raw/.../imip/USOS_DE_SUELO_EXITS_24, with 17
+  # gaps filled and 7 polygons enlarged): the zoning of every lot, in the plan's
+  # vocabulary (USOSUELO24). The plan covers Condesa only (17 % of the lots) and
+  # zones the lots this file does not; it still gives max_cos, max_cus and
+  # max_density. Remove to use the plan alone.
+  existing_land_use:
+    uri: az://cleaned/por_estado/02_baja_california/002_mexicali/imip/uso_de_suelo/usos_de_suelo_finales.geojson
+    params:
+      column: USOSUELO24
       max_distance_m: 3.0
   heights:   # Open Buildings 2.5D temporal tiles and their manifests
     uri: az://sandbox/projects/EXE/cleaned/open_buildings_temporal_data_v1_mx

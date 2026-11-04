@@ -13,7 +13,7 @@ src/reimagina_test_port/
 ├── snapshot.py    prepared GeoParquet snapshots, the offline sources
 ├── ingestion/     a city's baseline from the data lake (data, not indicators):
 │                  cities/*.yaml, prep, footprints, cadastral, elements,
-│                  crosswalk (+ crosswalk.csv), zoning_fallback, raw_amenities, points,
+│                  crosswalk (+ crosswalk.csv), raw_amenities, points,
 │                  baseline, catalogs,
 │                  baseline_writer, nodes.py (reimagina_baseline*)
 ├── indicators/    one subpackage per indicator type, each with its nodes.py
@@ -187,28 +187,30 @@ raster's average floors to whole floors, as the API's integer decoding does.
 
 Each city is a YAML in `ingestion/cities/` (`<city>.yaml`, the city key), laid
 out as reimagina_pipelines_lab's `pipelines/ingestion/cities`: codes and CRS,
-`sources` (`blocks`, `census`, `parcels`, `zoning`, `heights`, `amenities`,
-`denue`; a `uri` and its `params` each) and the builders' `params` (`lots`,
+`sources` (`blocks`, `census`, `parcels`, `zoning`, `existing_land_use`,
+`heights`, `amenities`, `denue`; a `uri` and its `params` each) and the builders' `params` (`lots`,
 `amenities`, `points`). Values come from exe_reimagina's
 `src/pipeline/cities/*.toml`. A missing or unknown key fails at import, and the
 `city` parameter of the baseline nodes accepts every YAML in the folder. Only
 Mexicali is configured: Tlalpan's normativa derives its maxima from levels and
 open area, which `prep.prepare_normativa` does not do.
 
-A zoning plan may cover only part of a city. `sources.parcels.params.zoning_fallback`
-(`ingestion/zoning_fallback.py`, optional) gives lots outside the plan's area (the
-convex hull of its polygons) a zoning from a cadastral column, mapped by a CSV
-next to the YAML (`<value>,zoning`) to the plan's vocabulary, so `land_use` and
-where homes go read it like any zone. Lots inside the area keep the plan's zoning
-or none; values the CSV does not list give none. The report's `zoning` counts the
-lots zoned by the plan, those outside its area, those zoned by the fallback and
-those with an empty or unlisted value. Mexicali's plan (*Normativa síntesis*)
-covers Condesa only, 65,884 of 388,007 lots within 3 m (exe_reimagina
-`doc/CITIES.md`: 17 %); outside it, lots take the cadastre's `Giro`
-(`cities/mexicali_giro.csv`: its 99 most frequent values, 99.8 % of the lots,
-93 mapped; empty, `OTRO`, `OTROS`, `VIALIDAD`, `VARIOS_NIVELES` and
-`PARTICULAR` give none). The mapping is ours, not the design's. Tlalpan would
-not need it: its normativa is the cadastre with zoning per lot.
+A zoning plan may cover only part of a city. `sources.existing_land_use`
+(optional: a `uri`, its `column` and `max_distance_m`) is a city-wide land use
+in the plan's vocabulary: every lot takes its zoning from it, as from the plan
+(the polygon containing its representative point, else the nearest within
+`max_distance_m`), and the plan's only where it has none
+(`prep.assign_existing_land_use`). The plan still gives the limits (`max_cos`,
+`max_cus`, `max_density`). The report's `zoning` counts the lots zoned by each
+and those without. Mexicali's plan (*Normativa síntesis*) covers Condesa only,
+65,884 of 388,007 lots within 3 m (exe_reimagina `doc/CITIES.md`: 17 %); its
+existing land use is IMIP's 2024 (`cleaned/.../imip/uso_de_suelo/usos_de_suelo_finales.geojson`,
+the raw `USOS_DE_SUELO_EXITS_24` with 17 gaps filled), with the same 12 values
+(`USOSUELO24`), 387,352 lots. In Condesa both agree on 96 % of the lots; the
+plan zones 54 the file does not. Being the existing use, it has values the plan
+uses little ("Baldíos", "Agrícola", "Rústicos"...): no homes go there, and an
+empty lot gets no `land_use`. Tlalpan would not need it: its normativa is the
+cadastre with zoning per lot.
 
 Amenities and establishments are elements of their own (`ingestion/points.py`),
 placed as `urban_fabric.md` says. Every record of the raw INEGI DENUE CSV whose
