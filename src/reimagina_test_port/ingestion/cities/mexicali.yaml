@@ -17,8 +17,16 @@ sources:
     uri: az://cleaned/inegi/censo/manzanas_2020.parquet/entidad=2/mun=2
   parcels:
     uri: az://raw/por_estado/02_baja_california/002_mexicali/imip/PRED_CAT_CP/PREDIOS_CAT_CP.shp
-    # Cadastral columns joined with "-" into each lot's key.
-    params: {key_columns: [Numdel, Colonia, Manzana, Lote, Fraccion]}
+    params:
+      # Cadastral columns joined with "-" into each lot's key.
+      key_columns: [Numdel, Colonia, Manzana, Lote, Fraccion]
+      # The zoning plan covers Condesa only (17 % of the lots). Lots outside its
+      # area (the convex hull of its polygons) take their zoning from the
+      # cadastre's Giro, mapped to the plan's vocabulary by mexicali_giro.csv;
+      # inside it, the plan's zoning or none. Remove to use the plan only.
+      zoning_fallback:
+        column: Giro
+        values: mexicali_giro.csv
   zoning:
     uri: az://sandbox/projects/EXE/raw/normativa/Predios (Normativa sintesis).geojson
     # Source column -> internal name; a lot takes the containing polygon, else the

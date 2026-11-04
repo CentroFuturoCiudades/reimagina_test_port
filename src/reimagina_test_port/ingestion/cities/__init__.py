@@ -7,6 +7,7 @@ builders' ``params``. Values come from exe_reimagina's
 meaning of each parameter. Source URIs point at the CFC data lake.
 """
 
+import csv
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,34 @@ class CityConfigError(ValueError):
 
 
 @dataclass(frozen=True)
+class ZoningFallback:
+    """Zoning for lots outside the zoning plan's area (``zoning_fallback``)."""
+
+    # Cadastral column read for each lot, and its value -> zoning value.
+    column: str
+    values: dict[str, str]
+
+
+def read_fallback_values(path: Path) -> dict[str, str]:
+    """``{cadastral value: zoning value}`` of a ``<column>,zoning`` CSV."""
+    if not path.exists():
+        msg = f"zoning_fallback: {path.name} does not exist next to the city YAML"
+        raise CityConfigError(msg)
+    with path.open(encoding="utf-8", newline="") as file:
+        reader = csv.reader(file)
+        header = next(reader, [])
+        if len(header) != 2 or header[1] != "zoning":
+            msg = f"{path.name}: the header must be '<column>,zoning'"
+            raise CityConfigError(msg)
+        rows = [(raw.strip(), zoning.strip().lower()) for raw, zoning in reader]
+    values = dict(rows)
+    if len(values) != len(rows):
+        msg = f"{path.name}: values repeated"
+        raise CityConfigError(msg)
+    return values
+
+
+@dataclass(frozen=True)
 class CityPreset:
     name: str
     # Lot id city key: uuid5(NS, f"{key}:lot:{cadastral key}").
@@ -36,6 +65,9 @@ class CityPreset:
     lots_uri: str
     # Cadastral columns joined with "-" into each lot's key.
     key_columns: tuple[str, ...]
+    # Zoning of lots outside the zoning plan's area from a cadastral column
+    # (zoning_fallback.py); None: lots without a zone keep none.
+    zoning_fallback: ZoningFallback | None
     normativa_uri: str
     # Normativa source column -> internal name (zoning, max_cos, max_cus, ...).
     normativa_columns: dict[str, str]
@@ -108,6 +140,15 @@ class _Section:
             raise CityConfigError(msg)
 
 
+def _zoning_fallback(section: _Section, path: Path) -> ZoningFallback | None:
+    if not section.values:
+        return None
+    column = str(section.required("column"))
+    values = read_fallback_values(path.parent / str(section.required("values")))
+    section.done()
+    return ZoningFallback(column=column, values=values)
+
+
 def from_yaml(path: Path) -> CityPreset:
     """The preset of one city YAML; missing or unknown keys raise ``CityConfigError``."""
     config = _Section(yaml.safe_load(path.read_text(encoding="utf-8")), path.name)
@@ -160,6 +201,7 @@ def from_yaml(path: Path) -> CityPreset:
         census_uri=census_uri,
         lots_uri=lots_uri,
         key_columns=tuple(map(str, parcels.required("key_columns"))),
+        zoning_fallback=_zoning_fallback(parcels.section("zoning_fallback"), path),
         normativa_uri=normativa_uri,
         normativa_columns={
             str(k): str(v)

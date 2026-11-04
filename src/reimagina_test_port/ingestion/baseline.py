@@ -10,12 +10,14 @@ placed in their lot first (``points``), and each lot's ``land_use`` is classifie
 from what it holds.
 """
 
+import hashlib
 import logging
 from collections.abc import Callable
 from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
+import shapely
 
 from reimagina_test_port.common import lake
 from reimagina_test_port.ingestion import (
@@ -24,6 +26,7 @@ from reimagina_test_port.ingestion import (
     points,
     prep,
     raw_amenities,
+    zoning_fallback,
 )
 from reimagina_test_port.ingestion.cities import CityPreset
 from reimagina_test_port.ingestion.elements import (
@@ -73,6 +76,42 @@ def block_table(blocks: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return gpd.GeoDataFrame(
         frame, geometry=blocks.geometry.to_crs(4326).to_numpy(), crs=4326
     )
+
+
+def height_stats(
+    lots: gpd.GeoDataFrame,
+    tiles: list[Path],
+    params: footprints.FootprintParams,
+    workdir: Path,
+    compute: Callable[[], pd.DataFrame],
+) -> tuple[pd.DataFrame, str]:
+    """The lots' height statistics, reused from ``workdir`` when nothing they depend
+    on changed; returns them and ``cached`` or ``computed``.
+
+    Reading the rasters for every lot is most of a build (~30 min for Mexicali).
+    The file is named by a fingerprint of what the statistics depend on: each
+    lot's id and geometry, the tiles and the parameters that shape the raster
+    reading (not ``average_level_height``, applied afterwards).
+    """
+    digest = hashlib.sha256()
+    digest.update(repr(sorted(t.name for t in tiles)).encode())
+    digest.update(
+        repr(
+            (params.presence_threshold, params.height_percentile, params.gsd_pixel)
+        ).encode()
+    )
+    digest.update("\n".join(map(str, lots.index)).encode())
+    for wkb in shapely.to_wkb(lots.geometry.to_numpy()):
+        digest.update(wkb)
+    path = workdir / f"height_stats_{digest.hexdigest()[:16]}.parquet"
+    if path.exists():
+        stats = pd.read_parquet(path)
+        if stats.index.equals(lots.index):
+            logger.info("Height stats reused from %s", path.name)
+            return stats, "cached"
+    stats = compute()
+    stats.to_parquet(path)
+    return stats, "computed"
 
 
 def lot_shapes(lots: gpd.GeoDataFrame, city: CityPreset) -> gpd.GeoDataFrame:
@@ -174,7 +213,9 @@ def build(
 ) -> dict[str, gpd.GeoDataFrame | dict]:
     """``lots``, ``blocks``, ``amenities``, ``establishments`` and a ``report``.
 
-    The report has the cadastral keys (``lots``), the amenities file's rows per
+    The report has the cadastral keys (``lots``), whether the height statistics
+    were ``cached`` or ``computed`` (``heights``), the lots zoned by the zoning
+    plan and by the city's fallback (``zoning``), the amenities file's rows per
     category (``amenities_file``) and, for amenities and
     establishments, the source points, the elements kept and those outside
     every lot; for establishments also the DENUE rows of the state and of the
@@ -203,15 +244,28 @@ def build(
     # prep uses the index as lot_id: index by the unique cadastral key.
     source, keys_report = cadastral.lot_keys(source, city.key_columns)
     logger.info("Cadastral keys: %s", keys_report)
+    normativa = gpd.read_file(normativa_path, engine="pyogrio")
     lots = prep.prepare_lots(
         source,
-        gpd.read_file(normativa_path, engine="pyogrio"),
+        normativa,
         blocks,
         block_export,
         target_crs=city.target_crs,
         normativa_columns=city.normativa_columns,
         normativa_max_distance=city.normativa_max_distance,
     )
+    zoning_report = {"from_zoning_plan": int(lots["zoning"].notna().sum())}
+    if fallback := city.zoning_fallback:
+        if fallback.column not in source:
+            msg = f"zoning_fallback: the lots have no column {fallback.column!r}"
+            raise ValueError(msg)
+        lots["zoning"], zoning_report = zoning_fallback.apply(
+            lots,
+            lots["lot_id"].map(source[fallback.column]),
+            normativa.geometry,
+            fallback,
+            metric_crs=city.target_crs,
+        )
 
     progress("footprints", 3, len(STAGES))
     tile_names = footprints.tiles_for_lots(manifest_paths, lots)
@@ -235,7 +289,13 @@ def build(
         if params.presence_threshold > 0
         else None
     )
-    stats = footprints.compute_height_stats(lots, height_vrt, presence_vrt, params)
+    stats, heights = height_stats(
+        lots,
+        tiles,
+        params,
+        workdir,
+        lambda: footprints.compute_height_stats(lots, height_vrt, presence_vrt, params),
+    )
     lots = footprints.add_urban_metrics(
         lots, stats, average_level_height=params.average_level_height
     )
@@ -267,6 +327,8 @@ def build(
         "establishments": establishments,
         "report": {
             "lots": keys_report,
+            "zoning": zoning_report,
+            "heights": heights,
             "amenities_file": file_report,
             "amenities": amenities_report,
             "establishments": denue_report | establishments_report,
