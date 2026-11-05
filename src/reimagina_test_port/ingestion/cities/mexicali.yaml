@@ -77,7 +77,7 @@ params:
       single_family: 100
       multifamily: 100
       mixed_use: 80
-      commerce: 100
-      office: 100
-      industrial: 100
-      amenity: 100
+      commerce: 0
+      office: 0
+      industrial: 0
+      amenity: 0
