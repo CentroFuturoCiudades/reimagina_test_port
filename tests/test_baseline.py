@@ -412,10 +412,11 @@ def test_build(city, tmp_path):
     assert lots.loc["1-A-7-1", "num_levels"] == 2
     assert lots.loc["1-A-7-1", "area"] == pytest.approx(400.0)
     assert lots.loc["1-A-7-1", "occupancy_rate"] == pytest.approx(0.75)
-    # Space allocation by land use: mixed use 80, the rest 100.
+    # Space allocation by land use: residential 100, mixed use 80, the rest 0.
     assert lots.loc["1-A-7-1", "housing.floor_share"] == 80
     assert lots.loc["1-A-7-2#2", "housing.floor_share"] == 100
-    assert lots.loc["1-B-8-1", "housing.floor_share"] == 100
+    assert lots.loc["1-B-8-1", "housing.floor_share"] == 0
+    assert lots.loc["sin_clave", "housing.floor_share"] == 0
     assert blocks.loc[CVEGEO[0], "people_per_household"] == 3.25
     # Targets: declared, unset when loaded.
     assert blocks[["lot.size_m2", "lot.frontage_m"]].isna().all().all()

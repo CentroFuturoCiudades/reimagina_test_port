@@ -283,7 +283,8 @@ for the per-lot space allocation of `ingestion_pipelines.md` until it is
 computed: each city's YAML gives a share per land use
 (`params.space_allocation.housing.floor_share`), and each lot takes its land
 use's. A land use not listed, or a lot without land use, has no value. Mexicali:
-`mixed_use` 80 (80 housing, 20 other), every other land use 100.
+`single_family` and `multifamily` 100, `mixed_use` 80 (80 housing, 20 other),
+`commerce`, `office`, `industrial` and `amenity` 0.
 
 ## Baseline writer
 
