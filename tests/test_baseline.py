@@ -172,7 +172,7 @@ def test_imip_normalizer(tmp_path):
     assert table["category"].to_dict() == {
         "edu_basica:1": "primary_education",
         "edu_basica:3": "secondary_education",
-        "edu_basica:2": "primary_education",
+        "edu_basica:2": "care",
         "esp_pub:1": "public_space",
         "esp_pub:3": "sports_recreation",
         "deporte:9": "sports_recreation",
@@ -451,7 +451,7 @@ def test_build(city, tmp_path):
     shop = establishments.loc["denue:101"]
     assert shop["parent_id"] == lots.loc["1-B-8-1", "id"]
     assert shop.geometry.equals_exact(centers[shop["parent_id"]], 1e-12)
-    assert shop["category"] == "convenience_store"
+    assert shop["category"] == "food_retail"
     assert shop["scian_code"] == "461110"
     assert shop["scian_sector"] == "46"
     assert shop["num_workers"] == 3

@@ -256,13 +256,30 @@ def test_lot_attributes_keep_conditional_keys() -> None:
 
 
 def test_crosswalk_longest_prefix_and_other() -> None:
-    codes = pd.Series(["461110", "461150", "611122", "311830", "811111", " 464111"])
+    codes = pd.Series(["461110", "461150", "462112", "611122", "311830", "811111",
+                       " 464111", "461122", "461160"])  # fmt: skip
     out = crosswalk.classify(codes)
     expect_equal(
         list(zip(out["element"], out["category"], strict=True)),
-        [("establishment", "convenience_store"), ("establishment", "food_retail"),
-         ("amenity", "primary_education"), ("establishment", "manufacturing"),
-         ("establishment", "other"), ("establishment", "medicines")],
+        [("establishment", "food_retail"), ("establishment", "fresh_food"),
+         ("establishment", "basic_household_goods"),
+         ("amenity", "primary_education"),
+         ("establishment", "manufacturing"), ("establishment", "other"),
+         ("establishment", "medicines"), ("establishment", "fresh_food"),
+         ("establishment", "food_retail")],
+    )  # fmt: skip
+
+
+def test_crosswalk_education_and_care() -> None:
+    # Preschool and special education are care; upper secondary tertiary;
+    # universities are not in the workbook. Community food services (62421) are
+    # care, the rest of 6242 community facilities.
+    codes = pd.Series(["611112", "611182", "611132", "611162", "611312", "624212",
+                       "624232", "813210"])  # fmt: skip
+    expect_equal(
+        crosswalk.classify(codes)["category"].tolist(),
+        ["care", "care", "secondary_education", "tertiary_education", "other",
+         "care", "community_facility", "community_facility"],
     )  # fmt: skip
 
 

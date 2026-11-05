@@ -217,9 +217,16 @@ placed as `urban_fabric.md` says. Every record of the raw INEGI DENUE CSV whose
 `municipio` is the city's is an amenity or an establishment, never both, by the
 SCIAN crosswalk (`ingestion/crosswalk.csv`: a prefix, an element type and a
 category, the longest prefix winning; no match is an establishment of category
-`other`). The crosswalk is a **draft** written from SCIAN 2018 until the API
-repository has the official table; rows marked "draft" or "open question" in its
-`note` column are guesses.
+`other`). It is the team's DENUE crosswalk (`denue_crosswalk.xlsx`, November
+2026): the codes of each group's *What does this include specifically?*
+column, and nothing else. A subgroup takes its codes from its group, the longest
+prefix winning: meat, fruit and vegetables, grains and dairy (46112–46115) are
+`fresh_food`, the rest of groceries (4611) `food_retail`; supermarkets and mini-supermarkets (4621)
+`basic_household_goods`; community food services (62421) `care`, the rest of
+6242 `community_facility`. Preschool and special education (61111, 61118) are
+`care`, as the workbook's description of the group says, though its code column
+leaves them out. Public sports clubs and gyms, and museums, are amenities; private
+sports clubs and gyms, and cinemas, establishments.
 
 The other amenities come from each city's own layers, in two steps. The
 `raw_amenities` step (`ingestion/raw_amenities.py`) reads the raw layers of
@@ -242,9 +249,9 @@ the same level nearby, and about 40 DENUE sports and culture places no IMIP one.
 Mexicali's normalizer, `imip`, reads IMIP's equipment layers
 (`az://cleaned/por_estado/02_baja_california/002_mexicali/imip/equipamiento/`)
 with exe_reimagina's `2_equip_for_exe.ipynb` rules: six of its 15 layers,
-`edu_basica` split by `TIPO` (primary and preschool `primary_education`, general
-and technical secondary `secondary_education`; CENDI and telesecundaria left
-out), `med_sup` `secondary_education`, `edu_sup` `tertiary_education`, `deporte`
+`edu_basica` split by `TIPO` (primary `primary_education`, preschool `care`,
+general and technical secondary `secondary_education`; CENDI and telesecundaria
+left out), `med_sup` `tertiary_education`, `edu_sup` `university`, `deporte`
 `sports_recreation`, `cult_rec` `cultural_facility`, and `esp_pub` filtered to
 neighbourhood gardens and parks (`public_space`) and sports spaces
 (`sports_recreation`; exe counted them as parks). Names come from `NOM_ESC` or `NOMBRE` (`esp_pub` has none); `area_m2`,
