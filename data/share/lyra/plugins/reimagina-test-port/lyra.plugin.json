@@ -1673,6 +1673,299 @@
       "spatial_inputs": {}
     },
     {
+      "description": "Walking distance over the road network from each lot to the nearest POI of one type (poi_type), as GHSCI: points are their own entry and polygons are entered anywhere along their outline (a point every 20 m within 30 m of a street); entries join the street at their projection on the nearest segment, every street two-way. Null beyond max_distance_m.",
+      "inputs": {
+        "edges": {
+          "arguments": {},
+          "output": "reimagina_road_network_edges"
+        },
+        "lots": {
+          "arguments": {},
+          "output": "reimagina_scenario_lots"
+        },
+        "nodes": {
+          "arguments": {},
+          "output": "reimagina_road_network_nodes"
+        },
+        "pois": {
+          "arguments": {},
+          "output": "reimagina_scenario_pois"
+        }
+      },
+      "name": "reimagina_nearest_poi_distance",
+      "outputs": {
+        "reimagina_nearest_poi_distance_lots": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Walking distance over the road network from the lot's nearest entry to the nearest POI entry of the type; null beyond max_distance_m.",
+              "name": "distance_m",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "DistanceParameters": {
+            "additionalProperties": false,
+            "description": "The source's parameter, plus the POIs to measure and the search limit.",
+            "properties": {
+              "max_distance_m": {
+                "default": 10000,
+                "description": "Search limit over the network, in metres; lots farther from every POI have no distance.",
+                "exclusiveMinimum": 0,
+                "title": "Max Distance M",
+                "type": "number"
+              },
+              "poi_type": {
+                "description": "Type of the POIs to measure, as their amenity_type (e.g. pharmacy).",
+                "minLength": 1,
+                "title": "Poi Type",
+                "type": "string"
+              },
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id",
+              "poi_type"
+            ],
+            "title": "DistanceParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/DistanceParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_nearest_poi_distance_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "Residents with a POI of one type (poi_type) within within_m over the road network, and the average distance to the nearest one (ULI 'Percentage of population with access to <poi> within X meters' and 'Average distance to closest <poi>'). Lots within within_m count their built-form population; blocks add up their lots and average their distances weighted by population.",
+      "inputs": {
+        "blocks": {
+          "arguments": {},
+          "output": "reimagina_built_form_blocks"
+        },
+        "distances": {
+          "arguments": {},
+          "output": "reimagina_nearest_poi_distance_lots"
+        },
+        "lots": {
+          "arguments": {},
+          "output": "reimagina_built_form_lots"
+        }
+      },
+      "name": "reimagina_population_access",
+      "outputs": {
+        "reimagina_population_access_blocks": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Network distance to the nearest POI of the type; for a block, its lots' average weighted by population (null without residents within max_distance_m).",
+              "name": "distance_m",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Residents (built-form).",
+              "name": "population",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within within_m of a POI of the type.",
+              "name": "population_with_access",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "population_with_access / population (0-1); null without residents.",
+              "name": "access_share",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        },
+        "reimagina_population_access_lots": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Network distance to the nearest POI of the type; for a block, its lots' average weighted by population (null without residents within max_distance_m).",
+              "name": "distance_m",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Residents (built-form).",
+              "name": "population",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within within_m of a POI of the type.",
+              "name": "population_with_access",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "population_with_access / population (0-1); null without residents.",
+              "name": "access_share",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "PopulationAccessParameters": {
+            "additionalProperties": false,
+            "description": "Plus the distance within which residents have access.",
+            "properties": {
+              "max_distance_m": {
+                "default": 10000,
+                "description": "Search limit over the network, in metres; lots farther from every POI have no distance.",
+                "exclusiveMinimum": 0,
+                "title": "Max Distance M",
+                "type": "number"
+              },
+              "poi_type": {
+                "description": "Type of the POIs to measure, as their amenity_type (e.g. pharmacy).",
+                "minLength": 1,
+                "title": "Poi Type",
+                "type": "string"
+              },
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              },
+              "within_m": {
+                "description": "Access distance over the network, in metres (e.g. 300).",
+                "exclusiveMinimum": 0,
+                "title": "Within M",
+                "type": "number"
+              }
+            },
+            "required": [
+              "scenario_id",
+              "poi_type",
+              "within_m"
+            ],
+            "title": "PopulationAccessParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/PopulationAccessParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_population_access_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
       "description": "Acquire the road network H5 of the scenario's project (projects.road_network_uri) as node and edge tables.",
       "inputs": {},
       "name": "reimagina_road_network",
