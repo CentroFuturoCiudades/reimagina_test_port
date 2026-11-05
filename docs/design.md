@@ -13,7 +13,7 @@ src/reimagina_test_port/
 ├── snapshot.py    prepared GeoParquet snapshots, the offline sources
 ├── ingestion/     a city's baseline from the data lake (data, not indicators):
 │                  cities/*.yaml, prep, footprints, cadastral, elements,
-│                  crosswalk (+ crosswalk.csv), zoning_fallback, raw_amenities, points,
+│                  crosswalk (+ crosswalk.csv), raw_amenities, points,
 │                  baseline, catalogs,
 │                  baseline_writer, nodes.py (reimagina_baseline*)
 ├── indicators/    one subpackage per indicator type, each with its nodes.py
@@ -187,37 +187,46 @@ raster's average floors to whole floors, as the API's integer decoding does.
 
 Each city is a YAML in `ingestion/cities/` (`<city>.yaml`, the city key), laid
 out as reimagina_pipelines_lab's `pipelines/ingestion/cities`: codes and CRS,
-`sources` (`blocks`, `census`, `parcels`, `zoning`, `heights`, `amenities`,
-`denue`; a `uri` and its `params` each) and the builders' `params` (`lots`,
+`sources` (`blocks`, `census`, `parcels`, `zoning`, `existing_land_use`,
+`heights`, `amenities`, `denue`; a `uri` and its `params` each) and the builders' `params` (`lots`,
 `amenities`, `points`). Values come from exe_reimagina's
 `src/pipeline/cities/*.toml`. A missing or unknown key fails at import, and the
 `city` parameter of the baseline nodes accepts every YAML in the folder. Only
 Mexicali is configured: Tlalpan's normativa derives its maxima from levels and
 open area, which `prep.prepare_normativa` does not do.
 
-A zoning plan may cover only part of a city. `sources.parcels.params.zoning_fallback`
-(`ingestion/zoning_fallback.py`, optional) gives lots outside the plan's area (the
-convex hull of its polygons) a zoning from a cadastral column, mapped by a CSV
-next to the YAML (`<value>,zoning`) to the plan's vocabulary, so `land_use` and
-where homes go read it like any zone. Lots inside the area keep the plan's zoning
-or none; values the CSV does not list give none. The report's `zoning` counts the
-lots zoned by the plan, those outside its area, those zoned by the fallback and
-those with an empty or unlisted value. Mexicali's plan (*Normativa síntesis*)
-covers Condesa only, 65,884 of 388,007 lots within 3 m (exe_reimagina
-`doc/CITIES.md`: 17 %); outside it, lots take the cadastre's `Giro`
-(`cities/mexicali_giro.csv`: its 99 most frequent values, 99.8 % of the lots,
-93 mapped; empty, `OTRO`, `OTROS`, `VIALIDAD`, `VARIOS_NIVELES` and
-`PARTICULAR` give none). The mapping is ours, not the design's. Tlalpan would
-not need it: its normativa is the cadastre with zoning per lot.
+A zoning plan may cover only part of a city. `sources.existing_land_use`
+(optional: a `uri`, its `column` and `max_distance_m`) is a city-wide land use
+in the plan's vocabulary: every lot takes its zoning from it, as from the plan
+(the polygon containing its representative point, else the nearest within
+`max_distance_m`), and the plan's only where it has none
+(`prep.assign_existing_land_use`). The plan still gives the limits (`max_cos`,
+`max_cus`, `max_density`). The report's `zoning` counts the lots zoned by each
+and those without. Mexicali's plan (*Normativa síntesis*) covers Condesa only,
+65,884 of 388,007 lots within 3 m (exe_reimagina `doc/CITIES.md`: 17 %); its
+existing land use is IMIP's 2024 (`cleaned/.../imip/uso_de_suelo/usos_de_suelo_finales.geojson`,
+the raw `USOS_DE_SUELO_EXITS_24` with 17 gaps filled), with the same 12 values
+(`USOSUELO24`), 387,352 lots. In Condesa both agree on 96 % of the lots; the
+plan zones 54 the file does not. Being the existing use, it has values the plan
+uses little ("Baldíos", "Agrícola", "Rústicos"...): no homes go there, and an
+empty lot gets no `land_use`. Tlalpan would not need it: its normativa is the
+cadastre with zoning per lot.
 
 Amenities and establishments are elements of their own (`ingestion/points.py`),
 placed as `urban_fabric.md` says. Every record of the raw INEGI DENUE CSV whose
 `municipio` is the city's is an amenity or an establishment, never both, by the
 SCIAN crosswalk (`ingestion/crosswalk.csv`: a prefix, an element type and a
 category, the longest prefix winning; no match is an establishment of category
-`other`). The crosswalk is a **draft** written from SCIAN 2018 until the API
-repository has the official table; rows marked "draft" or "open question" in its
-`note` column are guesses.
+`other`). It is the team's DENUE crosswalk (`denue_crosswalk.xlsx`, November
+2026): the codes of each group's *What does this include specifically?*
+column, and nothing else. A subgroup takes its codes from its group, the longest
+prefix winning: meat, fruit and vegetables, grains and dairy (46112–46115) are
+`fresh_food`, the rest of groceries (4611) `food_retail`; supermarkets and mini-supermarkets (4621)
+`basic_household_goods`; community food services (62421) `care`, the rest of
+6242 `community_facility`. Preschool and special education (61111, 61118) are
+`care`, as the workbook's description of the group says, though its code column
+leaves them out. Public sports clubs and gyms, and museums, are amenities; private
+sports clubs and gyms, and cinemas, establishments.
 
 The other amenities come from each city's own layers, in two steps. The
 `raw_amenities` step (`ingestion/raw_amenities.py`) reads the raw layers of
@@ -240,9 +249,9 @@ the same level nearby, and about 40 DENUE sports and culture places no IMIP one.
 Mexicali's normalizer, `imip`, reads IMIP's equipment layers
 (`az://cleaned/por_estado/02_baja_california/002_mexicali/imip/equipamiento/`)
 with exe_reimagina's `2_equip_for_exe.ipynb` rules: six of its 15 layers,
-`edu_basica` split by `TIPO` (primary and preschool `primary_education`, general
-and technical secondary `secondary_education`; CENDI and telesecundaria left
-out), `med_sup` `secondary_education`, `edu_sup` `tertiary_education`, `deporte`
+`edu_basica` split by `TIPO` (primary `primary_education`, preschool `care`,
+general and technical secondary `secondary_education`; CENDI and telesecundaria
+left out), `med_sup` `tertiary_education`, `edu_sup` `university`, `deporte`
 `sports_recreation`, `cult_rec` `cultural_facility`, and `esp_pub` filtered to
 neighbourhood gardens and parks (`public_space`) and sports spaces
 (`sports_recreation`; exe counted them as parks). Names come from `NOM_ESC` or `NOMBRE` (`esp_pub` has none); `area_m2`,
@@ -281,7 +290,8 @@ for the per-lot space allocation of `ingestion_pipelines.md` until it is
 computed: each city's YAML gives a share per land use
 (`params.space_allocation.housing.floor_share`), and each lot takes its land
 use's. A land use not listed, or a lot without land use, has no value. Mexicali:
-`mixed_use` 80 (80 housing, 20 other), every other land use 100.
+`single_family` and `multifamily` 100, `mixed_use` 80 (80 housing, 20 other),
+`commerce`, `office`, `industrial` and `amenity` 0.
 
 ## Baseline writer
 

@@ -23,7 +23,6 @@ from reimagina_test_port.ingestion import (
     cities,
     prep,
     raw_amenities,
-    zoning_fallback,
 )
 from reimagina_test_port.ingestion.cities import CITIES
 
@@ -123,33 +122,35 @@ def write_imip(folder: Path, **layers: tuple[list, list, list]) -> None:
         )
 
 
-def test_zoning_fallback_outside_the_plan_only():
-    # The plan covers x 0-20; lots at x 0, 10 (inside) and 50, 70, 90 (outside).
+def test_existing_land_use_then_zoning_plan():
+    # The existing use covers lots at x 0 and 50; the plan, lots at x 0 and 10.
     lots = gpd.GeoDataFrame(
-        {"zoning": ["Habitacional", None, None, None, None]},
-        geometry=[box(x, 0, x + 5, 5) for x in (0, 10, 50, 70, 90)],
+        {
+            "lot_id": ["a", "b", "c", "d"],
+            "zoning": ["Mixto", "Habitacional", None, None],
+        },
+        geometry=[box(x, 0, x + 5, 5) for x in (0, 10, 50, 70)],
         crs=CRS,
     )
-    plan = gpd.GeoSeries([box(0, 0, 20, 5)], crs=CRS)
-    raw = pd.Series(
-        ["Casa Habitacion", "CASA HABITACION", "casa habitacion", "OTRO", None]
+    existing = gpd.GeoDataFrame(
+        {"USOSUELO24": ["Habitacional", "Baldíos"]},
+        geometry=[box(-1, -1, 6, 6), box(49, -1, 56, 6)],
+        crs=CRS,
     )
-    fallback = cities.ZoningFallback("Giro", {"CASA_HABITACION": "habitacional"})
-    zoning, report = zoning_fallback.apply(lots, raw, plan, fallback, metric_crs=CRS)
-    # Inside the plan's area: its zoning or none, never the fallback.
+    zoning, report = prep.assign_existing_land_use(
+        lots, existing, column="USOSUELO24", target_crs=CRS, max_distance=3.0
+    )
+    # The existing use first; the plan where it has none; else none.
     assert zoning.fillna("-").tolist() == [
         "Habitacional",
-        "-",
-        "habitacional",
-        "-",
+        "Habitacional",
+        "Baldíos",
         "-",
     ]
     assert report == {
+        "from_existing_land_use": 2,
         "from_zoning_plan": 1,
-        "outside_plan_area": 3,
-        "from_fallback": 1,
-        "fallback_value_empty": 1,
-        "fallback_value_unlisted": 1,
+        "without_zoning": 1,
     }
 
 
@@ -171,7 +172,7 @@ def test_imip_normalizer(tmp_path):
     assert table["category"].to_dict() == {
         "edu_basica:1": "primary_education",
         "edu_basica:3": "secondary_education",
-        "edu_basica:2": "primary_education",
+        "edu_basica:2": "care",
         "esp_pub:1": "public_space",
         "esp_pub:3": "sports_recreation",
         "deporte:9": "sports_recreation",
@@ -232,8 +233,8 @@ def write_sources(root: Path) -> dict[str, str]:
     lots = pd.concat([lots, lots.iloc[[1]]], ignore_index=True)
     (root / "lots").mkdir()
     lots.to_file(root / "lots" / "PREDIOS.shp", engine="pyogrio")
-    # The zoning plan covers the first block only; the second block's lots take
-    # their zoning from Giro (the shop) or none (sin_clave, without Giro).
+    # The zoning plan covers the first block; the existing land use, one lot of it
+    # ("1-A-7-1") and the second block, for commerce.
     gpd.GeoDataFrame(
         {
             "USOSUELO24": ["Habitacional"],
@@ -244,6 +245,11 @@ def write_sources(root: Path) -> dict[str, str]:
         geometry=[box(-5, -5, 45, 45)],
         crs=CRS,
     ).to_file(root / "normativa.geojson", engine="pyogrio")
+    gpd.GeoDataFrame(
+        {"USOSUELO24": ["Habitacional", "Comercio y servicios"]},
+        geometry=[box(-1, -1, 21, 21), box(55, -5, 105, 45)],
+        crs=CRS,
+    ).to_file(root / "existing_land_use.geojson", engine="pyogrio")
     # IMIP's layers: a garden 5 m from a lot and a school far from every lot; a
     # median and a CENDI, which no rule keeps.
     write_imip(
@@ -305,6 +311,7 @@ def write_sources(root: Path) -> dict[str, str]:
     return {
         "lots_uri": str(root / "lots" / "PREDIOS.shp"),
         "normativa_uri": str(root / "normativa.geojson"),
+        "existing_land_use_uri": str(root / "existing_land_use.geojson"),
         "amenities_uri": str(root / "imip"),
         "denue_uri": str(root / "denue.csv"),
         "tiles_uri": str(root / "tiles"),
@@ -342,11 +349,9 @@ def test_build(city, tmp_path):
         },
         "heights": "computed",
         "zoning": {
-            "from_zoning_plan": 3,
-            "outside_plan_area": 2,
-            "from_fallback": 1,
-            "fallback_value_empty": 1,
-            "fallback_value_unlisted": 0,
+            "from_existing_land_use": 3,
+            "from_zoning_plan": 2,
+            "without_zoning": 0,
         },
         "amenities_file": {"public_space": 1, "primary_education": 1},
         # One source per kind: the IMIP park, not its school; the DENUE school,
@@ -407,10 +412,11 @@ def test_build(city, tmp_path):
     assert lots.loc["1-A-7-1", "num_levels"] == 2
     assert lots.loc["1-A-7-1", "area"] == pytest.approx(400.0)
     assert lots.loc["1-A-7-1", "occupancy_rate"] == pytest.approx(0.75)
-    # Space allocation by land use: mixed use 80, the rest 100.
+    # Space allocation by land use: residential 100, mixed use 80, the rest 0.
     assert lots.loc["1-A-7-1", "housing.floor_share"] == 80
     assert lots.loc["1-A-7-2#2", "housing.floor_share"] == 100
-    assert lots.loc["1-B-8-1", "housing.floor_share"] == 100
+    assert lots.loc["1-B-8-1", "housing.floor_share"] == 0
+    assert lots.loc["sin_clave", "housing.floor_share"] == 0
     assert blocks.loc[CVEGEO[0], "people_per_household"] == 3.25
     # Targets: declared, unset when loaded.
     assert blocks[["lot.size_m2", "lot.frontage_m"]].isna().all().all()
@@ -445,7 +451,7 @@ def test_build(city, tmp_path):
     shop = establishments.loc["denue:101"]
     assert shop["parent_id"] == lots.loc["1-B-8-1", "id"]
     assert shop.geometry.equals_exact(centers[shop["parent_id"]], 1e-12)
-    assert shop["category"] == "convenience_store"
+    assert shop["category"] == "food_retail"
     assert shop["scian_code"] == "461110"
     assert shop["scian_sector"] == "46"
     assert shop["num_workers"] == 3
@@ -495,6 +501,17 @@ def test_mexicali_yaml():
     assert city.floor_share_by_land_use["mixed_use"] == 80
     assert city.amenities_uri.endswith("imip/equipamiento")
     assert city.amenities_normalizer == "imip"
+    assert str(city.existing_land_use_uri).endswith(
+        "uso_de_suelo/usos_de_suelo_finales.geojson"
+    )
+    assert city.existing_land_use_column == "USOSUELO24"
+
+
+def test_existing_land_use_is_optional(tmp_path):
+    path = write_city(
+        tmp_path, "mexicali", lambda c: c["sources"].pop("existing_land_use")
+    )
+    assert cities.from_yaml(path).existing_land_use_uri is None
 
 
 def write_city(tmp_path: Path, name: str, change) -> Path:
@@ -502,10 +519,6 @@ def write_city(tmp_path: Path, name: str, change) -> Path:
     change(config)
     path = tmp_path / f"{name}.yaml"
     path.write_text(yaml.safe_dump(config), encoding="utf-8")
-    giro = cities.FOLDER / "mexicali_giro.csv"
-    (tmp_path / giro.name).write_text(
-        giro.read_text(encoding="utf-8"), encoding="utf-8"
-    )
     return path
 
 
@@ -514,10 +527,10 @@ def write_city(tmp_path: Path, name: str, change) -> Path:
     [
         (lambda c: c["sources"].pop("denue"), "sources.denue: uri is required"),
         (lambda c: c["params"].pop("space_allocation"), "housing.floor_share is required"),
-        (lambda c: c["sources"]["parcels"]["params"]["zoning_fallback"].pop("column"),
-         "zoning_fallback: column is required"),
-        (lambda c: c["sources"]["parcels"]["params"]["zoning_fallback"].update(values="x.csv"),
-         "x.csv does not exist"),
+        (lambda c: c["sources"]["existing_land_use"]["params"].pop("column"),
+         "existing_land_use.params: column is required"),
+        (lambda c: c["sources"]["existing_land_use"]["params"].update(typo=1),
+         r"existing_land_use.params: unknown keys \['typo'\]"),
         (lambda c: c["sources"]["amenities"]["params"].update(normalizer="sigcdmx"),
          "unknown normalizer 'sigcdmx'"),
         (lambda c: c["sources"]["amenities"]["params"].update(categories=["parks"]),

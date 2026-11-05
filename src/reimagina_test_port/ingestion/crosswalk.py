@@ -1,9 +1,10 @@
 """SCIAN code -> element type (amenity or establishment) and category.
 
-A DRAFT of the platform's crosswalk (reimagina_urbano_api ``urban_fabric.md``,
-*Platform configuration*), written from SCIAN 2018 until the API repository has the
-official table: ``crosswalk.csv``, one SCIAN prefix per row, the longest prefix
-winning (``461110`` before ``4611``). A code no prefix matches is an establishment
+The platform's crosswalk (reimagina_urbano_api ``urban_fabric.md``, *Platform
+configuration*), the codes the team's DENUE crosswalk (``denue_crosswalk.xlsx``,
+November 2026) lists under *What does this include specifically?*:
+``crosswalk.csv``, one SCIAN prefix per row, the longest prefix winning (``46112``
+before ``4611``). A code no prefix matches is an establishment
 of category ``other``: it counts only as jobs. Each DENUE record is one or the
 other, never both.
 """
@@ -17,7 +18,7 @@ import pandas as pd
 PATH = Path(__file__).with_name("crosswalk.csv")
 
 AMENITY_CATEGORIES = (
-    "primary_education", "secondary_education", "tertiary_education",
+    "primary_education", "secondary_education", "tertiary_education", "university",
     "primary_healthcare", "medical_clinic", "hospital", "care", "community_facility",
     "cultural_facility", "sports_recreation", "public_space", "police",
     "emergency_services",

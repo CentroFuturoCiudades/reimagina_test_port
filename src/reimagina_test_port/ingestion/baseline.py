@@ -26,7 +26,6 @@ from reimagina_test_port.ingestion import (
     points,
     prep,
     raw_amenities,
-    zoning_fallback,
 )
 from reimagina_test_port.ingestion.cities import CityPreset
 from reimagina_test_port.ingestion.elements import (
@@ -214,8 +213,8 @@ def build(
     """``lots``, ``blocks``, ``amenities``, ``establishments`` and a ``report``.
 
     The report has the cadastral keys (``lots``), whether the height statistics
-    were ``cached`` or ``computed`` (``heights``), the lots zoned by the zoning
-    plan and by the city's fallback (``zoning``), the amenities file's rows per
+    were ``cached`` or ``computed`` (``heights``), the lots zoned by the existing
+    land use and by the zoning plan (``zoning``), the amenities file's rows per
     category (``amenities_file``) and, for amenities and
     establishments, the source points, the elements kept and those outside
     every lot; for establishments also the DENUE rows of the state and of the
@@ -225,6 +224,11 @@ def build(
     progress("download", 0, len(STAGES))
     lots_path = lake.download_shapefile(city.lots_uri, workdir / "lots")
     normativa_path = lake.download(city.normativa_uri, workdir)
+    existing_path = (
+        lake.download(city.existing_land_use_uri, workdir)
+        if city.existing_land_use_uri
+        else None
+    )
     denue_path = lake.download(city.denue_uri, workdir)
     manifests_uri = f"{city.manifests_uri}/{city.year}/manifests"
     manifest_paths = [
@@ -255,16 +259,13 @@ def build(
         normativa_max_distance=city.normativa_max_distance,
     )
     zoning_report = {"from_zoning_plan": int(lots["zoning"].notna().sum())}
-    if fallback := city.zoning_fallback:
-        if fallback.column not in source:
-            msg = f"zoning_fallback: the lots have no column {fallback.column!r}"
-            raise ValueError(msg)
-        lots["zoning"], zoning_report = zoning_fallback.apply(
+    if existing_path:
+        lots["zoning"], zoning_report = prep.assign_existing_land_use(
             lots,
-            lots["lot_id"].map(source[fallback.column]),
-            normativa.geometry,
-            fallback,
-            metric_crs=city.target_crs,
+            gpd.read_file(existing_path, engine="pyogrio"),
+            column=city.existing_land_use_column,
+            target_crs=city.target_crs,
+            max_distance=city.existing_land_use_max_distance,
         )
 
     progress("footprints", 3, len(STAGES))

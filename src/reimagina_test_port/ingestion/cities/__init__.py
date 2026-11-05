@@ -7,7 +7,6 @@ builders' ``params``. Values come from exe_reimagina's
 meaning of each parameter. Source URIs point at the CFC data lake.
 """
 
-import csv
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -24,34 +23,6 @@ class CityConfigError(ValueError):
 
 
 @dataclass(frozen=True)
-class ZoningFallback:
-    """Zoning for lots outside the zoning plan's area (``zoning_fallback``)."""
-
-    # Cadastral column read for each lot, and its value -> zoning value.
-    column: str
-    values: dict[str, str]
-
-
-def read_fallback_values(path: Path) -> dict[str, str]:
-    """``{cadastral value: zoning value}`` of a ``<column>,zoning`` CSV."""
-    if not path.exists():
-        msg = f"zoning_fallback: {path.name} does not exist next to the city YAML"
-        raise CityConfigError(msg)
-    with path.open(encoding="utf-8", newline="") as file:
-        reader = csv.reader(file)
-        header = next(reader, [])
-        if len(header) != 2 or header[1] != "zoning":
-            msg = f"{path.name}: the header must be '<column>,zoning'"
-            raise CityConfigError(msg)
-        rows = [(raw.strip(), zoning.strip().lower()) for raw, zoning in reader]
-    values = dict(rows)
-    if len(values) != len(rows):
-        msg = f"{path.name}: values repeated"
-        raise CityConfigError(msg)
-    return values
-
-
-@dataclass(frozen=True)
 class CityPreset:
     name: str
     # Lot id city key: uuid5(NS, f"{key}:lot:{cadastral key}").
@@ -65,9 +36,6 @@ class CityPreset:
     lots_uri: str
     # Cadastral columns joined with "-" into each lot's key.
     key_columns: tuple[str, ...]
-    # Zoning of lots outside the zoning plan's area from a cadastral column
-    # (zoning_fallback.py); None: lots without a zone keep none.
-    zoning_fallback: ZoningFallback | None
     normativa_uri: str
     # Normativa source column -> internal name (zoning, max_cos, max_cus, ...).
     normativa_columns: dict[str, str]
@@ -87,6 +55,12 @@ class CityPreset:
     denue_uri: str
     denue_municipio: str
     denue_encoding: str = "latin-1"
+    # Existing land use (sources.existing_land_use), in the zoning plan's
+    # vocabulary: each lot's zoning, the plan's only where it has none. The plan
+    # still gives the limits (max_cos...). None: the plan alone.
+    existing_land_use_uri: str | None = None
+    existing_land_use_column: str = ""
+    existing_land_use_max_distance: float = 3.0
     normativa_max_distance: float = 3.0
     presence_threshold: float = 0.5
     height_percentile: float = 95.0
@@ -140,15 +114,6 @@ class _Section:
             raise CityConfigError(msg)
 
 
-def _zoning_fallback(section: _Section, path: Path) -> ZoningFallback | None:
-    if not section.values:
-        return None
-    column = str(section.required("column"))
-    values = read_fallback_values(path.parent / str(section.required("values")))
-    section.done()
-    return ZoningFallback(column=column, values=values)
-
-
 def from_yaml(path: Path) -> CityPreset:
     """The preset of one city YAML; missing or unknown keys raise ``CityConfigError``."""
     config = _Section(yaml.safe_load(path.read_text(encoding="utf-8")), path.name)
@@ -172,6 +137,11 @@ def from_yaml(path: Path) -> CityPreset:
     tiles_uri, heights = source("heights")
     amenities_uri, raw_amenities = source("amenities")
     denue_uri, denue = source("denue")
+    existing_uri, existing = (
+        source("existing_land_use")
+        if "existing_land_use" in sources.values
+        else (None, _Section(None, "existing_land_use"))
+    )
     lots, amenities, points, space_allocation = (
         params.section("lots"),
         params.section("amenities"),
@@ -201,7 +171,6 @@ def from_yaml(path: Path) -> CityPreset:
         census_uri=census_uri,
         lots_uri=lots_uri,
         key_columns=tuple(map(str, parcels.required("key_columns"))),
-        zoning_fallback=_zoning_fallback(parcels.section("zoning_fallback"), path),
         normativa_uri=normativa_uri,
         normativa_columns={
             str(k): str(v)
@@ -219,6 +188,15 @@ def from_yaml(path: Path) -> CityPreset:
         denue_uri=denue_uri,
         denue_municipio=str(denue.required("municipio")),
         denue_encoding=str(denue.optional("encoding", default("denue_encoding"))),
+        existing_land_use_uri=existing_uri,
+        existing_land_use_column=(
+            str(existing.required("column")) if existing_uri else ""
+        ),
+        existing_land_use_max_distance=float(
+            existing.optional(
+                "max_distance_m", default("existing_land_use_max_distance")
+            )
+        ),
         default_capacity=float(
             amenities.optional("default_capacity", default("default_capacity"))
         ),
@@ -238,7 +216,7 @@ def from_yaml(path: Path) -> CityPreset:
         },
     )
     for section in (
-        blocks, census, parcels, zoning, heights, raw_amenities, denue,
+        blocks, census, parcels, zoning, heights, raw_amenities, denue, existing,
         lots, amenities, points, space_allocation, sources, params, config,
     ):  # fmt: skip
         section.done()
