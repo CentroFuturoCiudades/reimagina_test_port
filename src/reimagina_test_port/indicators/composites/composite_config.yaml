@@ -1,0 +1,95 @@
+# The composite trees: each node with `children` is a composite, every other node
+# an indicator (a leaf). Each composite becomes its own Lyra metric,
+# reimagina_composite_<name>, depending on its children: the indicator tables its
+# leaves read and the outputs of its child composites (composite_metric.py).
+# Composites form a DAG: `trees` lists one or more top-level indices, and a child
+# `{ref: <composite>, weight: w}` reuses a composite defined elsewhere instead of
+# repeating it (computed once, read by every parent). A cycle fails.
+#
+# element: the grain every composite is computed at (blocks or lots).
+# boundary: optional, the URL of a GeoParquet (az:// or a path) with the area to
+#   read the composites over, such as a city without its rural localities; only
+#   the elements inside it get composites. Without it, all of them do.
+#
+# Leaves:
+#   source     the indicator pipeline: accessibility or built_form
+#   variable   its column (distance_to_public_space, density, ...)
+#   transform  optional, before normalising: {soft_threshold: minutes, k: 5}
+#              (closer is better, 0-1) or {steps: [[limit, score], ...], beyond: 0}
+#   compress   optional: pull values beyond 2 SD toward 2-3 SD
+#   polarity   positive (more is better) or negative
+#   method     ampi (needs reference and goalposts {min, max}) or mpi (mean, sd)
+#   weight     its weight in its composite (default 1)
+# Composites:
+#   phenomenon positive (higher index is better) or negative
+#   min_valid  how many children must have a value (default: all)
+#   weight     its weight in its parent (default 1)
+#
+# Normalised scores sit around 100: AMPI puts the reference at 100 and moves 60
+# points across the goalposts; MPI puts the mean at 100 and 10 points per SD.
+element: blocks
+trees:
+  - name: index
+    phenomenon: positive
+    min_valid: 1
+
+    children:
+      - name: proximity
+        phenomenon: positive
+        children:
+          - name: health
+            phenomenon: positive
+            children:
+              - name: health_facilities
+                source: accessibility
+                variable: distance_to_health
+                transform: {soft_threshold: 10}   # minutes walking
+                polarity: positive
+                method: ampi
+                reference: 0.5
+                goalposts: {min: 0, max: 1}
+              - name: health_services
+                source: accessibility
+                variable: distance_to_health_services
+                transform: {soft_threshold: 10}
+                polarity: positive
+                method: ampi
+                reference: 0.5
+                goalposts: {min: 0, max: 1}
+
+          - name: primary_education
+            source: accessibility
+            variable: distance_to_primary_education
+            transform: {soft_threshold: 15}
+            polarity: positive
+            method: ampi
+            reference: 0.5
+            goalposts: {min: 0, max: 1}
+
+          - name: public_space
+            source: accessibility
+            variable: distance_to_public_space
+            transform: {soft_threshold: 10}
+            polarity: positive
+            method: ampi
+            reference: 0.5
+            goalposts: {min: 0, max: 1}
+
+      - name: urban_form
+        phenomenon: positive
+        children:
+          - name: density
+            source: built_form
+            variable: density   # homes per hectare
+            polarity: positive
+            method: ampi
+            reference: 150
+            goalposts: {min: 0, max: 400}
+
+          - name: intensity
+            source: built_form
+            variable: cus       # built floor area over lot area
+            polarity: positive
+            method: ampi
+            reference: 1.5
+            goalposts: {min: 0, max: 4}

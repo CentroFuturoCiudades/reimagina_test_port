@@ -25,6 +25,9 @@ from reimagina_test_port import plugin
 from reimagina_test_port.common import schema
 from reimagina_test_port.indicators.accessibility import model as accessibility
 from reimagina_test_port.indicators.accessibility import nodes as accessibility_nodes
+from reimagina_test_port.indicators.composites.composite_metric import (
+    composite_outputs,
+)
 from reimagina_test_port.indicators.population_access import (
     nodes as population_access_nodes,
 )
@@ -329,6 +332,14 @@ def seed_catalog(conn) -> None:
         *accessibility_nodes.SCORE_KEYS,
         *population_access_nodes.KEYS,
     ]
+    _, composites = composite_outputs()
+    for name in composites:  # stored on blocks only
+        conn.execute(
+            "INSERT INTO reimagina_urbano.indicator_catalog "
+            "(element_type, key, name, value_type, scope) "
+            "VALUES ('block', %s, %s, 'number', 'scenario')",
+            (f"composite_{name}", name),
+        )
     for element_type in ("lot", "block"):
         for key in keys:
             conn.execute(
@@ -553,6 +564,10 @@ def test_write_baseline_is_idempotent(dsn):
     assert values[(BLOCK, "distance_to_health")][0] > 0
     # No POI: never written.
     assert (BLOCK, "distance_to_public_space") not in values
+    # Composites: each one's index, on blocks.
+    assert 40 < values[(BLOCK, "composite_index")][0] < 160
+    assert values[(BLOCK, "composite_health")][0] > 0
+    assert not any(e == HOUSE and k.startswith("composite_") for e, k in values)
     # Accessibility is stored on blocks only; a lot shows its block's.
     assert not any(
         element == HOUSE and key in accessibility_nodes.ACCESSIBILITY_KEYS
