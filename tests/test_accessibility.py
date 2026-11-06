@@ -71,7 +71,7 @@ def test_lots_inherit_their_block():
             assert not set(values) & set(accessibility_nodes.ACCESSIBILITY_KEYS)
 
 
-def test_minutes_is_the_slowest_reachable_amenity():
+def test_minutes_is_the_slowest_reachable_destination():
     blocks = run_snapshot("synthetic", "reimagina_accessibility")[
         "reimagina_accessibility_blocks"
     ]
@@ -84,7 +84,7 @@ def test_minutes_is_the_slowest_reachable_amenity():
         assert row["farthest_amenity"] == max(distances, key=distances.get)
         assert row["minutes"] == distances[row["farthest_amenity"]]
     # Unreachable or absent categories (and the unknown "casino") stay null.
-    assert blocks["distance_to_hospital"].isna().all()
+    assert blocks["distance_to_care"].isna().all()
     scores = blocks[accessibility_nodes.SCORE_KEYS].stack().dropna()
     assert scores.between(0, 1, inclusive="right").all()
 

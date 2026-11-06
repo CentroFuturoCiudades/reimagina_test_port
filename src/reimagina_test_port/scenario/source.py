@@ -6,6 +6,7 @@ when it has one (even an empty one) and from the baseline otherwise.
 """
 
 import json
+import logging
 import os
 from typing import Any
 from urllib.parse import urlparse
@@ -15,7 +16,10 @@ import pandas as pd
 import psycopg
 from psycopg import sql
 
-from reimagina_test_port.common.vocabulary import amenity_type_of
+from reimagina_test_port.common import conditions
+from reimagina_test_port.common.vocabulary import DESTINATION_TYPES
+
+logger = logging.getLogger(__name__)
 
 DSN_ENV_VAR = "REIMAGINA_POSTGRES_DSN"
 SCHEMA = "reimagina_urbano"
@@ -30,6 +34,7 @@ _TABLES = {
         "element_state",
         "attribute_catalog",
         "element_state_attribute_value",
+        "poi_catalog",
     )
 }
 
@@ -84,46 +89,53 @@ _ATTRIBUTES_QUERY = sql.SQL(
     """
 ).format(**_TABLES)
 
-# Accessibility destinations: present amenity and establishment elements, with
-# their effective category and scian_code. read_pois turns them into the model's
-# amenity types (vocabulary.amenity_type_of). Capacity stays NULL, as before: the
-# model counts each destination once.
+# Accessibility destinations: the poi_catalog rules of the active types. read_pois
+# evaluates them (common.conditions) over the present amenity and establishment
+# elements, with the effective values of the keys the rules read.
+_POI_RULES_QUERY = sql.SQL(
+    "SELECT poi_type, rule_criteria FROM {poi_catalog} "
+    "WHERE status = 'active' ORDER BY poi_type"
+).format(**_TABLES)
+
 # Starts from those attribute values and only then looks up their state, instead
-# of resolving every element of the scenario first.
-_POIS_QUERY = sql.SQL(
-    """
+# of resolving every element of the scenario first. Capacity stays NULL, as
+# before: the model counts each destination once.
+_POI_VALUES = """
     WITH value AS (
         SELECT DISTINCT ON (v.element_id, v.attribute_id)
-               v.element_id, ac.key, v.value_text
+               v.element_id, ac.key, ac.value_type::text AS value_type,
+               v.value_num, v.value_text, v.value_json
         FROM {element_state_attribute_value} v
         JOIN {attribute_catalog} ac ON ac.id = v.attribute_id
         WHERE v.scenario_id IN (%(scenario)s::uuid, %(baseline)s::uuid)
           AND ac.element_type IN ('amenity', 'establishment')
-          AND ac.key IN ('category', 'scian_code')
+          AND ac.key = ANY(%(keys)s)
         ORDER BY v.element_id, v.attribute_id, (v.scenario_id = %(scenario)s::uuid) DESC
-    ),
-    point AS (
-        SELECT element_id,
-               max(value_text) FILTER (WHERE key = 'category') AS category,
-               max(value_text) FILTER (WHERE key = 'scian_code') AS scian_code
-        FROM value
-        GROUP BY element_id
-    ),
+    )
+"""
+_POI_ELEMENTS_QUERY = sql.SQL(
+    _POI_VALUES
+    + """,
     state AS (
         SELECT DISTINCT ON (es.element_id) es.element_id, es.geometry, es.deleted_at
         FROM {element_state} es
-        JOIN point p ON p.element_id = es.element_id
         WHERE es.scenario_id IN (%(scenario)s::uuid, %(baseline)s::uuid)
+          AND es.element_id IN (SELECT element_id FROM value)
         ORDER BY es.element_id, (es.scenario_id = %(scenario)s::uuid) DESC
     )
-    SELECT st.element_id::text AS id, p.category, p.scian_code,
-           NULL::double precision AS capacity,
+    SELECT st.element_id::text AS id, e.type::text AS type,
            ST_AsBinary(st.geometry) AS geometry
     FROM state st
-    JOIN point p ON p.element_id = st.element_id
     JOIN {elements} e ON e.id = st.element_id
     WHERE st.deleted_at IS NULL AND e.deleted_at IS NULL
     ORDER BY 1
+    """
+).format(**_TABLES)
+_POI_ATTRIBUTES_QUERY = sql.SQL(
+    _POI_VALUES
+    + """
+    SELECT element_id::text, key, value_type, value_num, value_text, value_json
+    FROM value
     """
 ).format(**_TABLES)
 
@@ -181,32 +193,66 @@ def _geometry(values: pd.Series) -> gpd.GeoSeries:
     return gpd.GeoSeries.from_wkb(values.map(bytes, na_action="ignore"), crs=CRS)
 
 
-def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
-    """Present amenities and establishments with an accessibility type: id,
-    amenity_type, capacity, geometry."""
-    with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
-        baseline = _baseline_id(cur, scenario_id)
-        cur.execute(_POIS_QUERY, {"scenario": scenario_id, "baseline": baseline})
-        frame = pd.DataFrame(
-            cur.fetchall(),
-            columns=["id", "category", "scian_code", "capacity", "geometry"],
-        )
-    frame.insert(
-        1,
-        "amenity_type",
-        [
-            amenity_type_of(category, code)
-            for category, code in zip(
-                frame["category"], frame["scian_code"], strict=True
+def _destination_rules(cur: psycopg.Cursor) -> dict[str, dict[str, Any]]:
+    """Rules of the active poi_catalog types the model has outputs for."""
+    cur.execute(_POI_RULES_QUERY)
+    rules = {}
+    for poi_type, rule in cur.fetchall():
+        if poi_type not in DESTINATION_TYPES:
+            logger.warning(
+                "poi_catalog type without accessibility outputs: %s", poi_type
             )
-        ],
-    )
-    frame = (
-        frame[frame["amenity_type"].notna()]
-        .drop(columns=["category", "scian_code"])
-        .reset_index(drop=True)
-    )
-    frame["capacity"] = frame["capacity"].astype("float64")
+            continue
+        rules[poi_type] = json.loads(rule) if isinstance(rule, str) else rule
+    return rules
+
+
+def _matches(rules: dict[str, dict[str, Any]], element: dict[str, Any]) -> list[str]:
+    matched = []
+    for poi_type, rule in rules.items():
+        try:
+            if conditions.evaluate(rule, element):
+                matched.append(poi_type)
+        except conditions.ConditionError as exc:
+            logger.error("poi_catalog rule of %s is malformed: %s", poi_type, exc)
+    return matched
+
+
+def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
+    """Present amenities and establishments, one row per poi_catalog type whose
+    rule they meet: id, poi_type, capacity, geometry."""
+    with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
+        params = {"scenario": scenario_id, "baseline": _baseline_id(cur, scenario_id)}
+        rules = _destination_rules(cur)
+        own: set[str] = set()
+        for poi_type, rule in rules.items():
+            rule_keys, parent_keys = conditions.keys(rule)
+            own |= rule_keys - {"type"}
+            if parent_keys:
+                # Only the element's own values are read; parent keys are missing.
+                logger.warning(
+                    "%s reads its parent's %s", poi_type, sorted(parent_keys)
+                )
+        params["keys"] = sorted(own)
+        cur.execute(_POI_ELEMENTS_QUERY, params)
+        elements = cur.fetchall()
+        cur.execute(_POI_ATTRIBUTES_QUERY, params)
+        attribute_rows = cur.fetchall()
+
+    attributes: dict[str, dict[str, Any]] = {}
+    for element_id, key, value_type, num, text, js in attribute_rows:
+        attributes.setdefault(element_id, {})[key] = decode_value(
+            value_type, num, text, js
+        )
+    rows = [
+        (element_id, poi_type, geometry)
+        for element_id, element_type, geometry in elements
+        for poi_type in _matches(
+            rules, {**attributes.get(element_id, {}), "type": element_type}
+        )
+    ]
+    frame = pd.DataFrame(rows, columns=["id", "poi_type", "geometry"])
+    frame.insert(2, "capacity", pd.Series(dtype="float64", index=frame.index))
     return gpd.GeoDataFrame(
         frame.drop(columns="geometry"), geometry=_geometry(frame["geometry"]), crs=CRS
     )

@@ -11,7 +11,6 @@ import rasterio
 from rasterio.transform import from_origin
 from shapely.geometry import box
 
-from reimagina_test_port.common import vocabulary
 from reimagina_test_port.ingestion import crosswalk, elements, footprints, prep
 
 CRS = "EPSG:32611"
@@ -257,16 +256,18 @@ def test_lot_attributes_keep_conditional_keys() -> None:
 
 def test_crosswalk_longest_prefix_and_other() -> None:
     codes = pd.Series(["461110", "461150", "462112", "611122", "311830", "811111",
-                       " 464111", "461122", "461160"])  # fmt: skip
+                       " 464111", "461122", "461160", "462111", "468411"])  # fmt: skip
     out = crosswalk.classify(codes)
     expect_equal(
         list(zip(out["element"], out["category"], strict=True)),
         [("establishment", "food_retail"), ("establishment", "fresh_food"),
-         ("establishment", "basic_household_goods"),
+         ("establishment", "convenience_store"),
          ("amenity", "primary_education"),
          ("establishment", "manufacturing"), ("establishment", "other"),
          ("establishment", "medicines"), ("establishment", "fresh_food"),
-         ("establishment", "food_retail")],
+         ("establishment", "food_retail"),
+         ("establishment", "basic_household_goods"),
+         ("establishment", "petrol_station")],
     )  # fmt: skip
 
 
@@ -288,13 +289,3 @@ def test_crosswalk_rejects_unknown_category(tmp_path: Path) -> None:
     path.write_text("scian_prefix,element,category,note\n61,amenity,school,x\n")
     with pytest.raises(ValueError, match="school"):
         crosswalk.table(path)
-
-
-def test_amenity_type_of_scian_then_category() -> None:
-    expect_equal(vocabulary.amenity_type_of("primary_education", "611112"), "preschool")
-    expect_equal(vocabulary.amenity_type_of("medicines", "464111"), "pharmacy")
-    expect_equal(vocabulary.amenity_type_of("public_space", None), "park")
-    expect_equal(vocabulary.amenity_type_of("sports_recreation", "713943"), "gym")
-    # Schools of the amenities file: the DENUE already has them.
-    expect_equal(vocabulary.amenity_type_of("primary_education", None), None)
-    expect_equal(vocabulary.amenity_type_of("other", "811111"), None)

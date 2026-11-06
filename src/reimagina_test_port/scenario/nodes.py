@@ -90,8 +90,8 @@ def scenario_dataset(
 @dataset(
     name="reimagina_scenario_pois",
     description=(
-        "Acquire a scenario's present amenities and establishments, with the "
-        "accessibility amenity_type their category and SCIAN code give."
+        "Acquire a scenario's present amenities and establishments, one row per "
+        "active poi_catalog type whose rule they meet."
     ),
     outputs={"reimagina_scenario_pois": POIS_DECLARATION},
 )

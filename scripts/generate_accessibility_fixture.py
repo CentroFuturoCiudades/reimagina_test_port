@@ -33,7 +33,13 @@ edges = pd.DataFrame(
 pois = gpd.GeoDataFrame(
     {
         "id": ["poi-park", "poi-clinic", "poi-school", "poi-pharmacy", "poi-unknown"],
-        "amenity_type": ["park", "clinic", "primary_school", "pharmacy", "casino"],
+        "poi_type": [
+            "public_space",
+            "health",
+            "primary_education",
+            "health_services",
+            "casino",
+        ],
         "capacity": [None, 2.0, None, None, None],
     },
     geometry=[
