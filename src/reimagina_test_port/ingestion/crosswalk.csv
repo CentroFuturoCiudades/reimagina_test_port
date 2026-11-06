@@ -30,6 +30,8 @@ scian_prefix,element,category,note
 46114,establishment,fresh_food,"Semillas y granos alimenticios, especias y chiles secos"
 46115,establishment,fresh_food,"Leche, otros productos lácteos y embutidos"
 4621,establishment,basic_household_goods,Tiendas de autoservicio (supermercados y minisupers)
+462112,establishment,convenience_store,Minisupers
+468411,establishment,petrol_station,Gasolina y diésel
 466111,establishment,basic_household_goods,Muebles para el hogar
 466112,establishment,basic_household_goods,Electrodomésticos menores y aparatos de línea blanca
 466114,establishment,basic_household_goods,"Cristalería, loza y utensilios de cocina"

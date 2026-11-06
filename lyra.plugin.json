@@ -2,7 +2,7 @@
   "factory": "reimagina_test_port.plugin:create_plugin",
   "nodes": [
     {
-      "description": "Walking accessibility per block, inherited by its lots (exe_reimagina model job). Blocks are origins weighted by the scenario's modelled population; destinations are amenities and establishments, by the amenity_type their category and SCIAN code give. Up to five nearest destinations per amenity within 10 km on the road network at 4.8 km/h. Null means none is reachable.",
+      "description": "Walking accessibility per block, inherited by its lots (exe_reimagina model job). Blocks are origins weighted by the scenario's modelled population; destinations are amenities and establishments, by the poi_catalog rules they meet. Up to five nearest destinations per type within 10 km on the road network at 4.8 km/h. Null means none is reachable.",
       "inputs": {
         "blocks": {
           "arguments": {},
@@ -51,197 +51,183 @@
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest amenity of the slowest reachable type.",
+              "description": "Walking minutes to the nearest destination of the slowest reachable type.",
               "name": "minutes",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Slowest reachable amenity type.",
+              "description": "Slowest reachable destination type.",
               "name": "farthest_amenity",
               "nullable": true,
               "type": "string",
               "unit": null
             },
             {
-              "description": "Gravity score for park, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_park",
+              "description": "Gravity score for public_space, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_public_space",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for daycare, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_daycare",
+              "description": "Gravity score for fresh_food, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_fresh_food",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for preschool, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_preschool",
+              "description": "Gravity score for food, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_food",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for primary_school, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_primary_school",
+              "description": "Gravity score for convenience_store, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_convenience_store",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for secondary_school, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_secondary_school",
+              "description": "Gravity score for petrol_station, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_petrol_station",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for high_school, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_high_school",
+              "description": "Gravity score for manufacturing, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_manufacturing",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for university, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_university",
+              "description": "Gravity score for education, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_education",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for hospital, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_hospital",
+              "description": "Gravity score for primary_education, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_primary_education",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for clinic, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_clinic",
+              "description": "Gravity score for health, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_health",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for pharmacy, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_pharmacy",
+              "description": "Gravity score for health_services, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_health_services",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for cinema, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_cinema",
+              "description": "Gravity score for care, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_care",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for gym, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_gym",
+              "description": "Gravity score for community_culture_recreation, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_community_culture_recreation",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for recreation, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_recreation",
-              "nullable": true,
-              "type": "number",
-              "unit": "score"
-            },
-            {
-              "description": "Walking minutes to the nearest park.",
-              "name": "distance_to_park",
+              "description": "Walking minutes to the nearest public_space.",
+              "name": "distance_to_public_space",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest daycare.",
-              "name": "distance_to_daycare",
+              "description": "Walking minutes to the nearest fresh_food.",
+              "name": "distance_to_fresh_food",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest preschool.",
-              "name": "distance_to_preschool",
+              "description": "Walking minutes to the nearest food.",
+              "name": "distance_to_food",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest primary_school.",
-              "name": "distance_to_primary_school",
+              "description": "Walking minutes to the nearest convenience_store.",
+              "name": "distance_to_convenience_store",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest secondary_school.",
-              "name": "distance_to_secondary_school",
+              "description": "Walking minutes to the nearest petrol_station.",
+              "name": "distance_to_petrol_station",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest high_school.",
-              "name": "distance_to_high_school",
+              "description": "Walking minutes to the nearest manufacturing.",
+              "name": "distance_to_manufacturing",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest university.",
-              "name": "distance_to_university",
+              "description": "Walking minutes to the nearest education.",
+              "name": "distance_to_education",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest hospital.",
-              "name": "distance_to_hospital",
+              "description": "Walking minutes to the nearest primary_education.",
+              "name": "distance_to_primary_education",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest clinic.",
-              "name": "distance_to_clinic",
+              "description": "Walking minutes to the nearest health.",
+              "name": "distance_to_health",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest pharmacy.",
-              "name": "distance_to_pharmacy",
+              "description": "Walking minutes to the nearest health_services.",
+              "name": "distance_to_health_services",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest cinema.",
-              "name": "distance_to_cinema",
+              "description": "Walking minutes to the nearest care.",
+              "name": "distance_to_care",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest gym.",
-              "name": "distance_to_gym",
-              "nullable": true,
-              "type": "number",
-              "unit": null
-            },
-            {
-              "description": "Walking minutes to the nearest recreation.",
-              "name": "distance_to_recreation",
+              "description": "Walking minutes to the nearest community_culture_recreation.",
+              "name": "distance_to_community_culture_recreation",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -274,197 +260,183 @@
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest amenity of the slowest reachable type.",
+              "description": "Walking minutes to the nearest destination of the slowest reachable type.",
               "name": "minutes",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Slowest reachable amenity type.",
+              "description": "Slowest reachable destination type.",
               "name": "farthest_amenity",
               "nullable": true,
               "type": "string",
               "unit": null
             },
             {
-              "description": "Gravity score for park, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_park",
+              "description": "Gravity score for public_space, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_public_space",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for daycare, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_daycare",
+              "description": "Gravity score for fresh_food, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_fresh_food",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for preschool, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_preschool",
+              "description": "Gravity score for food, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_food",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for primary_school, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_primary_school",
+              "description": "Gravity score for convenience_store, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_convenience_store",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for secondary_school, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_secondary_school",
+              "description": "Gravity score for petrol_station, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_petrol_station",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for high_school, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_high_school",
+              "description": "Gravity score for manufacturing, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_manufacturing",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for university, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_university",
+              "description": "Gravity score for education, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_education",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for hospital, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_hospital",
+              "description": "Gravity score for primary_education, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_primary_education",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for clinic, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_clinic",
+              "description": "Gravity score for health, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_health",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for pharmacy, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_pharmacy",
+              "description": "Gravity score for health_services, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_health_services",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for cinema, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_cinema",
+              "description": "Gravity score for care, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_care",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for gym, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_gym",
+              "description": "Gravity score for community_culture_recreation, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_community_culture_recreation",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "Gravity score for recreation, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_recreation",
-              "nullable": true,
-              "type": "number",
-              "unit": "score"
-            },
-            {
-              "description": "Walking minutes to the nearest park.",
-              "name": "distance_to_park",
+              "description": "Walking minutes to the nearest public_space.",
+              "name": "distance_to_public_space",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest daycare.",
-              "name": "distance_to_daycare",
+              "description": "Walking minutes to the nearest fresh_food.",
+              "name": "distance_to_fresh_food",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest preschool.",
-              "name": "distance_to_preschool",
+              "description": "Walking minutes to the nearest food.",
+              "name": "distance_to_food",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest primary_school.",
-              "name": "distance_to_primary_school",
+              "description": "Walking minutes to the nearest convenience_store.",
+              "name": "distance_to_convenience_store",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest secondary_school.",
-              "name": "distance_to_secondary_school",
+              "description": "Walking minutes to the nearest petrol_station.",
+              "name": "distance_to_petrol_station",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest high_school.",
-              "name": "distance_to_high_school",
+              "description": "Walking minutes to the nearest manufacturing.",
+              "name": "distance_to_manufacturing",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest university.",
-              "name": "distance_to_university",
+              "description": "Walking minutes to the nearest education.",
+              "name": "distance_to_education",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest hospital.",
-              "name": "distance_to_hospital",
+              "description": "Walking minutes to the nearest primary_education.",
+              "name": "distance_to_primary_education",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest clinic.",
-              "name": "distance_to_clinic",
+              "description": "Walking minutes to the nearest health.",
+              "name": "distance_to_health",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest pharmacy.",
-              "name": "distance_to_pharmacy",
+              "description": "Walking minutes to the nearest health_services.",
+              "name": "distance_to_health_services",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest cinema.",
-              "name": "distance_to_cinema",
+              "description": "Walking minutes to the nearest care.",
+              "name": "distance_to_care",
               "nullable": true,
               "type": "number",
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest gym.",
-              "name": "distance_to_gym",
-              "nullable": true,
-              "type": "number",
-              "unit": null
-            },
-            {
-              "description": "Walking minutes to the nearest recreation.",
-              "name": "distance_to_recreation",
+              "description": "Walking minutes to the nearest community_culture_recreation.",
+              "name": "distance_to_community_culture_recreation",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -2137,7 +2109,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Acquire a scenario's present amenities and establishments, with the accessibility amenity_type their category and SCIAN code give.",
+      "description": "Acquire a scenario's present amenities and establishments, one row per active poi_catalog type whose rule they meet.",
       "inputs": {},
       "name": "reimagina_scenario_pois",
       "outputs": {
@@ -2151,8 +2123,8 @@
               "unit": null
             },
             {
-              "description": "Amenity type of the element.",
-              "name": "amenity_type",
+              "description": "poi_catalog type whose rule the element meets; one row per type.",
+              "name": "poi_type",
               "nullable": true,
               "type": "string",
               "unit": null

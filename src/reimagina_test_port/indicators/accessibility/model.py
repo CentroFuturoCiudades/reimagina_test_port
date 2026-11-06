@@ -2,12 +2,13 @@
 
 Ported from reimagina-lyra ``accessibility.py`` (exe_reimagina's model job), reading
 tables instead of the store. Blocks are the origins, weighted by this scenario's
-modelled population and homes; destinations are elements with an ``amenity_type``.
-The CFC model (``accessibility_metrics``) is copied unchanged.
+modelled population and homes; destinations have a ``poi_type``, one of the
+poi_catalog types (``vocabulary.DESTINATION_TYPES``). The CFC model
+(``accessibility_metrics``) is copied unchanged.
 
-Per block: ``minutes`` / ``farthest_amenity`` (slowest reachable amenity type),
-``accessibility_<amenity>`` (gravity score as a 0-1 percentile rank among the run's
-blocks) and ``distance_to_<amenity>`` (walking minutes to the nearest one). A missing
+Per block: ``minutes`` / ``farthest_amenity`` (slowest reachable destination type),
+``accessibility_<type>`` (gravity score as a 0-1 percentile rank among the run's
+blocks) and ``distance_to_<type>`` (walking minutes to the nearest one). A missing
 value means none is reachable within ``MAX_DISTANCE``; it is never written as 0.
 """
 
@@ -21,9 +22,8 @@ import pandana as pdna
 import pandas as pd
 
 from reimagina_test_port.common.vocabulary import (
-    AMENITY_ACCESSIBILITY_PARAMS,
-    AMENITY_TYPES,
-    normalize_amenity_type,
+    DESTINATION_ACCESSIBILITY_PARAMS,
+    DESTINATION_TYPES,
 )
 from reimagina_test_port.indicators.accessibility.fastpath import apply_fastpath
 from reimagina_test_port.indicators.accessibility.metrics import (
@@ -48,17 +48,17 @@ NETWORK_BBOX_MARGIN_M = 1_000
 
 # Radii capped to MAX_DISTANCE, as in reimagina-lyra.
 POIS_CONFIG = {
-    amenity: {
+    poi_type: {
         **params,
         "radius": min(params["radius"], MAX_DISTANCE),
         "POB_COL": POB_COL,
         "VIV_COL": VIV_COL,
     }
-    for amenity, params in AMENITY_ACCESSIBILITY_PARAMS.items()
+    for poi_type, params in DESTINATION_ACCESSIBILITY_PARAMS.items()
 }
 
-SCORE_KEYS = [f"accessibility_{amenity}" for amenity in AMENITY_TYPES]
-DISTANCE_KEYS = [f"distance_to_{amenity}" for amenity in AMENITY_TYPES]
+SCORE_KEYS = [f"accessibility_{poi_type}" for poi_type in DESTINATION_TYPES]
+DISTANCE_KEYS = [f"distance_to_{poi_type}" for poi_type in DESTINATION_TYPES]
 KEYS = ["minutes", "farthest_amenity", *SCORE_KEYS, *DISTANCE_KEYS]
 
 
@@ -104,20 +104,13 @@ def check_network_coverage(
         raise ValueError(msg)
 
 
-def _category(value: Any) -> str | None:
-    try:
-        return normalize_amenity_type(value)
-    except ValueError:
-        return None
-
-
 def load_pois(pois: gpd.GeoDataFrame, crs: str) -> gpd.GeoDataFrame:
     """Destinations in the model's contract: index id, category, capacity, centroid."""
-    categories = pois["amenity_type"].map(_category)
-    unknown = sorted(set(pois.loc[categories.isna(), "amenity_type"].dropna()))
-    if unknown:
-        logger.warning("Unknown amenity_type, POIs ignored: %s", unknown)
+    categories = pois["poi_type"]
     keep = categories.isin(POIS_CONFIG)
+    unknown = sorted(set(categories[~keep].dropna()))
+    if unknown:
+        logger.warning("Unknown poi_type, POIs ignored: %s", unknown)
     selected = pois[keep].reset_index(drop=True)
     # Missing, zero or non-finite capacity counts as one, as `to_number(v) or 1`.
     capacity = [

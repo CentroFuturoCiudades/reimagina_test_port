@@ -48,7 +48,6 @@ dev = [
 extend-exclude = [
     "src/reimagina_test_port/indicators/accessibility/metrics.py",
     "src/reimagina_test_port/indicators/accessibility/fastpath.py",
-    "src/reimagina_test_port/common/vocabulary.py",
     "src/reimagina_test_port/ingestion/prep.py",
     "src/reimagina_test_port/ingestion/footprints.py",
     "src/reimagina_test_port/ingestion/elements.py",

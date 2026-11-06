@@ -18,12 +18,12 @@ from lyra.sdk import (
 
 from reimagina_test_port.common.nodes import column, timed
 from reimagina_test_port.common.schema import IDENTITY, identity_columns
-from reimagina_test_port.common.vocabulary import AMENITY_TYPES
+from reimagina_test_port.common.vocabulary import DESTINATION_TYPES
 
 logger = logging.getLogger(__name__)
 
-SCORE_KEYS = [f"accessibility_{amenity}" for amenity in AMENITY_TYPES]
-DISTANCE_KEYS = [f"distance_to_{amenity}" for amenity in AMENITY_TYPES]
+SCORE_KEYS = [f"accessibility_{poi_type}" for poi_type in DESTINATION_TYPES]
+DISTANCE_KEYS = [f"distance_to_{poi_type}" for poi_type in DESTINATION_TYPES]
 ACCESSIBILITY_KEYS = ["minutes", "farthest_amenity", *SCORE_KEYS, *DISTANCE_KEYS]
 
 
@@ -37,22 +37,24 @@ def accessibility_declaration() -> TableOutput:
             "minutes",
             "number",
             None,
-            "Walking minutes to the nearest amenity of the slowest reachable type.",
+            "Walking minutes to the nearest destination of the slowest reachable type.",
         ),
-        column("farthest_amenity", "string", None, "Slowest reachable amenity type."),
+        column(
+            "farthest_amenity", "string", None, "Slowest reachable destination type."
+        ),
         *(
             column(
                 key,
                 "number",
                 Unit.SCORE,
-                f"Gravity score for {amenity}, as a 0-1 percentile rank among the "
+                f"Gravity score for {poi_type}, as a 0-1 percentile rank among the "
                 "run's blocks.",
             )
-            for key, amenity in zip(SCORE_KEYS, AMENITY_TYPES, strict=True)
+            for key, poi_type in zip(SCORE_KEYS, DESTINATION_TYPES, strict=True)
         ),
         *(
-            column(key, "number", None, f"Walking minutes to the nearest {amenity}.")
-            for key, amenity in zip(DISTANCE_KEYS, AMENITY_TYPES, strict=True)
+            column(key, "number", None, f"Walking minutes to the nearest {poi_type}.")
+            for key, poi_type in zip(DISTANCE_KEYS, DESTINATION_TYPES, strict=True)
         ),
     ]
     return TableOutput(columns=columns, geometry="geometry")
@@ -61,7 +63,12 @@ def accessibility_declaration() -> TableOutput:
 POIS_DECLARATION = TableOutput(
     columns=[
         TableColumn(name="id", type="string", unit=None, description="Element ID."),
-        column("amenity_type", "string", None, "Amenity type of the element."),
+        column(
+            "poi_type",
+            "string",
+            None,
+            "poi_catalog type whose rule the element meets; one row per type.",
+        ),
         column("capacity", "number", Unit.COUNT, "Capacity; missing counts as one."),
     ],
     geometry="geometry",
@@ -161,8 +168,8 @@ def accessibility_metric(
             "Walking accessibility per block, inherited by its lots (exe_reimagina "
             "model job). Blocks are origins weighted by the scenario's modelled "
             "population; destinations are amenities and establishments, by the "
-            "amenity_type their category and SCIAN code give. Up to five "
-            "nearest destinations per amenity within 10 km on the road network at "
+            "poi_catalog rules they meet. Up to five nearest destinations per "
+            "type within 10 km on the road network at "
             "4.8 km/h. Null means none is reachable."
         ),
         inputs={

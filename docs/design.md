@@ -34,7 +34,7 @@ its lot output and computes all lot indicators. `reimagina_built_form` depends o
 that metric's result and on the source block output, aggregates lots by parent
 ID, and returns both tables. `reimagina_accessibility` depends on both
 built-form tables and on two more datasets: `reimagina_scenario_pois` (present
-amenities and establishments with an accessibility `amenity_type`) and `reimagina_road_network` (the project's road
+amenities and establishments, one row per `poi_catalog` type whose rule they meet) and `reimagina_road_network` (the project's road
 network as node and edge tables). `reimagina_scenario_indicators` writes the
 built-form tables and `reimagina_scenario_accessibility` the accessibility
 tables to Reimagina's database; `reimagina_scenario_write` is the final node and
@@ -87,26 +87,28 @@ no custom context factory.
 
 Ported from reimagina-lyra `accessibility.py` (exe_reimagina's model job), in
 `indicators/accessibility/`. The CFC model (`metrics.py`, its vectorized `fastpath.py`)
-and the amenity vocabulary (`common/vocabulary.py`) are copied unchanged and excluded
-from ruff so they stay diffable; `model.py` adapts the orchestration to
+are copied unchanged and excluded from ruff so they stay diffable; `model.py` adapts the orchestration to
 tables.
 
 Blocks are the origins, weighted by this run's built-form `population` (blocks
 without demand are weight 0, not excluded). Destinations are the present amenity
-and establishment elements, at their point. Their `category` and `scian_code` give
-one of the model's 13 types (`vocabulary.amenity_type_of`): the longest SCIAN
-prefix first (`61112` primary school, `46411` pharmacy, `512130` cinema...), else
-the category (`public_space` park, `sports_recreation` gym, `cultural_facility`
-recreation). Schools without a SCIAN code are left out, as their level is
-unknown (Mexicali loads none: its schools come from the DENUE). Elements with no type are ignored. Until the model's
-indicators move to the categories, its keys and radii are unchanged. The model routes up to five nearest destinations per type
+and establishment elements, at their point. Their types are the active types of
+the API's `poi_catalog` (`public_space`, `health`, `primary_education`...): each
+element counts once for every type whose `rule_criteria` it meets, evaluated with
+a copy of the API's conditions evaluator (`common/conditions.py`) over its
+effective values; rules that read `parent.<key>` see those keys as missing. The
+model's outputs are declared before the database is read, so the types and their
+radii also live in `common/vocabulary.py` (`DESTINATION_TYPES`); an active type
+missing there is ignored with a warning, and one without destinations is null.
+The radii are provisional, from the old equivalent types (`park` 670 m for
+`public_space`, `clinic` 2 km for `health`...). The model routes up to five nearest destinations per type
 within 10 km at 4.8 km/h, with radii capped at 10 km and the POI-to-network snap
 distance included. The metric CRS is `ACCESS_CRS`, else the blocks' UTM zone;
 it fails if fewer than half the blocks fall within the network's extent.
 
 Per block: `minutes` / `farthest_amenity` (slowest reachable type),
-`accessibility_<amenity>` (gravity score as a 0-1 percentile rank among the
-run's blocks, so relative to the run) and `distance_to_<amenity>` (walking
+`accessibility_<type>` (gravity score as a 0-1 percentile rank among the
+run's blocks, so relative to the run) and `distance_to_<type>` (walking
 minutes to the nearest). Each lot inherits its block's values. Null means
 unreachable within 10 km, never 0. Keys match `indicator_catalog`; the catalog
 uses minutes ("min"), which Lyra cannot declare, so those columns have no unit.
@@ -221,8 +223,10 @@ category, the longest prefix winning; no match is an establishment of category
 2026): the codes of each group's *What does this include specifically?*
 column, and nothing else. A subgroup takes its codes from its group, the longest
 prefix winning: meat, fruit and vegetables, grains and dairy (46112–46115) are
-`fresh_food`, the rest of groceries (4611) `food_retail`; supermarkets and mini-supermarkets (4621)
-`basic_household_goods`; community food services (62421) `care`, the rest of
+`fresh_food`, the rest of groceries (4611) `food_retail`; supermarkets (4621)
+`basic_household_goods`, mini-supermarkets (462112) `convenience_store`; petrol
+stations (468411) are `petrol_station`, outside the workbook, so that
+`poi_catalog` rules read categories, not SCIAN codes; community food services (62421) `care`, the rest of
 6242 `community_facility`. Preschool and special education (61111, 61118) are
 `care`, as the workbook's description of the group says, though its code column
 leaves them out. Public sports clubs and gyms, and museums, are amenities; private

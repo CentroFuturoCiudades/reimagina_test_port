@@ -36,7 +36,7 @@ and does not require an installed shared-data manifest.
 `REIMAGINA_SNAPSHOT_ROOT` overrides the bundled data root. Each snapshot is a
 subdirectory containing `lot.parquet` and `block.parquet`, matching Reimagina's
 prepared element exports. Accessibility also reads `poi.parquet` (`id`,
-`amenity_type`, `capacity`, geometry) and `network_nodes.parquet` /
+`poi_type`, `capacity`, geometry; one row per destination type) and `network_nodes.parquet` /
 `network_edges.parquet` (`id, x, y` and `from, to, distance, two_way`, in the
 blocks' UTM zone). The snapshot parameter is required, and accepts letters,
 digits, hyphens, and underscores (starting with a letter or digit). Missing files
@@ -93,8 +93,9 @@ and the following nullable numerical columns:
 
 `reimagina_accessibility` returns `reimagina_accessibility_lots` and
 `reimagina_accessibility_blocks` with `id`, `parent_id`, `source_record_ref`,
-geometry, `minutes` (min), `farthest_amenity`, and `accessibility_<amenity>`
-(score 0-1) and `distance_to_<amenity>` (min) for the 13 amenity types; lots
+geometry, `minutes` (min), `farthest_amenity`, and `accessibility_<type>`
+(score 0-1) and `distance_to_<type>` (min) for the 12 destination types
+(`common/vocabulary.py`, the active `poi_catalog` types); lots
 repeat their block's values. `reimagina_scenario_accessibility` writes only the
 blocks. See [design](design.md#accessibility).
 
