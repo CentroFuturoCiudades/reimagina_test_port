@@ -4,7 +4,7 @@
 - ``snapshot``: prepared GeoParquet snapshots, the offline sources.
 - ``ingestion``: build a city's baseline from the data lake (data, not indicators).
 - ``indicators``: one subpackage per indicator type (``built_form``,
-  ``accessibility``).
+  ``accessibility``, ``composites``).
 - ``common``: what ingestion and indicators share.
 
 Production (``create_plugin``) runs over Reimagina scenarios; the snapshot graph
@@ -16,6 +16,7 @@ from lyra.sdk import PluginDefinition
 from reimagina_test_port import snapshot
 from reimagina_test_port.indicators.accessibility.nodes import accessibility_metric
 from reimagina_test_port.indicators.built_form import nodes as built_form_nodes
+from reimagina_test_port.indicators.composites.composite_metric import composite_metrics
 from reimagina_test_port.ingestion import nodes as ingestion_nodes
 from reimagina_test_port.scenario import nodes as scenario_nodes
 
@@ -38,8 +39,10 @@ def create_plugin() -> PluginDefinition:
                 "reimagina_road_network_nodes",
                 "reimagina_road_network_edges",
             ),
+            *composite_metrics(scenario_nodes.ScenarioParameters),
             scenario_nodes.scenario_indicators,
             scenario_nodes.scenario_accessibility,
+            scenario_nodes.composites_write(),
             scenario_nodes.scenario_write,
             ingestion_nodes.baseline_dataset,
             ingestion_nodes.baseline_elements,
@@ -65,5 +68,6 @@ def create_snapshot_plugin() -> PluginDefinition:
                 "reimagina_prepared_network_nodes",
                 "reimagina_prepared_network_edges",
             ),
+            *composite_metrics(snapshot.SnapshotParameters),
         ]
     )
