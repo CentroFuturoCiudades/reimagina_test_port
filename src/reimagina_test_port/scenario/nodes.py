@@ -1,8 +1,9 @@
 """Lyra nodes over a Reimagina scenario: reimagina_scenario (its lots and blocks),
 reimagina_scenario_pois and reimagina_road_network (accessibility inputs), and the
-writes reimagina_scenario_indicators, reimagina_scenario_accessibility and
-reimagina_scenario_write."""
+writes reimagina_scenario_indicators, reimagina_scenario_accessibility,
+reimagina_scenario_composites and reimagina_scenario_write."""
 
+import inspect
 import logging
 from typing import Any
 
@@ -308,17 +309,81 @@ def scenario_accessibility(
     )
 
 
+def composite_values(tables: dict[str, gpd.GeoDataFrame]) -> pd.DataFrame:
+    """One row per element of any composite (``id``, ``parent_id``) and one
+    column per composite, ``composite_<name>``: its index there, or missing."""
+    from reimagina_test_port.indicators.composites.composite_metric import (
+        composite_key,
+    )
+
+    rows = pd.concat([table[["id", "parent_id"]] for table in tables.values()])
+    result = rows.drop_duplicates("id").reset_index(drop=True)
+    ids = result["id"].astype(str)
+    for name, table in tables.items():
+        index = pd.Series(table["index"].to_numpy(), index=table["id"].astype(str))
+        result[composite_key(name)] = index.reindex(ids).to_numpy()
+    return result
+
+
+def composites_write():
+    """reimagina_scenario_composites: every composite of composite_config.yaml,
+    its index under composite_<name>, in its own transaction."""
+    from reimagina_test_port.indicators.composites.composite_metric import (
+        ELEMENT_TYPES,
+        composite_key,
+        composite_outputs,
+        output_name,
+    )
+
+    element, names = composite_outputs()
+    key = {name: composite_key(name) for name in names}
+    inputs = {key[n]: Dependency(output_name(n, element)) for n in names}
+    keys = dict.fromkeys(inputs, "number")
+
+    def handler(**arguments: Any) -> pd.DataFrame:
+        tables = {name: arguments[key[name]] for name in names}
+        return write_group(
+            arguments["parameters"],
+            {ELEMENT_TYPES[element]: composite_values(tables)},
+            keys,
+            node="reimagina_scenario_composites",
+            log=arguments["context"].logger,
+        )
+
+    # Lyra binds dependencies by argument name: one per composite.
+    handler.__signature__ = inspect.Signature(
+        [
+            inspect.Parameter(key, inspect.Parameter.KEYWORD_ONLY)
+            for key in ["parameters", *inputs, "context"]
+        ]
+    )
+    handler.__annotations__ = {"parameters": WriteParameters, "context": RunContext}
+    return metric(
+        name="reimagina_scenario_composites",
+        description=(
+            "Compute a scenario's composite indicators and write each one's index "
+            f"to Reimagina's element_state_indicator_value as composite_<name> "
+            f"({', '.join(sorted(keys))}), on {element}, under the same rules as "
+            "reimagina_scenario_indicators. Elements outside the composites' "
+            "boundary get none. Other indicators are not touched."
+        ),
+        inputs=inputs,
+        outputs={"reimagina_scenario_composites": WRITE_DECLARATION},
+    )(handler)
+
+
 @metric(
     name="reimagina_scenario_write",
     description=(
-        "Compute and write a scenario's built-form indicators and accessibility, "
-        "as exe_reimagina's model job does: reimagina_scenario_indicators and "
-        "reimagina_scenario_accessibility, each in its own transaction. The result "
-        "adds up both."
+        "Compute and write a scenario's built-form indicators, accessibility and "
+        "composites: reimagina_scenario_indicators, reimagina_scenario_accessibility "
+        "and reimagina_scenario_composites, each in its own transaction. The "
+        "result adds up all three."
     ),
     inputs={
         "indicators": Dependency("reimagina_scenario_indicators"),
         "accessibility": Dependency("reimagina_scenario_accessibility"),
+        "composites": Dependency("reimagina_scenario_composites"),
     },
     outputs={"reimagina_scenario_write": WRITE_DECLARATION},
 )
@@ -326,19 +391,16 @@ def scenario_write(
     parameters: WriteParameters,
     indicators: pd.DataFrame,
     accessibility: pd.DataFrame,
+    composites: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Final node: both writes' summary in one row."""
-    first, second = indicators.iloc[0], accessibility.iloc[0]
+    """Final node: the three writes' summary in one row."""
+    writes = [indicators.iloc[0], accessibility.iloc[0], composites.iloc[0]]
     return pd.DataFrame(
         [
             {
-                "elements": int(first["elements"]),
-                "values_written": int(
-                    first["values_written"] + second["values_written"]
-                ),
-                "values_cleared": int(
-                    first["values_cleared"] + second["values_cleared"]
-                ),
+                "elements": int(writes[0]["elements"]),
+                "values_written": sum(int(w["values_written"]) for w in writes),
+                "values_cleared": sum(int(w["values_cleared"]) for w in writes),
                 "dry_run": parameters.dry_run,
             }
         ]

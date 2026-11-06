@@ -18,7 +18,9 @@ src/reimagina_test_port/
 │                  baseline_writer, nodes.py (reimagina_baseline*)
 ├── indicators/    one subpackage per indicator type, each with its nodes.py
 │   ├── built_form/      calculation.py
-│   └── accessibility/   model.py, metrics.py, fastpath.py, network.py
+│   ├── accessibility/   model.py, metrics.py, fastpath.py, network.py
+│   └── composites/      composite.py (the math), composite_config.yaml (the tree),
+│                        composite_metric.py (its nodes)
 └── common/        shared: lake, vocabulary, schema (element identity,
                    attributes, units), rules (MIN_BUILT_M2), nodes (timed, column)
 ```
@@ -116,6 +118,46 @@ the CFC lake, or a local path), downloads it into the job's scratch folder with
 `DefaultAzureCredential`, and returns the pandana H5's nodes and edges (its first
 impedance as `distance`). A project without the URI fails as an input error.
 
+## Composites
+
+A composite indicator combines other indicators into one score per block (or
+lot). `composite_config.yaml` lists `trees`, each a top-level index: each node
+with `children` is a composite, every other node an indicator, which names its
+`source` (`accessibility` or `built_form`), its column, and how it is
+normalised: an optional transform (`soft_threshold` or `steps`, distance to a
+0-1 score), optional outlier compression, its polarity and AMPI (reference and
+goalposts) or MPI (mean and SD), all on a scale around 100. A composite combines
+its children with the weighted Mazziotta-Pareto index: their mean less an
+imbalance penalty (SD × SD / mean; added for a negative phenomenon), null unless
+`min_valid` children have a value. A child `{ref: <composite>, weight: w}`
+reuses a composite defined elsewhere, in the same tree or another, so the
+composites form a DAG: each is computed once and read by every parent.
+
+`composite_metric.composite_metrics` makes each composite its own metric,
+`reimagina_composite_<name>`, whose inputs are its children: the indicator
+outputs its leaves read (`reimagina_accessibility_blocks`, ...) and the outputs
+of the composites it reads (`reimagina_composite_<child>_blocks`). Lyra runs the
+DAG from those dependencies. Each output has the identity, each child's score (a
+leaf normalised, a composite's index), `index`, `mean`, `penalty`, `n` and
+geometry. The config is checked when the plugin loads: an unknown source or
+column, a missing normalisation value, a repeated or reserved name, an unknown
+key, a ref to no composite or a cycle fails, naming the node by its path.
+
+The config's optional `boundary` is the URL of a GeoParquet (`az://` or a path)
+with the area to read the composites over, such as a city without its rural
+localities. With it, `reimagina_composite_boundary` reads it once a run (its
+polygons merged, its CRS from the file) and every composite depends on it,
+keeping only the elements whose representative point lies inside, before
+normalising, so the others are in no output and no statistic. Without it, every
+element gets composites.
+
+`reimagina_scenario_composites` writes each composite's `index` as
+`composite_<name>` on the config's elements, through the writer below, and
+`reimagina_scenario_write` runs it with the other two writes. Elements outside
+the boundary get none, and a value they had is cleared. A baseline write adds
+those keys to `indicator_catalog` (`catalogs`, job code `composites`, unit
+`score`); a composite added to the config gets its key the same way.
+
 ## Writer
 
 Ported from reimagina-lyra `store.write_indicators`. Values go to
@@ -123,8 +165,9 @@ Ported from reimagina-lyra `store.write_indicators`. Values go to
 job does: `reimagina_scenario_indicators` writes the built-form keys and
 `reimagina_scenario_accessibility` the accessibility keys, on blocks only (a
 lot's accessibility is its block's; readers take it from the lot's
-`parent_id`); each leaves the other's keys untouched, and
-`reimagina_scenario_write` runs both. Every key
+`parent_id`), and `reimagina_scenario_composites` the composites (see
+Composites); each leaves the others' keys untouched, and
+`reimagina_scenario_write` runs all three. Every key
 must be active in `indicator_catalog` (see the catalog contract). Floats are
 rounded to 4 decimals, so a fork compares exactly against its baseline.
 
