@@ -1645,7 +1645,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Walking distance over the road network from each lot to the nearest POI of one type (poi_type), as GHSCI: points are their own entry and polygons are entered anywhere along their outline (a point every 20 m within 30 m of a street); entries join the street at their projection on the nearest segment, every street two-way. Null beyond max_distance_m.",
+      "description": "Walking distance over the road network from each lot to the nearest POI of each poi_catalog type, as GHSCI: points are their own entry and polygons are entered anywhere along their outline (a point every 20 m within 30 m of a street); entries join the street at their projection on the nearest segment, every street two-way.",
       "inputs": {
         "edges": {
           "arguments": {},
@@ -1690,8 +1690,85 @@
               "unit": null
             },
             {
-              "description": "Walking distance over the road network from the lot's nearest entry to the nearest POI entry of the type; null beyond max_distance_m.",
-              "name": "distance_m",
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_public_space",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_fresh_food",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_food",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_convenience_store",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_manufacturing",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_primary_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_health",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_health_services",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_care",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_community_culture_recreation",
               "nullable": true,
               "type": "number",
               "unit": "m"
@@ -1703,22 +1780,39 @@
       },
       "request_schema": {
         "$defs": {
-          "DistanceParameters": {
+          "PopulationAccessParameters": {
             "additionalProperties": false,
-            "description": "The source's parameter, plus the POIs to measure and the search limit.",
+            "description": "The source's parameter, plus the poi_catalog types to measure.",
             "properties": {
-              "max_distance_m": {
-                "default": 10000,
-                "description": "Search limit over the network, in metres; lots farther from every POI have no distance.",
-                "exclusiveMinimum": 0,
-                "title": "Max Distance M",
-                "type": "number"
-              },
-              "poi_type": {
-                "description": "Type of the POIs to measure, as their poi_type (e.g. public_space).",
-                "minLength": 1,
-                "title": "Poi Type",
-                "type": "string"
+              "poi_types": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "enum": [
+                        "public_space",
+                        "fresh_food",
+                        "food",
+                        "convenience_store",
+                        "petrol_station",
+                        "manufacturing",
+                        "education",
+                        "primary_education",
+                        "health",
+                        "health_services",
+                        "care",
+                        "community_culture_recreation"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Types to measure; all when omitted.",
+                "title": "Poi Types"
               },
               "scenario_id": {
                 "description": "Reimagina scenario UUID.",
@@ -1728,10 +1822,9 @@
               }
             },
             "required": [
-              "scenario_id",
-              "poi_type"
+              "scenario_id"
             ],
-            "title": "DistanceParameters",
+            "title": "PopulationAccessParameters",
             "type": "object"
           }
         },
@@ -1739,7 +1832,7 @@
         "additionalProperties": false,
         "properties": {
           "parameters": {
-            "$ref": "#/$defs/DistanceParameters"
+            "$ref": "#/$defs/PopulationAccessParameters"
           }
         },
         "required": [
@@ -1752,7 +1845,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Residents with a POI of one type (poi_type) within within_m over the road network, and the average distance to the nearest one (ULI 'Percentage of population with access to <poi> within X meters' and 'Average distance to closest <poi>'). Lots within within_m count their built-form population; blocks add up their lots and average their distances weighted by population.",
+      "description": "Residents with a POI of each poi_catalog type within its coverage distance over the road network, and the average distance to the nearest one (ULI 'Percentage of population with access to <poi> within X meters' and 'Average distance to closest <poi>'). Lots within the distance count their built-form population; blocks add up their lots and average their distances weighted by population.",
       "inputs": {
         "blocks": {
           "arguments": {},
@@ -1793,32 +1886,172 @@
               "unit": null
             },
             {
-              "description": "Network distance to the nearest POI of the type; for a block, its lots' average weighted by population (null without residents within max_distance_m).",
-              "name": "distance_m",
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_public_space",
               "nullable": true,
               "type": "number",
               "unit": "m"
             },
             {
-              "description": "Residents (built-form).",
-              "name": "population",
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_fresh_food",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_food",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_convenience_store",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_manufacturing",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_primary_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_health",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_health_services",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_care",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_public_space",
               "nullable": true,
               "type": "number",
               "unit": "count"
             },
             {
-              "description": "Residents of lots within within_m of a POI of the type.",
-              "name": "population_with_access",
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_fresh_food",
               "nullable": true,
               "type": "number",
               "unit": "count"
             },
             {
-              "description": "population_with_access / population (0-1); null without residents.",
-              "name": "access_share",
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_food",
               "nullable": true,
               "type": "number",
-              "unit": "ratio"
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_convenience_store",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_manufacturing",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_primary_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_health",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_health_services",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_care",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
             }
           ],
           "geometry": "geometry",
@@ -1848,32 +2081,172 @@
               "unit": null
             },
             {
-              "description": "Network distance to the nearest POI of the type; for a block, its lots' average weighted by population (null without residents within max_distance_m).",
-              "name": "distance_m",
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_public_space",
               "nullable": true,
               "type": "number",
               "unit": "m"
             },
             {
-              "description": "Residents (built-form).",
-              "name": "population",
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_fresh_food",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_food",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_convenience_store",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_manufacturing",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_primary_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_health",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_health_services",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_care",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_public_space",
               "nullable": true,
               "type": "number",
               "unit": "count"
             },
             {
-              "description": "Residents of lots within within_m of a POI of the type.",
-              "name": "population_with_access",
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_fresh_food",
               "nullable": true,
               "type": "number",
               "unit": "count"
             },
             {
-              "description": "population_with_access / population (0-1); null without residents.",
-              "name": "access_share",
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_food",
               "nullable": true,
               "type": "number",
-              "unit": "ratio"
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_convenience_store",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_manufacturing",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_primary_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_health",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_health_services",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_care",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
             }
           ],
           "geometry": "geometry",
@@ -1884,38 +2257,47 @@
         "$defs": {
           "PopulationAccessParameters": {
             "additionalProperties": false,
-            "description": "Plus the distance within which residents have access.",
+            "description": "The source's parameter, plus the poi_catalog types to measure.",
             "properties": {
-              "max_distance_m": {
-                "default": 10000,
-                "description": "Search limit over the network, in metres; lots farther from every POI have no distance.",
-                "exclusiveMinimum": 0,
-                "title": "Max Distance M",
-                "type": "number"
-              },
-              "poi_type": {
-                "description": "Type of the POIs to measure, as their poi_type (e.g. public_space).",
-                "minLength": 1,
-                "title": "Poi Type",
-                "type": "string"
+              "poi_types": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "enum": [
+                        "public_space",
+                        "fresh_food",
+                        "food",
+                        "convenience_store",
+                        "petrol_station",
+                        "manufacturing",
+                        "education",
+                        "primary_education",
+                        "health",
+                        "health_services",
+                        "care",
+                        "community_culture_recreation"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Types to measure; all when omitted.",
+                "title": "Poi Types"
               },
               "scenario_id": {
                 "description": "Reimagina scenario UUID.",
                 "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                 "title": "Scenario Id",
                 "type": "string"
-              },
-              "within_m": {
-                "description": "Access distance over the network, in metres (e.g. 300).",
-                "exclusiveMinimum": 0,
-                "title": "Within M",
-                "type": "number"
               }
             },
             "required": [
-              "scenario_id",
-              "poi_type",
-              "within_m"
+              "scenario_id"
             ],
             "title": "PopulationAccessParameters",
             "type": "object"

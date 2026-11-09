@@ -1,12 +1,14 @@
-"""Lyra nodes of population access to one type of POI over the road network:
+"""Lyra nodes of population access to the poi_catalog types over the road network:
 
-- reimagina_nearest_poi_distance: metres from each lot to its nearest POI of the type.
-- reimagina_population_access: residents within a distance of one, and the average
-  distance, per lot and per block.
+- reimagina_nearest_poi_distance: metres from each lot to its nearest POI of each type.
+- reimagina_population_access: residents within each type's coverage distance, and the
+  average distance to its nearest POI, per lot and per block.
 """
 
+from collections.abc import Callable, Mapping, Sequence
+from typing import Literal
+
 import geopandas as gpd
-import numpy as np
 import pandas as pd
 from lyra.sdk import (
     Dependency,
@@ -16,13 +18,14 @@ from lyra.sdk import (
     Unit,
     metric,
 )
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from reimagina_test_port.common.nodes import column, timed
 from reimagina_test_port.common.schema import IDENTITY, identity_columns
+from reimagina_test_port.common.vocabulary import DESTINATION_TYPES
 from reimagina_test_port.indicators.accessibility.model import resolve_access_crs
 from reimagina_test_port.indicators.population_access.calculation import (
-    nearest_distance,
+    nearest_distances,
     population_access,
     street_network,
 )
@@ -30,62 +33,37 @@ from reimagina_test_port.indicators.population_access.calculation import (
 POI_TYPE_COLUMN = "poi_type"
 MAX_DISTANCE_M = 10_000
 DISTANCE_OUTPUT = "reimagina_nearest_poi_distance_lots"
-KEYS = [
-    "distance_m",
-    "population",
-    "population_with_access",
-    "access_share",
+PoiType = Literal[DESTINATION_TYPES]  # ty: ignore[invalid-type-form]
+DISTANCE_KEYS = [f"distance_m_{poi_type}" for poi_type in DESTINATION_TYPES]
+ACCESS_KEYS = [f"population_with_access_{poi_type}" for poi_type in DESTINATION_TYPES]
+KEYS = [*DISTANCE_KEYS, *ACCESS_KEYS]
+
+DISTANCE_COLUMNS = [
+    column(
+        key,
+        "number",
+        Unit.METRE,
+        "Walk over the road network to the nearest POI of the type; for a block, its "
+        "lots' average weighted by population. Null beyond 10 km or if not measured.",
+    )
+    for key in DISTANCE_KEYS
+]
+ACCESS_COLUMNS = [
+    column(
+        key,
+        "number",
+        Unit.COUNT,
+        "Residents of lots within the type's coverage distance of one of its POIs.",
+    )
+    for key in ACCESS_KEYS
 ]
 
 
-DISTANCE_DECLARATION = TableOutput(
-    columns=[
-        *identity_columns(),
-        column(
-            "distance_m",
-            "number",
-            Unit.METRE,
-            "Walking distance over the road network from the lot's nearest entry "
-            "to the nearest POI entry of the type; null beyond max_distance_m.",
-        ),
-    ]
-)
-
-
-def population_access_declaration() -> TableOutput:
-    """Identity, distance, residents, residents with access, their share, geometry."""
-    return TableOutput(
-        columns=[
-            *identity_columns(),
-            column(
-                "distance_m",
-                "number",
-                Unit.METRE,
-                "Network distance to the nearest POI of the type; for a block, its "
-                "lots' average weighted by population (null without residents "
-                "within max_distance_m).",
-            ),
-            column("population", "number", Unit.COUNT, "Residents (built-form)."),
-            column(
-                "population_with_access",
-                "number",
-                Unit.COUNT,
-                "Residents of lots within within_m of a POI of the type.",
-            ),
-            column(
-                "access_share",
-                "number",
-                Unit.RATIO,
-                "population_with_access / population (0-1); null without residents.",
-            ),
-        ],
-        geometry="geometry",
-    )
-
-
 def result_frame(source: gpd.GeoDataFrame, values: pd.DataFrame) -> gpd.GeoDataFrame:
-    """Identity and geometry of ``source`` with the values, in its order."""
+    """Identity and geometry of ``source`` with every key, in its order; the keys of
+    types not measured stay null."""
     result = source[IDENTITY + ["geometry"]].copy()
+    values = values.reindex(columns=KEYS)
     for key in KEYS:
         result[key] = values[key].to_numpy()
     return result
@@ -97,37 +75,21 @@ def population_access_metrics(
     pois_output: str,
     nodes_output: str,
     edges_output: str,
+    coverage_m: Callable[[], Mapping[str, float]],
 ) -> list:
-    """Both nodes over one source's lots, POIs and road network."""
+    """Both nodes over one source's lots, POIs, road network and coverage distances."""
 
-    class DistanceParameters(parameters_type):  # ty: ignore[unsupported-base]
-        """The source's parameter, plus the POIs to measure and the search limit."""
+    class PopulationAccessParameters(parameters_type):  # ty: ignore[unsupported-base]
+        """The source's parameter, plus the poi_catalog types to measure."""
 
-        poi_type: str = Field(
-            min_length=1,
-            description=f"Type of the POIs to measure, as their {POI_TYPE_COLUMN} "
-            "(e.g. public_space).",
-        )
-        max_distance_m: float = Field(
-            default=MAX_DISTANCE_M,
-            gt=0,
-            description="Search limit over the network, in metres; lots farther "
-            "from every POI have no distance.",
+        poi_types: list[PoiType] | None = Field(
+            default=None, description="Types to measure; all when omitted."
         )
 
-    class PopulationAccessParameters(DistanceParameters):
-        """Plus the distance within which residents have access."""
-
-        within_m: float = Field(
-            gt=0, description="Access distance over the network, in metres (e.g. 300)."
+    def requested(parameters) -> Sequence[str]:
+        return (
+            DESTINATION_TYPES if parameters.poi_types is None else parameters.poi_types
         )
-
-        @model_validator(mode="after")
-        def _within_search(self):
-            if self.within_m > self.max_distance_m:
-                msg = "within_m cannot exceed max_distance_m"
-                raise ValueError(msg)
-            return self
 
     def distance_handler(
         parameters,
@@ -137,31 +99,20 @@ def population_access_metrics(
         edges: pd.DataFrame,
         context: RunContext,
     ) -> pd.DataFrame:
-        selected = pois[pois[POI_TYPE_COLUMN] == parameters.poi_type]
-        if selected.empty:
-            context.logger.warning(
-                "No POI of type %r; types present: %s",
-                parameters.poi_type,
-                sorted(pois[POI_TYPE_COLUMN].dropna().unique()),
-            )
         crs = resolve_access_crs(lots)
         with timed("road network", context.logger):
             network = street_network(nodes, edges)
-        with timed("nearest POI distance", context.logger):
-            distance = nearest_distance(
-                lots, selected, network, crs, parameters.max_distance_m
-            )
-        context.logger.info(
-            "%s: %d POIs; %d of %d lots within %s m of one",
-            parameters.poi_type,
-            len(selected),
-            np.isfinite(distance).sum(),
-            len(lots),
-            parameters.max_distance_m,
-        )
-        result = pd.DataFrame(lots[IDENTITY].copy())
-        result["distance_m"] = distance
-        return result
+        selected = {
+            poi_type: pois.geometry[pois[POI_TYPE_COLUMN] == poi_type]
+            for poi_type in requested(parameters)
+        }
+        with timed("nearest POI distances", context.logger):
+            distances = nearest_distances(lots, selected, network, crs, MAX_DISTANCE_M)
+        values = pd.DataFrame(
+            {f"distance_m_{key}": value for key, value in distances.items()},
+            index=lots.index,
+        ).reindex(columns=DISTANCE_KEYS)
+        return pd.concat([pd.DataFrame(lots[IDENTITY]), values], axis=1)
 
     def access_handler(
         parameters,
@@ -170,49 +121,37 @@ def population_access_metrics(
         distances: pd.DataFrame,
         context: RunContext,
     ) -> dict[str, gpd.GeoDataFrame]:
-        distance = (
-            distances.set_index("id")["distance_m"].reindex(lots["id"]).to_numpy()
-        )
+        coverage = coverage_m()
+        by_lot = distances.set_index("id").reindex(lots["id"])
+        measured = {
+            poi_type: by_lot[f"distance_m_{poi_type}"].to_numpy()
+            for poi_type in requested(parameters)
+            if poi_type in coverage
+        }
         with timed("population access", context.logger):
-            values = population_access(lots, blocks, distance, parameters.within_m)
-        by_lot = values["lots"]
-        total = by_lot[["population", "population_with_access"]].sum()
-        reached = by_lot["population"].where(by_lot["distance_m"].notna())
-        context.logger.info(
-            "%s within %s m: %.0f of %.0f residents (%.1f%%); average distance %.0f m; "
-            "%.0f residents without one within %s m",
-            parameters.poi_type,
-            parameters.within_m,
-            total["population_with_access"],
-            total["population"],
-            100 * total["population_with_access"] / total["population"]
-            if total["population"]
-            else float("nan"),
-            (reached * by_lot["distance_m"]).sum() / reached.sum()
-            if reached.sum()
-            else float("nan"),
-            total["population"] - reached.sum(),
-            parameters.max_distance_m,
-        )
+            values = population_access(lots, blocks, measured, coverage)
         return {
-            "reimagina_population_access_lots": result_frame(lots, by_lot),
+            "reimagina_population_access_lots": result_frame(lots, values["lots"]),
             "reimagina_population_access_blocks": result_frame(
                 blocks, values["blocks"]
             ),
         }
 
-    distance_handler.__annotations__["parameters"] = DistanceParameters
+    distance_handler.__annotations__["parameters"] = PopulationAccessParameters
     access_handler.__annotations__["parameters"] = PopulationAccessParameters
+    population_access_output = TableOutput(
+        columns=[*identity_columns(), *DISTANCE_COLUMNS, *ACCESS_COLUMNS],
+        geometry="geometry",
+    )
     return [
         metric(
             name="reimagina_nearest_poi_distance",
             description=(
                 "Walking distance over the road network from each lot to the "
-                "nearest POI of one type (poi_type), as GHSCI: points are their own "
-                "entry and polygons are entered anywhere along their outline (a "
+                "nearest POI of each poi_catalog type, as GHSCI: points are their "
+                "own entry and polygons are entered anywhere along their outline (a "
                 "point every 20 m within 30 m of a street); entries join the street "
-                "at their projection on the nearest segment, every street two-way. "
-                "Null beyond max_distance_m."
+                "at their projection on the nearest segment, every street two-way."
             ),
             inputs={
                 "lots": Dependency(lots_output),
@@ -220,17 +159,21 @@ def population_access_metrics(
                 "nodes": Dependency(nodes_output),
                 "edges": Dependency(edges_output),
             },
-            outputs={DISTANCE_OUTPUT: DISTANCE_DECLARATION},
+            outputs={
+                DISTANCE_OUTPUT: TableOutput(
+                    columns=[*identity_columns(), *DISTANCE_COLUMNS]
+                )
+            },
         )(distance_handler),
         metric(
             name="reimagina_population_access",
             description=(
-                "Residents with a POI of one type (poi_type) within within_m over "
-                "the road network, and the average distance to the nearest one "
-                "(ULI 'Percentage of population with access to <poi> within X "
-                "meters' and 'Average distance to closest <poi>'). Lots within "
-                "within_m count their built-form population; blocks add up their "
-                "lots and average their distances weighted by population."
+                "Residents with a POI of each poi_catalog type within its coverage "
+                "distance over the road network, and the average distance to the "
+                "nearest one (ULI 'Percentage of population with access to <poi> "
+                "within X meters' and 'Average distance to closest <poi>'). Lots "
+                "within the distance count their built-form population; blocks add "
+                "up their lots and average their distances weighted by population."
             ),
             inputs={
                 "lots": Dependency("reimagina_built_form_lots"),
@@ -238,8 +181,8 @@ def population_access_metrics(
                 "distances": Dependency(DISTANCE_OUTPUT),
             },
             outputs={
-                "reimagina_population_access_lots": population_access_declaration(),
-                "reimagina_population_access_blocks": population_access_declaration(),
+                "reimagina_population_access_lots": population_access_output,
+                "reimagina_population_access_blocks": population_access_output,
             },
         )(access_handler),
     ]

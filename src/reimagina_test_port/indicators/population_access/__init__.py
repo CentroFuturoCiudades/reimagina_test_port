@@ -1,2 +1,2 @@
-"""Population access to one type of POI over the road network: the share of
-residents within a distance of one and the average distance to the nearest."""
+"""Population access to the poi_catalog types over the road network: residents
+within each type's coverage distance and the average distance to the nearest."""
