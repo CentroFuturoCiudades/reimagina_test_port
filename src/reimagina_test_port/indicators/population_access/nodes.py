@@ -27,9 +27,7 @@ from reimagina_test_port.indicators.population_access.calculation import (
     street_network,
 )
 
-# Today POIs carry their type as amenity_type; the node that selects and labels
-# them will be the one to say which column.
-POI_TYPE_COLUMN = "amenity_type"
+POI_TYPE_COLUMN = "poi_type"
 MAX_DISTANCE_M = 10_000
 DISTANCE_OUTPUT = "reimagina_nearest_poi_distance_lots"
 KEYS = [
@@ -108,7 +106,7 @@ def population_access_metrics(
         poi_type: str = Field(
             min_length=1,
             description=f"Type of the POIs to measure, as their {POI_TYPE_COLUMN} "
-            "(e.g. pharmacy).",
+            "(e.g. public_space).",
         )
         max_distance_m: float = Field(
             default=MAX_DISTANCE_M,

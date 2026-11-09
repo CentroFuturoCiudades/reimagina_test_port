@@ -1715,7 +1715,7 @@
                 "type": "number"
               },
               "poi_type": {
-                "description": "Type of the POIs to measure, as their amenity_type (e.g. pharmacy).",
+                "description": "Type of the POIs to measure, as their poi_type (e.g. public_space).",
                 "minLength": 1,
                 "title": "Poi Type",
                 "type": "string"
@@ -1894,7 +1894,7 @@
                 "type": "number"
               },
               "poi_type": {
-                "description": "Type of the POIs to measure, as their amenity_type (e.g. pharmacy).",
+                "description": "Type of the POIs to measure, as their poi_type (e.g. public_space).",
                 "minLength": 1,
                 "title": "Poi Type",
                 "type": "string"

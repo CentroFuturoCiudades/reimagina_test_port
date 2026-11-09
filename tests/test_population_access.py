@@ -22,7 +22,7 @@ def run(**parameters) -> dict[str, gpd.GeoDataFrame]:
     runner = LocalRunner.from_definitions(
         {"reimagina-test-port": create_snapshot_plugin()}
     )
-    defaults = {"snapshot": "synthetic", "poi_type": "pharmacy", "within_m": 300}
+    defaults = {"snapshot": "synthetic", "poi_type": "health_services", "within_m": 300}
     outputs = runner.run(
         "reimagina_population_access", {"parameters": {**defaults, **parameters}}
     )
