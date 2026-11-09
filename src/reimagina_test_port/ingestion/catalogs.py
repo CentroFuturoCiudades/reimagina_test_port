@@ -19,6 +19,10 @@ from psycopg import sql
 from reimagina_test_port.common.rules import LAND_USES
 from reimagina_test_port.common.schema import UNITS
 from reimagina_test_port.indicators.accessibility.nodes import ACCESSIBILITY_KEYS
+from reimagina_test_port.indicators.population_access.nodes import (
+    ACCESS_KEYS,
+    DISTANCE_KEYS,
+)
 from reimagina_test_port.ingestion.crosswalk import (
     AMENITY_CATEGORIES,
     ESTABLISHMENT_CATEGORIES,
@@ -64,6 +68,14 @@ INDICATORS = {
         key: (f"Accesibilidad a {key[14:]}", "score", "number", "accessibility")
         for key in ACCESSIBILITY_KEYS
         if key.startswith("accessibility_")
+    },
+    **{
+        key: (f"Distancia en metros a {key[11:]}", "m", "number", "population_access")
+        for key in DISTANCE_KEYS
+    },
+    **{
+        key: (f"Poblacion con acceso a {key[23:]}", None, "number", "population_access")
+        for key in ACCESS_KEYS
     },
 }
 INDICATOR_ELEMENT_TYPES = ("lot", "block")

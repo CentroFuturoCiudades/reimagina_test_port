@@ -1,7 +1,7 @@
 """Lyra nodes over a Reimagina scenario: reimagina_scenario (its lots and blocks),
 reimagina_scenario_pois and reimagina_road_network (accessibility inputs), and the
-writes reimagina_scenario_indicators, reimagina_scenario_accessibility and
-reimagina_scenario_write."""
+writes reimagina_scenario_indicators, reimagina_scenario_accessibility,
+reimagina_scenario_population_access and reimagina_scenario_write."""
 
 import logging
 from typing import Any
@@ -29,6 +29,7 @@ from reimagina_test_port.common.schema import (
     UNITS,
     source_declaration,
 )
+from reimagina_test_port.common.vocabulary import DESTINATION_TYPES
 from reimagina_test_port.indicators.accessibility import network
 from reimagina_test_port.indicators.accessibility.nodes import (
     ACCESSIBILITY_KEYS,
@@ -36,6 +37,7 @@ from reimagina_test_port.indicators.accessibility.nodes import (
     NODES_DECLARATION,
     POIS_DECLARATION,
 )
+from reimagina_test_port.indicators.population_access.nodes import PoiType
 from reimagina_test_port.scenario import source, writer
 
 logger = logging.getLogger(__name__)
@@ -308,17 +310,65 @@ def scenario_accessibility(
     )
 
 
+class PopulationAccessWriteParameters(WriteParameters):
+    """Scenario to write, and the poi_catalog types to write."""
+
+    poi_types: list[PoiType] | None = Field(
+        default=None, description="Types to write; all when omitted."
+    )
+
+
+@metric(
+    name="reimagina_scenario_population_access",
+    description=(
+        "Compute a scenario's population access and write it to Reimagina's "
+        "element_state_indicator_value, under the same rules as "
+        "reimagina_scenario_indicators. Only the keys of poi_types are written, so "
+        "a partial run keeps the stored values of the other types."
+    ),
+    inputs={
+        "lots": Dependency("reimagina_population_access_lots"),
+        "blocks": Dependency("reimagina_population_access_blocks"),
+    },
+    outputs={"reimagina_scenario_population_access": WRITE_DECLARATION},
+)
+def scenario_population_access(
+    parameters: PopulationAccessWriteParameters,
+    lots: gpd.GeoDataFrame,
+    blocks: gpd.GeoDataFrame,
+    context: RunContext,
+) -> pd.DataFrame:
+    """Population access values of the requested types, in their own transaction."""
+    poi_types = (
+        DESTINATION_TYPES if parameters.poi_types is None else parameters.poi_types
+    )
+    keys = {
+        f"{prefix}{poi_type}": "number"
+        for poi_type in poi_types
+        for prefix in ("distance_m_", "population_with_access_")
+    }
+    return write_group(
+        parameters,
+        {"lot": lots, "block": blocks},
+        keys,
+        node="reimagina_scenario_population_access",
+        log=context.logger,
+    )
+
+
 @metric(
     name="reimagina_scenario_write",
     description=(
-        "Compute and write a scenario's built-form indicators and accessibility, "
-        "as exe_reimagina's model job does: reimagina_scenario_indicators and "
-        "reimagina_scenario_accessibility, each in its own transaction. The result "
-        "adds up both."
+        "Compute and write a scenario's built-form indicators, accessibility and "
+        "population access: reimagina_scenario_indicators, "
+        "reimagina_scenario_accessibility and "
+        "reimagina_scenario_population_access, each in its own transaction. The "
+        "result adds up all three."
     ),
     inputs={
         "indicators": Dependency("reimagina_scenario_indicators"),
         "accessibility": Dependency("reimagina_scenario_accessibility"),
+        "population_access": Dependency("reimagina_scenario_population_access"),
     },
     outputs={"reimagina_scenario_write": WRITE_DECLARATION},
 )
@@ -326,19 +376,16 @@ def scenario_write(
     parameters: WriteParameters,
     indicators: pd.DataFrame,
     accessibility: pd.DataFrame,
+    population_access: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Final node: both writes' summary in one row."""
-    first, second = indicators.iloc[0], accessibility.iloc[0]
+    """Final node: the writes' summary in one row."""
+    writes = pd.concat([indicators, accessibility, population_access])
     return pd.DataFrame(
         [
             {
-                "elements": int(first["elements"]),
-                "values_written": int(
-                    first["values_written"] + second["values_written"]
-                ),
-                "values_cleared": int(
-                    first["values_cleared"] + second["values_cleared"]
-                ),
+                "elements": int(indicators["elements"].iloc[0]),
+                "values_written": int(writes["values_written"].sum()),
+                "values_cleared": int(writes["values_cleared"].sum()),
                 "dry_run": parameters.dry_run,
             }
         ]
