@@ -2853,15 +2853,11 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Compute a scenario's population access and write it to Reimagina's element_state_indicator_value, under the same rules as reimagina_scenario_indicators. Only the keys of poi_types are written, so a partial run keeps the stored values of the other types.",
+      "description": "Compute a scenario's population access and write it to Reimagina's element_state_indicator_value, under the same rules as reimagina_scenario_indicators. Only blocks are written, and only the keys of poi_types, so a partial run keeps the stored values of the other types.",
       "inputs": {
         "blocks": {
           "arguments": {},
           "output": "reimagina_population_access_blocks"
-        },
-        "lots": {
-          "arguments": {},
-          "output": "reimagina_population_access_lots"
         }
       },
       "name": "reimagina_scenario_population_access",

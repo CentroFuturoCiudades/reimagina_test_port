@@ -22,7 +22,10 @@ from pydantic import Field
 
 from reimagina_test_port.common.nodes import column, timed
 from reimagina_test_port.common.schema import IDENTITY, identity_columns
-from reimagina_test_port.common.vocabulary import DESTINATION_TYPES
+from reimagina_test_port.common.vocabulary import (
+    DESTINATION_COVERAGE_M,
+    DESTINATION_TYPES,
+)
 from reimagina_test_port.indicators.accessibility.model import resolve_access_crs
 from reimagina_test_port.indicators.population_access.calculation import (
     nearest_distances,
@@ -121,12 +124,17 @@ def population_access_metrics(
         distances: pd.DataFrame,
         context: RunContext,
     ) -> dict[str, gpd.GeoDataFrame]:
-        coverage = coverage_m()
+        catalog = coverage_m()
+        missing = [key for key in requested(parameters) if key not in catalog]
+        if missing:
+            context.logger.warning(
+                "poi_catalog types without coverage_m, using the default: %s", missing
+            )
+        coverage = {**DESTINATION_COVERAGE_M, **catalog}
         by_lot = distances.set_index("id").reindex(lots["id"])
         measured = {
             poi_type: by_lot[f"distance_m_{poi_type}"].to_numpy()
             for poi_type in requested(parameters)
-            if poi_type in coverage
         }
         with timed("population access", context.logger):
             values = population_access(lots, blocks, measured, coverage)

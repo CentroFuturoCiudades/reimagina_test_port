@@ -5,6 +5,7 @@ test creates and drops its own. See docs/verification.md for the container.
 """
 
 import importlib.util
+import logging
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -595,12 +596,23 @@ def test_write_population_access(dsn):
     write(BASELINE)
     values = stored(dsn, BASELINE)
     assert values[(BLOCK, "population_with_access_health_services")][0] == 93
-    assert values[(HOUSE, "distance_m_health_services")][0] > 0
-    # Active, but without coverage_m: not measured, not stored.
+    assert values[(BLOCK, "distance_m_health_services")][0] > 0
+    # Only blocks are written.
+    assert (HOUSE, "distance_m_health_services") not in values
+    # No POIs of the type: no distance.
     assert (BLOCK, "distance_m_public_space") not in values
     # A partial run keeps the values of the other types.
     run_metric("reimagina_scenario_population_access", BASELINE, poi_types=["health"])
     assert stored(dsn, BASELINE) == values
+
+
+def test_population_access_without_coverage_uses_the_default(dsn, caplog):
+    # The seeded poi_catalog has no coverage_m.
+    with caplog.at_level(logging.WARNING):
+        write(BASELINE)
+    assert "without coverage_m" in caplog.text
+    access = stored(dsn, BASELINE)[(BLOCK, "population_with_access_health_services")]
+    assert access[0] == 93
 
 
 def test_write_clears_values_back_to_baseline(dsn):

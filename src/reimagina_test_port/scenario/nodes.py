@@ -323,22 +323,18 @@ class PopulationAccessWriteParameters(WriteParameters):
     description=(
         "Compute a scenario's population access and write it to Reimagina's "
         "element_state_indicator_value, under the same rules as "
-        "reimagina_scenario_indicators. Only the keys of poi_types are written, so "
-        "a partial run keeps the stored values of the other types."
+        "reimagina_scenario_indicators. Only blocks are written, and only the keys "
+        "of poi_types, so a partial run keeps the stored values of the other types."
     ),
-    inputs={
-        "lots": Dependency("reimagina_population_access_lots"),
-        "blocks": Dependency("reimagina_population_access_blocks"),
-    },
+    inputs={"blocks": Dependency("reimagina_population_access_blocks")},
     outputs={"reimagina_scenario_population_access": WRITE_DECLARATION},
 )
 def scenario_population_access(
     parameters: PopulationAccessWriteParameters,
-    lots: gpd.GeoDataFrame,
     blocks: gpd.GeoDataFrame,
     context: RunContext,
 ) -> pd.DataFrame:
-    """Population access values of the requested types, in their own transaction."""
+    """Block values of the requested types, in their own transaction."""
     poi_types = (
         DESTINATION_TYPES if parameters.poi_types is None else parameters.poi_types
     )
@@ -349,7 +345,7 @@ def scenario_population_access(
     }
     return write_group(
         parameters,
-        {"lot": lots, "block": blocks},
+        {"block": blocks},
         keys,
         node="reimagina_scenario_population_access",
         log=context.logger,
