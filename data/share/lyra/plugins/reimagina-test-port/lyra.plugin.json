@@ -1845,6 +1845,321 @@
       "spatial_inputs": {}
     },
     {
+      "description": "Diversity of each poi_catalog type's POIs within walking distance (ULI 'Diversidad de <tipo> a 500 m'), as GHSCI: the Shannon entropy of the subcategories of the POIs within the type's diversity_m over the road network, over ln k, k being how many subcategories it has. Lots count the POIs their entries reach, walked as in reimagina_nearest_poi_distance; blocks average their lots weighted by population.",
+      "inputs": {
+        "blocks": {
+          "arguments": {},
+          "output": "reimagina_built_form_blocks"
+        },
+        "edges": {
+          "arguments": {},
+          "output": "reimagina_road_network_edges"
+        },
+        "lots": {
+          "arguments": {},
+          "output": "reimagina_built_form_lots"
+        },
+        "nodes": {
+          "arguments": {},
+          "output": "reimagina_road_network_nodes"
+        },
+        "pois": {
+          "arguments": {},
+          "output": "reimagina_scenario_pois"
+        }
+      },
+      "name": "reimagina_poi_diversity",
+      "outputs": {
+        "reimagina_poi_diversity_blocks": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_public_space",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_fresh_food",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_food",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_convenience_store",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_manufacturing",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_primary_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_health",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_health_services",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_care",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        },
+        "reimagina_poi_diversity_lots": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_public_space",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_fresh_food",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_food",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_convenience_store",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_manufacturing",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_primary_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_health",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_health_services",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_care",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the subcategories of the type's POIs within its diversity radius over the road network, over ln k (0 = one subcategory or none, 1 = all k equally); for a block, its lots' average weighted by population. Null if the type has no subcategories or was not measured.",
+              "name": "diversity_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "DiversityParameters": {
+            "additionalProperties": false,
+            "description": "The source's parameter, plus the poi_catalog types to measure.",
+            "properties": {
+              "poi_types": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "enum": [
+                        "public_space",
+                        "fresh_food",
+                        "food",
+                        "convenience_store",
+                        "petrol_station",
+                        "manufacturing",
+                        "education",
+                        "primary_education",
+                        "health",
+                        "health_services",
+                        "care",
+                        "community_culture_recreation"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Types to measure; all when omitted.",
+                "title": "Poi Types"
+              },
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id"
+            ],
+            "title": "DiversityParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/DiversityParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_poi_diversity_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
       "description": "Residents with a POI of each poi_catalog type within its coverage distance over the road network, and the average distance to the nearest one (ULI 'Percentage of population with access to <poi> within X meters' and 'Average distance to closest <poi>'). Lots within the distance count their built-form population; blocks add up their lots and average their distances weighted by population.",
       "inputs": {
         "blocks": {

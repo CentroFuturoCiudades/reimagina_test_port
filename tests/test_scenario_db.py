@@ -469,6 +469,38 @@ def test_pois_fall_back_to_baseline(dsn):
     assert fork["capacity"].isna().all()
 
 
+def test_pois_take_their_subcategory(dsn):
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            "UPDATE reimagina_urbano.poi_catalog SET params = %s "
+            "WHERE poi_type = 'health_services'",
+            (
+                (
+                    '{"diversity_m": 500, "subcategories": ['
+                    '{"name": "clinic", "when": {"category": "primary_healthcare"}}, '
+                    '{"name": "pharmacy", "when": {"scian_code": "464111"}}]}'
+                ),
+            ),
+        )
+    pois = scenario.read_pois(BASELINE)
+    assert list(zip(pois["poi_type"], pois["subcategory"], strict=True)) == [
+        ("health", pd.NA),
+        ("health_services", "clinic"),
+        ("health_services", "pharmacy"),
+    ]
+    assert scenario.read_diversity() == {"health_services": (500.0, 2)}
+    # A malformed subcategory only leaves the POIs without one; their types stay.
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            "UPDATE reimagina_urbano.poi_catalog SET params = "
+            """'{"subcategories": [{"name": "x", "when": {"category": {"in": "x"}}}]}' """
+            "WHERE poi_type = 'health_services'"
+        )
+    pois = scenario.read_pois(BASELINE)
+    assert list(pois["poi_type"]) == ["health", "health_services", "health_services"]
+    assert pois["subcategory"].isna().all()
+
+
 def test_road_network_uri(dsn, network_uri):
     assert scenario.read_road_network_uri(FORK) == network_uri
     with psycopg.connect(dsn) as conn:

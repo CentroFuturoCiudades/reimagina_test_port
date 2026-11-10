@@ -14,10 +14,14 @@ Production (``create_plugin``) runs over Reimagina scenarios; the snapshot graph
 from lyra.sdk import PluginDefinition
 
 from reimagina_test_port import snapshot
-from reimagina_test_port.common.vocabulary import DESTINATION_COVERAGE_M
+from reimagina_test_port.common.vocabulary import (
+    DESTINATION_COVERAGE_M,
+    DESTINATION_DIVERSITY,
+)
 from reimagina_test_port.indicators.accessibility.nodes import accessibility_metric
 from reimagina_test_port.indicators.built_form import nodes as built_form_nodes
 from reimagina_test_port.indicators.population_access.nodes import (
+    poi_diversity_metric,
     population_access_metrics,
 )
 from reimagina_test_port.ingestion import nodes as ingestion_nodes
@@ -50,6 +54,13 @@ def create_plugin() -> PluginDefinition:
                 "reimagina_road_network_nodes",
                 "reimagina_road_network_edges",
                 scenario_source.read_coverage_m,
+            ),
+            poi_diversity_metric(
+                scenario_nodes.ScenarioParameters,
+                "reimagina_scenario_pois",
+                "reimagina_road_network_nodes",
+                "reimagina_road_network_edges",
+                scenario_source.read_diversity,
             ),
             scenario_nodes.scenario_indicators,
             scenario_nodes.scenario_accessibility,
@@ -86,6 +97,13 @@ def create_snapshot_plugin() -> PluginDefinition:
                 "reimagina_prepared_network_nodes",
                 "reimagina_prepared_network_edges",
                 lambda: DESTINATION_COVERAGE_M,
+            ),
+            poi_diversity_metric(
+                snapshot.SnapshotParameters,
+                "reimagina_prepared_pois",
+                "reimagina_prepared_network_nodes",
+                "reimagina_prepared_network_edges",
+                lambda: DESTINATION_DIVERSITY,
             ),
         ]
     )

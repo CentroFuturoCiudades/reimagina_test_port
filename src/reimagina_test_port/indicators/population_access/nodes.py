@@ -3,6 +3,8 @@
 - reimagina_nearest_poi_distance: metres from each lot to its nearest POI of each type.
 - reimagina_population_access: residents within each type's coverage distance, and the
   average distance to its nearest POI, per lot and per block.
+- reimagina_poi_diversity: entropy of the subcategories of each type's POIs within
+  its diversity radius, per lot and per block.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -24,13 +26,18 @@ from reimagina_test_port.common.nodes import column, timed
 from reimagina_test_port.common.schema import IDENTITY, identity_columns
 from reimagina_test_port.common.vocabulary import (
     DESTINATION_COVERAGE_M,
+    DESTINATION_DIVERSITY,
     DESTINATION_TYPES,
 )
 from reimagina_test_port.indicators.accessibility.model import resolve_access_crs
-from reimagina_test_port.indicators.population_access.calculation import (
+from reimagina_test_port.indicators.population_access.access_calculation import (
     nearest_distances,
     population_access,
     street_network,
+)
+from reimagina_test_port.indicators.population_access.diversity_calculation import (
+    diversity,
+    poi_diversity,
 )
 
 POI_TYPE_COLUMN = "poi_type"
@@ -194,3 +201,116 @@ def population_access_metrics(
             },
         )(access_handler),
     ]
+
+
+DIVERSITY_KEYS = [f"diversity_{poi_type}" for poi_type in DESTINATION_TYPES]
+DIVERSITY_COLUMNS = [
+    column(
+        key,
+        "number",
+        Unit.RATIO,
+        "Shannon entropy of the subcategories of the type's POIs within its "
+        "diversity radius over the road network, over ln k (0 = one subcategory or "
+        "none, 1 = all k equally); for a block, its lots' average weighted by "
+        "population. Null if the type has no subcategories or was not measured.",
+    )
+    for key in DIVERSITY_KEYS
+]
+
+
+def poi_diversity_metric(
+    parameters_type: type[MetricParameters],
+    pois_output: str,
+    nodes_output: str,
+    edges_output: str,
+    diversity_params: Callable[[], Mapping[str, tuple[float, int]]],
+):
+    """The diversity node over one source's POIs and road network, with each type's
+    radius and number of subcategories."""
+
+    class DiversityParameters(parameters_type):  # ty: ignore[unsupported-base]
+        """The source's parameter, plus the poi_catalog types to measure."""
+
+        poi_types: list[PoiType] | None = Field(
+            default=None, description="Types to measure; all when omitted."
+        )
+
+    def diversity_handler(
+        parameters,
+        lots: gpd.GeoDataFrame,
+        blocks: gpd.GeoDataFrame,
+        pois: gpd.GeoDataFrame,
+        nodes: pd.DataFrame,
+        edges: pd.DataFrame,
+        context: RunContext,
+    ) -> dict[str, gpd.GeoDataFrame]:
+        requested = (
+            DESTINATION_TYPES if parameters.poi_types is None else parameters.poi_types
+        )
+        catalog = diversity_params()
+        missing = [
+            key
+            for key in requested
+            if key in DESTINATION_DIVERSITY and key not in catalog
+        ]
+        if missing:
+            context.logger.warning(
+                "poi_catalog types without diversity_m or subcategories, using the "
+                "default: %s",
+                missing,
+            )
+        params = {**DESTINATION_DIVERSITY, **catalog}
+        selected = {}
+        for poi_type in requested:
+            if poi_type not in params:
+                continue
+            of_type = pois[pois[POI_TYPE_COLUMN] == poi_type]
+            unclassified = int(of_type["subcategory"].isna().sum())
+            if unclassified:
+                context.logger.warning(
+                    "%s POIs of %s have no subcategory and are left out",
+                    unclassified,
+                    poi_type,
+                )
+            selected[poi_type] = of_type[of_type["subcategory"].notna()]
+        crs = resolve_access_crs(lots)
+        with timed("road network", context.logger):
+            network = street_network(nodes, edges)
+        with timed("POI diversity", context.logger):
+            values = diversity(
+                lots, blocks, poi_diversity(lots, selected, network, crs, params)
+            )
+        return {
+            f"reimagina_poi_diversity_{name}": source[IDENTITY + ["geometry"]].join(
+                values[name].reindex(columns=DIVERSITY_KEYS)
+            )
+            for name, source in (("lots", lots), ("blocks", blocks))
+        }
+
+    diversity_handler.__annotations__["parameters"] = DiversityParameters
+    output = TableOutput(
+        columns=[*identity_columns(), *DIVERSITY_COLUMNS], geometry="geometry"
+    )
+    return metric(
+        name="reimagina_poi_diversity",
+        description=(
+            "Diversity of each poi_catalog type's POIs within walking distance "
+            "(ULI 'Diversidad de <tipo> a 500 m'), as GHSCI: the Shannon entropy of "
+            "the subcategories of the POIs within the type's diversity_m over the "
+            "road network, over ln k, k being how many subcategories it has. Lots "
+            "count the POIs their entries reach, walked as in "
+            "reimagina_nearest_poi_distance; blocks average their lots weighted by "
+            "population."
+        ),
+        inputs={
+            "lots": Dependency("reimagina_built_form_lots"),
+            "blocks": Dependency("reimagina_built_form_blocks"),
+            "pois": Dependency(pois_output),
+            "nodes": Dependency(nodes_output),
+            "edges": Dependency(edges_output),
+        },
+        outputs={
+            "reimagina_poi_diversity_lots": output,
+            "reimagina_poi_diversity_blocks": output,
+        },
+    )(diversity_handler)

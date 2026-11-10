@@ -41,6 +41,7 @@ pois = gpd.GeoDataFrame(
             "casino",
         ],
         "capacity": [None, 2.0, None, None, None],
+        "subcategory": pd.array([None, None, None, "pharmacy", None], dtype="string"),
     },
     geometry=[
         box(x, y, x + 10, y + 10)
