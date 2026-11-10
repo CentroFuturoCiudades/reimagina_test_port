@@ -93,20 +93,13 @@ _ATTRIBUTES_QUERY = sql.SQL(
 # evaluates them (common.conditions) over the present amenity and establishment
 # elements, with the effective values of the keys the rules read.
 _POI_RULES_QUERY = sql.SQL(
-    "SELECT poi_type, rule_criteria, params -> 'subcategories' FROM {poi_catalog} "
+    "SELECT poi_type, rule_criteria FROM {poi_catalog} "
     "WHERE status = 'active' ORDER BY poi_type"
 ).format(**_TABLES)
 
 _POI_COVERAGE_QUERY = sql.SQL(
     "SELECT poi_type, (params ->> 'coverage_m')::float FROM {poi_catalog} "
     "WHERE status = 'active' AND params ->> 'coverage_m' IS NOT NULL"
-).format(**_TABLES)
-
-_POI_DIVERSITY_QUERY = sql.SQL(
-    "SELECT poi_type, (params ->> 'diversity_m')::float, "
-    "jsonb_array_length(params -> 'subcategories') FROM {poi_catalog} "
-    "WHERE status = 'active' AND params ->> 'diversity_m' IS NOT NULL "
-    "AND jsonb_typeof(params -> 'subcategories') = 'array'"
 ).format(**_TABLES)
 
 # Starts from those attribute values and only then looks up their state, instead
@@ -205,58 +198,26 @@ def _geometry(values: pd.Series) -> gpd.GeoSeries:
     return gpd.GeoSeries.from_wkb(values.map(bytes, na_action="ignore"), crs=CRS)
 
 
-def _json(value: Any) -> Any:
-    return json.loads(value) if isinstance(value, str) else value
-
-
-def _destination_rules(
-    cur: psycopg.Cursor,
-) -> dict[str, tuple[dict[str, Any], list[dict[str, Any]]]]:
-    """Rule and subcategories of the active poi_catalog types the model has outputs
-    for."""
+def _destination_rules(cur: psycopg.Cursor) -> dict[str, dict[str, Any]]:
+    """Rules of the active poi_catalog types the model has outputs for."""
     cur.execute(_POI_RULES_QUERY)
     rules = {}
-    for poi_type, rule, subcategories in cur.fetchall():
+    for poi_type, rule in cur.fetchall():
         if poi_type not in DESTINATION_TYPES:
             logger.warning(
                 "poi_catalog type without accessibility outputs: %s", poi_type
             )
             continue
-        rules[poi_type] = (_json(rule), _json(subcategories) or [])
+        rules[poi_type] = json.loads(rule) if isinstance(rule, str) else rule
     return rules
 
 
-def _subcategory(
-    poi_type: str, subcategories: list[dict[str, Any]], element: dict[str, Any]
-) -> str | None:
-    """The first subcategory whose ``when`` the element meets. A malformed one only
-    leaves the element without subcategory: its type, and accessibility, stay."""
-    try:
-        return next(
-            (
-                each["name"]
-                for each in subcategories
-                if conditions.evaluate(each["when"], element)
-            ),
-            None,
-        )
-    except (conditions.ConditionError, KeyError) as exc:
-        logger.error("poi_catalog subcategories of %s are malformed: %s", poi_type, exc)
-        return None
-
-
-def _matches(
-    rules: dict[str, tuple[dict[str, Any], list[dict[str, Any]]]],
-    element: dict[str, Any],
-) -> list[tuple[str, str | None]]:
-    """Types whose rule the element meets, each with its subcategory."""
+def _matches(rules: dict[str, dict[str, Any]], element: dict[str, Any]) -> list[str]:
     matched = []
-    for poi_type, (rule, subcategories) in rules.items():
+    for poi_type, rule in rules.items():
         try:
             if conditions.evaluate(rule, element):
-                matched.append(
-                    (poi_type, _subcategory(poi_type, subcategories, element))
-                )
+                matched.append(poi_type)
         except conditions.ConditionError as exc:
             logger.error("poi_catalog rule of %s is malformed: %s", poi_type, exc)
     return matched
@@ -264,20 +225,19 @@ def _matches(
 
 def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
     """Present amenities and establishments, one row per poi_catalog type whose
-    rule they meet: id, poi_type, capacity, subcategory, geometry."""
+    rule they meet: id, poi_type, capacity, geometry."""
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
         params = {"scenario": scenario_id, "baseline": _baseline_id(cur, scenario_id)}
         rules = _destination_rules(cur)
         own: set[str] = set()
-        for poi_type, (rule, subcategories) in rules.items():
-            for condition in [rule, *(each.get("when", {}) for each in subcategories)]:
-                rule_keys, parent_keys = conditions.keys(condition)
-                own |= rule_keys - {"type"}
-                if parent_keys:
-                    # Only the element's own values are read; parent keys are missing.
-                    logger.warning(
-                        "%s reads its parent's %s", poi_type, sorted(parent_keys)
-                    )
+        for poi_type, rule in rules.items():
+            rule_keys, parent_keys = conditions.keys(rule)
+            own |= rule_keys - {"type"}
+            if parent_keys:
+                # Only the element's own values are read; parent keys are missing.
+                logger.warning(
+                    "%s reads its parent's %s", poi_type, sorted(parent_keys)
+                )
         params["keys"] = sorted(own)
         cur.execute(_POI_ELEMENTS_QUERY, params)
         elements = cur.fetchall()
@@ -290,15 +250,14 @@ def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
             value_type, num, text, js
         )
     rows = [
-        (element_id, poi_type, subcategory, geometry)
+        (element_id, poi_type, geometry)
         for element_id, element_type, geometry in elements
-        for poi_type, subcategory in _matches(
+        for poi_type in _matches(
             rules, {**attributes.get(element_id, {}), "type": element_type}
         )
     ]
-    frame = pd.DataFrame(rows, columns=["id", "poi_type", "subcategory", "geometry"])
+    frame = pd.DataFrame(rows, columns=["id", "poi_type", "geometry"])
     frame.insert(2, "capacity", pd.Series(dtype="float64", index=frame.index))
-    frame["subcategory"] = frame["subcategory"].astype("string")
     return gpd.GeoDataFrame(
         frame.drop(columns="geometry"), geometry=_geometry(frame["geometry"]), crs=CRS
     )
@@ -309,14 +268,6 @@ def read_coverage_m() -> dict[str, float]:
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
         cur.execute(_POI_COVERAGE_QUERY)
         return dict(cur.fetchall())
-
-
-def read_diversity() -> dict[str, tuple[float, int]]:
-    """Diversity radius, in metres, and number of subcategories of the active
-    poi_catalog types that have both."""
-    with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
-        cur.execute(_POI_DIVERSITY_QUERY)
-        return {poi_type: (radius, count) for poi_type, radius, count in cur}
 
 
 def read_road_network_uri(scenario_id: str) -> str | None:

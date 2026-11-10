@@ -1,22 +1,21 @@
-"""Diversity of a type's POIs within walking distance of each lot (ULI "Diversidad
-de <tipo> a 500 m"), as GHSCI's ``normalised_entropy``: the Shannon entropy of the
-subcategories of the POIs reached, over its maximum,
+"""Diversity of the POIs within walking distance of each lot, by poi_type: the
+Shannon entropy of the types of the POIs reached, over its maximum,
 
     D = -sum(p_i ln p_i) / ln k,
 
-where p_i is the share of the POIs reached that are of subcategory i and k is how
-many subcategories the type has. A lot reaching nothing, or only one subcategory,
-scores 0; one reaching as many POIs of each of the k scores 1. A POI counts once,
-however many entries it has.
+where p_i is the share of the POIs reached that are of type i and k is how many
+types are counted. A lot reaching nothing, or only one type, scores 0; one reaching
+as many POIs of each of the k types scores 1. A POI of several types counts once in
+each, however many entries it has.
 
-A POI is reached when the walk to it is within the type's radius, walked as in
+A POI is reached when the walk to it is within the radius, walked as in
 ``access_calculation``: from one of the lot's entries to one of the POI's, over the
 street network. A block averages its lots weighted by population.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Sequence
 
 import geopandas as gpd
 import numpy as np
@@ -39,10 +38,10 @@ def reachable(
     destinations: pd.DataFrame,
     network: StreetNetwork,
     radius: float,
-) -> pd.DataFrame:
+) -> Iterator[pd.DataFrame]:
     """Pairs of ``origin`` and ``destination`` owners whose walk is within
-    ``radius``: one Dijkstra per destination, up to ``radius``, from a node of its
-    own joined to its entries' nodes."""
+    ``radius``, for ``CHUNK`` destinations at a time: one Dijkstra per destination,
+    up to ``radius``, from a node of its own joined to its entries' nodes."""
     owners = np.unique(destinations["owner"])
     source = network.nodes + np.searchsorted(owners, destinations["owner"])
     segment = destinations["segment"].to_numpy()
@@ -90,8 +89,21 @@ def reachable(
             ),
         }
     )
-    ends = ends[ends["cost"] <= radius]
-    pairs = []
+    ends = (
+        ends[ends["cost"] <= radius]
+        .groupby(["node", "origin"], as_index=False)["cost"]
+        .min()
+    )
+    # A POI on the same segment is reached along it, without going to a node.
+    same = origins.merge(destinations, on="segment", suffixes=("", "_poi"))
+    direct = (
+        (same["along_start"] - same["along_start_poi"]).abs()
+        + same["offset"]
+        + same["offset_poi"]
+    )
+    same = same.loc[direct <= radius, ["owner", "owner_poi"]].set_axis(
+        ["origin", "destination"], axis=1
+    )
     for first in range(0, len(owners), CHUNK):
         sources = network.nodes + np.arange(first, min(first + CHUNK, len(owners)))
         walk = dijkstra(graph, directed=True, indices=sources, limit=radius)
@@ -103,77 +115,70 @@ def reachable(
                 "walk": walk[row, node],
             }
         ).merge(ends, on="node")
-        pairs.append(
-            near.loc[near["walk"] + near["cost"] <= radius, ["origin", "destination"]]
-        )
-    # A POI on the same segment is reached along it, without going to a node.
-    same = origins.merge(destinations, on="segment", suffixes=("", "_poi"))
-    direct = (
-        (same["along_start"] - same["along_start_poi"]).abs()
-        + same["offset"]
-        + same["offset_poi"]
-    )
-    pairs.append(
-        same.loc[direct <= radius, ["owner", "owner_poi"]].set_axis(
-            ["origin", "destination"], axis=1
-        )
-    )
-    return pd.concat(pairs).drop_duplicates(ignore_index=True)
+        chunk = owners[first : first + CHUNK]
+        yield pd.concat(
+            [
+                near.loc[
+                    near["walk"] + near["cost"] <= radius, ["origin", "destination"]
+                ],
+                same[same["destination"].isin(chunk)],
+            ]
+        ).drop_duplicates(ignore_index=True)
 
 
 def poi_diversity(
     lots: gpd.GeoDataFrame,
-    pois: Mapping[str, gpd.GeoDataFrame],
+    pois: gpd.GeoSeries,
+    types: Sequence[str],
     network: StreetNetwork,
     crs: str,
-    params: Mapping[str, tuple[float, int]],
-) -> dict[str, np.ndarray]:
-    """``{poi_type: D}`` per lot, in order; NaN without geometry. ``pois`` holds each
-    type's POIs with their ``subcategory``, ``params`` its radius in metres and how
-    many subcategories it has. The lots' entries are built once."""
+    radius: float,
+    k: int,
+) -> np.ndarray:
+    """D per lot, in order; NaN without geometry. ``pois`` has one row per POI and
+    type, ``types`` its poi_type; ``radius`` is in metres and ``k`` is how many
+    types are counted. Rows at the same place are walked once."""
     origins = entries(
         gpd.GeoSeries(lots.geometry.to_numpy(), crs=lots.crs).to_crs(crs), network
     )
-    located = np.full(len(lots), np.nan)
-    located[origins["owner"].unique()] = 0.0
-    result = {}
-    for poi_type, frame in pois.items():
-        radius, count = params[poi_type]
-        values = located.copy()
-        result[poi_type] = values
-        if frame.empty or count < 2:
-            continue
-        pairs = reachable(
-            origins, entries(frame.geometry.to_crs(crs), network), network, radius
-        )
-        if pairs.empty:
-            continue
-        subcategory = frame["subcategory"].to_numpy()[pairs["destination"].to_numpy()]
-        reached = pd.crosstab(pairs["origin"].to_numpy(), subcategory)
-        share = reached.div(reached.sum(axis=1), axis=0)
-        # As sum(p ln 1/p): a negated sum of zeros would give -0.0.
-        entropy = (share * np.log(1 / share.where(share > 0))).sum(axis=1)
-        values[entropy.index.to_numpy()] = entropy.to_numpy() / np.log(count)
-    return result
+    values = np.full(len(lots), np.nan)
+    values[origins["owner"].unique()] = 0.0
+    if pois.empty or k < 2:
+        return values
+    place, places = pd.factorize(pois.to_wkb())
+    kind, kinds = pd.factorize(np.asarray(types))
+    rows = pd.DataFrame({"destination": place, "kind": kind})
+    # POIs reached by lot and type, added up a chunk of places at a time.
+    counts = np.zeros((len(lots), len(kinds)))
+    for pairs in reachable(
+        origins,
+        entries(gpd.GeoSeries.from_wkb(places, crs=pois.crs).to_crs(crs), network),
+        network,
+        radius,
+    ):
+        found = pairs.merge(rows, on="destination")
+        counts += np.bincount(
+            found["origin"].to_numpy() * len(kinds) + found["kind"].to_numpy(),
+            minlength=counts.size,
+        ).reshape(counts.shape)
+    total = counts.sum(axis=1)
+    reached = total > 0
+    share = counts[reached] / total[reached, None]
+    # As sum(p ln 1/p), 0 where p = 0: a negated sum of zeros would give -0.0.
+    surprise = np.log(np.divide(1, share, where=share > 0, out=np.ones_like(share)))
+    values[reached] = (share * surprise).sum(axis=1) / np.log(k)
+    return values
 
 
 def diversity(
-    lots: gpd.GeoDataFrame,
-    blocks: gpd.GeoDataFrame,
-    values: Mapping[str, np.ndarray],
-) -> dict[str, pd.DataFrame]:
-    """``diversity_<type>`` by lot and by block. ``values`` is ``poi_diversity`` of
-    ``lots``. A block averages its lots weighted by population, over lots with a
-    value; blocks without residents stay null."""
+    lots: gpd.GeoDataFrame, blocks: gpd.GeoDataFrame, values: np.ndarray
+) -> dict[str, np.ndarray]:
+    """By lot and by block, in order. ``values`` is ``poi_diversity`` of ``lots``.
+    A block averages its lots weighted by population, over lots with a value;
+    blocks without residents stay null."""
     population = pd.to_numeric(lots["population"]).astype("float64")
-    by_lot = pd.DataFrame(
-        {f"diversity_{poi_type}": value for poi_type, value in values.items()},
-        index=lots.index,
-    )
-    weights = by_lot.notna().mul(population, axis=0)
-    weighted = by_lot.mul(population, axis=0).groupby(lots["parent_id"]).sum()
-    by_block = weighted / weights.groupby(lots["parent_id"]).sum()
-    return {
-        "lots": by_lot,
-        "blocks": by_block.reindex(blocks["id"]).set_axis(blocks.index),
-    }
+    by_lot = pd.Series(values, index=lots.index)
+    weighted = (by_lot * population).groupby(lots["parent_id"]).sum()
+    weights = population.where(by_lot.notna()).groupby(lots["parent_id"]).sum()
+    by_block = (weighted / weights).reindex(blocks["id"])
+    return {"lots": by_lot.to_numpy(), "blocks": by_block.to_numpy()}

@@ -44,37 +44,41 @@ def test_reachable_walks_like_the_nearest_distance():
     pois = entries(points((550, 5), (1100, 5)), network)
     # Along the street: 50 + 10 + 5 = 65 and 400 + 10 + 5 = 415 m; across the
     # node at 1000 m: 500 + 10 + 100 + 5 = 615 and 950 + 10 + 5 = 965 m.
-    pairs = reachable(lots, pois, network, 500)
+    pairs = pd.concat(reachable(lots, pois, network, 500))
     assert set(map(tuple, pairs.to_numpy())) == {(0, 0), (1, 1)}
-    pairs = reachable(lots, pois, network, 700)
+    pairs = pd.concat(reachable(lots, pois, network, 700))
     assert set(map(tuple, pairs.to_numpy())) == {(0, 0), (1, 1), (0, 1)}
 
 
-def test_entropy_of_the_subcategories_reached():
+def test_entropy_of_the_types_reached():
     lots = gpd.GeoDataFrame(
         geometry=[Point(500, 10), Point(1500, 10), Point(2500, 10), None], crs=CRS
     )
-    pois = gpd.GeoDataFrame(
-        {"subcategory": ["a", "b", "a", "a", "a", "b", "a"]},
-        geometry=[
+    pois = gpd.GeoSeries(
+        [
             # Around the first lot, one of a and one of b.
             Point(480, 5),
             Point(520, 5),
-            # Around the second, three of a and one of b; the box is one POI,
-            # however many entries its outline has.
+            # Around the second, three of a and one of b: the POI at 1470 m is of
+            # both types, and the box is one POI however many entries it has.
             Point(1450, 5),
             Point(1470, 5),
+            Point(1470, 5),
             box(1520, 2, 1540, 8),
-            Point(1550, 5),
+            # Around the third, only one of b.
+            Point(2520, 5),
             # Far from every lot.
             Point(2900, 5),
         ],
         crs=CRS,
     )
-    values = poi_diversity(lots, {"x": pois}, street(), CRS, {"x": (100, 4)})["x"]
+    types = ["a", "b", "a", "a", "b", "a", "b", "a"]
+    values = poi_diversity(lots, pois, types, street(), CRS, 100, 4)
     np.testing.assert_allclose(
         values, [normalised(1, 1, k=4), normalised(3, 1, k=4), 0, np.nan]
     )
+    # One type reached is 0, not -0.0.
+    assert not np.signbit(values[2])
     assert normalised(1, 1, k=4) == pytest.approx(0.5)
 
 
@@ -86,23 +90,23 @@ def test_blocks_average_their_lots_weighted_by_population():
         }
     )
     blocks = pd.DataFrame({"id": ["a", "b", "c"]})
-    values = diversity(lots, blocks, {"x": np.array([0.5, 1.0, np.nan, 0.8])})
-    block = values["blocks"]["diversity_x"]
+    block = diversity(lots, blocks, np.array([0.5, 1.0, np.nan, 0.8]))["blocks"]
     # The lot without a value does not count; without residents, no average.
-    assert block.iloc[0] == pytest.approx((10 * 0.5 + 30 * 1.0) / 40)
-    assert block.iloc[1:].isna().all()
+    assert block[0] == pytest.approx((10 * 0.5 + 30 * 1.0) / 40)
+    assert np.isnan(block[1:]).all()
 
 
-def test_snapshot_measures_the_types_with_subcategories():
+def test_snapshot_counts_the_catalog_types():
     runner = LocalRunner.from_definitions(
         {"reimagina-test-port": create_snapshot_plugin()}
     )
     outputs = runner.run(
         "reimagina_poi_diversity", {"parameters": {"snapshot": "synthetic"}}
     )
-    lots = outputs["reimagina_poi_diversity_lots"]
-    # One pharmacy: one subcategory reached or none, so 0 (not -0.0).
-    assert lots["diversity_health_services"].eq(0).all()
-    assert not np.signbit(lots["diversity_health_services"]).any()
-    # Types without subcategories are not measured.
-    assert lots["diversity_public_space"].isna().all()
+    lots = outputs["reimagina_poi_diversity_lots"]["poi_diversity"]
+    # Four POIs of four catalog types, all within reach of most lots, out of k = 12;
+    # the fifth POI's type is not in the catalog and does not count.
+    assert lots.max() == pytest.approx(np.log(4) / np.log(12))
+    assert lots.between(0, 1).all()
+    blocks = outputs["reimagina_poi_diversity_blocks"].set_index("id")
+    assert np.isnan(blocks.loc["block-empty", "poi_diversity"])

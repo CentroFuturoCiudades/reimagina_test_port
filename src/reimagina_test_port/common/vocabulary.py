@@ -18,7 +18,6 @@ from __future__ import annotations
 __all__ = [
     "DESTINATION_ACCESSIBILITY_PARAMS",
     "DESTINATION_COVERAGE_M",
-    "DESTINATION_DIVERSITY",
     "DESTINATION_TYPES",
 ]
 
@@ -53,17 +52,6 @@ DESTINATION_COVERAGE_M = {
     "health_services": 500,
     "care": 300,
     "community_culture_recreation": 300,
-}
-
-# Diversidad de cada tipo para las corridas sin base (snapshot): el radio en metros
-# (`params.diversity_m`) y cuántas subcategorías tiene (`params.subcategories`, que
-# dicen qué es cada una). Con base se leen de `poi_catalog`.
-DESTINATION_DIVERSITY = {
-    "food": (500, 12),
-    "education": (500, 4),
-    "health_services": (500, 4),
-    "care": (500, 5),
-    "community_culture_recreation": (500, 8),
 }
 
 
