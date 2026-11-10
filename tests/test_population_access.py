@@ -20,6 +20,7 @@ CRS = "EPSG:32611"
 # The synthetic pharmacy: a 10 m box (x 640450-640460) on the street y=3610000.
 DISTANCE = "distance_m_health_services"
 ACCESS = "population_with_access_health_services"
+SHARE = "share_with_access_health_services"
 
 
 def run(**parameters) -> dict[str, gpd.GeoDataFrame]:
@@ -50,6 +51,9 @@ def test_blocks_add_up_their_lots(monkeypatch):
     # Weighted by population: lot-half_empty (45, 365 m) and lot-mixed (90, 165 m).
     assert blocks.loc["block-z", DISTANCE] == pytest.approx((45 * 365 + 90 * 165) / 135)
     assert blocks.loc["block-empty", [DISTANCE, ACCESS]].isna().all()
+    # The share of the block's residents: 90 of 135; none without residents.
+    assert blocks.loc["block-z", SHARE] == pytest.approx(90 / 135)
+    assert pd.isna(blocks.loc["block-empty", SHARE])
 
 
 def test_each_type_uses_its_coverage():

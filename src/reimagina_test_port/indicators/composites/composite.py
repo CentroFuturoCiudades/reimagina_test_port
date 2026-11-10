@@ -22,17 +22,21 @@ import pandas as pd
 
 
 def soft_threshold(distance, threshold, k=5.0):
+    """Distance -> 0-1, half at the threshold. A missing distance (an element not
+    measured, such as a block without residents) stays missing."""
     d = pd.to_numeric(distance, errors="coerce").astype("float64")
     with np.errstate(over="ignore"):
-        score = 1.0 / (1.0 + np.exp(k * (d - threshold) / threshold))
-    return score.fillna(0.0)
+        return 1.0 / (1.0 + np.exp(k * (d - threshold) / threshold))
 
 
 def stepped_score(distance, steps, beyond=0.0):
+    """Distance -> the score of the first step it is within, else ``beyond``. A
+    missing distance stays missing."""
     d = pd.to_numeric(distance, errors="coerce").astype("float64")
     out = pd.Series(beyond, index=d.index, dtype="float64")
     for limit, value in reversed(steps):
         out[d <= limit] = value
+    out[d.isna()] = np.nan
     return out
 
 

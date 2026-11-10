@@ -32,6 +32,11 @@ from reimagina_test_port.indicators.composites.composite import (
     build_composite,
     normalize_indicators,
 )
+from reimagina_test_port.indicators.population_access.nodes import (
+    ACCESS_KEYS,
+    DISTANCE_KEYS,
+    SHARE_KEYS,
+)
 
 CONFIG = Path(__file__).with_name("composite_config.yaml")
 # A leaf's source -> its Lyra output prefix and columns; the output is
@@ -39,6 +44,10 @@ CONFIG = Path(__file__).with_name("composite_config.yaml")
 SOURCES = {
     "accessibility": ("reimagina_accessibility", ACCESSIBILITY_KEYS),
     "built_form": ("reimagina_built_form", list(UNITS)),
+    "population_access": (
+        "reimagina_population_access",
+        DISTANCE_KEYS + ACCESS_KEYS + SHARE_KEYS,
+    ),
 }
 ELEMENTS = ("blocks", "lots")
 LEAF_KEYS = {

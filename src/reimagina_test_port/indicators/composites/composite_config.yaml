@@ -12,10 +12,12 @@
 #   the elements inside it get composites. Without it, all of them do.
 #
 # Leaves:
-#   source     the indicator pipeline: accessibility or built_form
-#   variable   its column (distance_to_public_space, density, ...)
-#   transform  optional, before normalising: {soft_threshold: minutes, k: 5}
-#              (closer is better, 0-1) or {steps: [[limit, score], ...], beyond: 0}
+#   source     the indicator pipeline: accessibility, population_access or
+#              built_form
+#   variable   its column (distance_m_public_space, density, ...)
+#   transform  optional, before normalising: {soft_threshold: distance, k: 5}
+#              in the variable's unit (closer is better, 0-1) or
+#              {steps: [[limit, score], ...], beyond: 0}
 #   compress   optional: pull values beyond 2 SD toward 2-3 SD
 #   polarity   positive (more is better) or negative
 #   method     ampi (needs reference and goalposts {min, max}) or mpi (mean, sd)
@@ -27,69 +29,266 @@
 #
 # Normalised scores sit around 100: AMPI puts the reference at 100 and moves 60
 # points across the goalposts; MPI puts the mean at 100 and 10 points per SD.
+#
+# The tree follows composite_indices > uli of MX_Mexicali_2025_ULI.yml:
+#
+#   index > domain > core measure > indicator
+#
+# - Domains are the ULI's (its `domains` keys). Only those with an indicator in
+#   the database are here: housing, safety and sociodemographics have none yet.
+# - Core measures are the sankey's (hoja «Indicadores» de
+#   indicadores_por_completar.xlsx), one composite each.
+# - Each sankey sub-variable with data is a leaf, in pairs:
+#   - «Average distance to closest <poi>»: distance_m_<type>, with the matching
+#     ULI indicator's transform (named in its comment): a soft threshold at its
+#     distance, or a step for binary access. The ULI scores along the pedestrian
+#     network in metres, as distance_m_* is measured.
+#   - «Percentage of population with access to <poi> within X m»:
+#     share_with_access_<type>, population_with_access_<type> over the block's
+#     residents, X being the type's coverage_m in poi_catalog.
+# - Blocks without residents have no distance: their leaves, and the composites
+#   that need them, are left missing.
+# - A core measure in several domains counts an equal share of its weight in
+#   each, as the ULI does (a third in each of three): it is defined in its
+#   first domain and reused in the others with `ref`.
+# - AMPI reference: the ULI's is the study region average. Here it is the
+#   average of the transformed indicator over Base Mexicali's blocks
+#   (510bff7c, November 2026), fixed so that a scenario is scored against the
+#   baseline and not against itself.
 element: blocks
 trees:
   - name: index
     phenomenon: positive
     min_valid: 1
-
     children:
-      - name: proximity
+      # -- Social infrastructure ------------------------------------------------
+      - name: social_infrastructure
         phenomenon: positive
+        min_valid: 1
         children:
-          - name: health
+          # Acceso a servicios diarios: social infrastructure, mobility and
+          # transport, economic development.
+          - name: daily_services
+            phenomenon: positive
+            weight: 0.3333
+            children:
+              # ULI fresh_food: fresh food within 300 m.
+              - name: fresh_food
+                source: population_access
+                variable: distance_m_fresh_food
+                transform: {soft_threshold: 300}
+                polarity: positive
+                method: ampi
+                reference: 0.162
+                goalposts: {min: 0, max: 1}
+              # Percentage of population with access within 300 m.
+              - name: fresh_food_pct
+                source: population_access
+                variable: share_with_access_fresh_food
+                polarity: positive
+                method: ampi
+                reference: 0.153
+                goalposts: {min: 0, max: 1}
+              # ULI convenience: convenience stores within 300 m.
+              - name: convenience
+                source: population_access
+                variable: distance_m_convenience_store
+                transform: {soft_threshold: 300}
+                polarity: positive
+                method: ampi
+                reference: 0.318
+                goalposts: {min: 0, max: 1}
+              # Percentage of population with access within 300 m.
+              - name: convenience_pct
+                source: population_access
+                variable: share_with_access_convenience_store
+                polarity: positive
+                method: ampi
+                reference: 0.312
+                goalposts: {min: 0, max: 1}
+              # ULI petrol_250m: a disamenity, 250 m or more from a petrol
+              # station scores 1.
+              - name: petrol_250m
+                source: population_access
+                variable: distance_m_petrol_station
+                transform: {steps: [[250, 0]], beyond: 1}
+                polarity: positive
+                method: ampi
+                reference: 0.956
+                goalposts: {min: 0, max: 1}
+              # Percentage of population with access within 250 m (a disamenity: fewer is better).
+              - name: petrol_250m_pct
+                source: population_access
+                variable: share_with_access_petrol_station
+                polarity: negative
+                method: ampi
+                reference: 0.048
+                goalposts: {min: 0, max: 1}
+
+          # Acceso a salud, educación y cuidados.
+          - name: health_education_care
             phenomenon: positive
             children:
-              - name: health_facilities
-                source: accessibility
-                variable: distance_to_health
-                transform: {soft_threshold: 10}   # minutes walking
+              # ULI primary_school: primary schools within 300 m.
+              - name: primary_school
+                source: population_access
+                variable: distance_m_primary_education
+                transform: {soft_threshold: 300}
                 polarity: positive
                 method: ampi
-                reference: 0.5
+                reference: 0.141
                 goalposts: {min: 0, max: 1}
-              - name: health_services
-                source: accessibility
-                variable: distance_to_health_services
-                transform: {soft_threshold: 10}
+              # Percentage of population with access within 300 m.
+              - name: primary_school_pct
+                source: population_access
+                variable: share_with_access_primary_education
                 polarity: positive
                 method: ampi
-                reference: 0.5
+                reference: 0.124
+                goalposts: {min: 0, max: 1}
+              # ULI primary_healthcare: health care within 300 m.
+              - name: primary_healthcare
+                source: population_access
+                variable: distance_m_health
+                transform: {soft_threshold: 300}
+                polarity: positive
+                method: ampi
+                reference: 0.328
+                goalposts: {min: 0, max: 1}
+              # Percentage of population with access within 300 m.
+              - name: primary_healthcare_pct
+                source: population_access
+                variable: share_with_access_health
+                polarity: positive
+                method: ampi
+                reference: 0.336
+                goalposts: {min: 0, max: 1}
+              # ULI care_support: care services within 300 m.
+              - name: care_support
+                source: population_access
+                variable: distance_m_care
+                transform: {soft_threshold: 300}
+                polarity: positive
+                method: ampi
+                reference: 0.237
+                goalposts: {min: 0, max: 1}
+              # Percentage of population with access within 300 m.
+              - name: care_support_pct
+                source: population_access
+                variable: share_with_access_care
+                polarity: positive
+                method: ampi
+                reference: 0.225
                 goalposts: {min: 0, max: 1}
 
-          - name: primary_education
-            source: accessibility
-            variable: distance_to_primary_education
-            transform: {soft_threshold: 15}
-            polarity: positive
-            method: ampi
-            reference: 0.5
-            goalposts: {min: 0, max: 1}
+          # Acceso a espacios comunitarios, culturales y recreativos.
+          - name: community_culture_recreation
+            phenomenon: positive
+            children:
+              # ULI ccr_any: community, culture and recreation within 300 m.
+              - name: ccr_any
+                source: population_access
+                variable: distance_m_community_culture_recreation
+                transform: {soft_threshold: 300}
+                polarity: positive
+                method: ampi
+                reference: 0.623
+                goalposts: {min: 0, max: 1}
+              # Percentage of population with access within 300 m.
+              - name: ccr_any_pct
+                source: population_access
+                variable: share_with_access_community_culture_recreation
+                polarity: positive
+                method: ampi
+                reference: 0.662
+                goalposts: {min: 0, max: 1}
 
-          - name: public_space
-            source: accessibility
-            variable: distance_to_public_space
-            transform: {soft_threshold: 10}
-            polarity: positive
-            method: ampi
-            reference: 0.5
-            goalposts: {min: 0, max: 1}
+          # Índice de caminabilidad: built environment, mobility and transport,
+          # social infrastructure. Of its components only net residential
+          # density is in the database; the ULI's walkability index is not.
+          - name: walkability
+            phenomenon: positive
+            weight: 0.3333
+            children:
+              # Net residential density (homes per hectare); outliers reach
+              # 2,400 viv/ha, so they are compressed.
+              - name: net_residential_density
+                source: built_form
+                variable: density
+                compress: true
+                polarity: positive
+                method: ampi
+                reference: 45.8
+                goalposts: {min: 0, max: 400}
 
-      - name: urban_form
+      # -- Mobility and transport -----------------------------------------------
+      - name: mobility_transport
         phenomenon: positive
+        min_valid: 1
         children:
-          - name: density
-            source: built_form
-            variable: density   # homes per hectare
-            polarity: positive
-            method: ampi
-            reference: 150
-            goalposts: {min: 0, max: 400}
+          - {ref: daily_services, weight: 0.3333}
+          - {ref: walkability, weight: 0.3333}
 
-          - name: intensity
-            source: built_form
-            variable: cus       # built floor area over lot area
-            polarity: positive
-            method: ampi
-            reference: 1.5
-            goalposts: {min: 0, max: 4}
+      # -- Economic development -------------------------------------------------
+      - name: economic_development
+        phenomenon: positive
+        min_valid: 1
+        children:
+          - {ref: daily_services, weight: 0.3333}
+          # Acceso a fuentes de empleo.
+          - name: employment
+            phenomenon: positive
+            children:
+              # ULI manufacturing_1000m: binary access within 1 km.
+              - name: manufacturing_1000m
+                source: population_access
+                variable: distance_m_manufacturing
+                transform: {steps: [[1000, 1]], beyond: 0}
+                polarity: positive
+                method: ampi
+                reference: 0.976
+                goalposts: {min: 0, max: 1}
+              # Percentage of population with access within 1000 m.
+              - name: manufacturing_1000m_pct
+                source: population_access
+                variable: share_with_access_manufacturing
+                polarity: positive
+                method: ampi
+                reference: 0.975
+                goalposts: {min: 0, max: 1}
+
+      # -- Ambient environment --------------------------------------------------
+      - name: ambient_environment
+        phenomenon: positive
+        min_valid: 1
+        children:
+          # Acceso a parques: ambient environment, built environment.
+          - name: parks
+            phenomenon: positive
+            weight: 0.5
+            children:
+              # ULI parks: a park or public open space within 300 m.
+              - name: public_open_space
+                source: population_access
+                variable: distance_m_public_space
+                transform: {soft_threshold: 300}
+                polarity: positive
+                method: ampi
+                reference: 0.127
+                goalposts: {min: 0, max: 1}
+              # Percentage of population with access within 300 m.
+              - name: public_open_space_pct
+                source: population_access
+                variable: share_with_access_public_space
+                polarity: positive
+                method: ampi
+                reference: 0.125
+                goalposts: {min: 0, max: 1}
+
+      # -- Built environment ----------------------------------------------------
+      - name: built_environment
+        phenomenon: positive
+        min_valid: 1
+        children:
+          - {ref: parks, weight: 0.5}
+          - {ref: walkability, weight: 0.3333}

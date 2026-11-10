@@ -1,7 +1,12 @@
 """Composite indicators: the normalisation math, the tree as Lyra nodes, and the
-tree run over the synthetic snapshot's accessibility and built-form indicators."""
+tree run over the synthetic snapshot's accessibility and built-form indicators.
+
+The tree tests use their own small tree (composite_test_config.yaml), so they do
+not change with the bundled one; the bundled tree is checked to load and to be
+wired into the production graph."""
 
 import copy
+from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
@@ -11,6 +16,7 @@ from lyra.sdk import LocalRunner, PluginDefinition
 from shapely.geometry import box
 
 from reimagina_test_port import plugin, snapshot
+from reimagina_test_port.common.vocabulary import DESTINATION_COVERAGE_M
 from reimagina_test_port.indicators.accessibility.nodes import accessibility_metric
 from reimagina_test_port.indicators.built_form.nodes import built_form_metrics
 from reimagina_test_port.indicators.composites import composite_metric as nodes
@@ -19,6 +25,9 @@ from reimagina_test_port.indicators.composites.composite import (
     normalize_indicators,
     soft_threshold,
     stepped_score,
+)
+from reimagina_test_port.indicators.population_access.nodes import (
+    population_access_metrics,
 )
 from reimagina_test_port.local import run_snapshot
 
@@ -34,11 +43,11 @@ def test_normalisation():
     ]
     mpi = normalize_indicators(x, method="mpi", mean=0.5, sd=0.25)
     assert mpi.tolist() == [90, 100, 110]
-    # Closer is better: half at the threshold, unreachable (missing) is 0.
+    # Closer is better: half at the threshold; not measured stays missing.
     near = soft_threshold(pd.Series([10.0, 0.0, np.nan]), 10)
-    assert near.iloc[0] == 0.5 and near.iloc[1] > 0.99 and near.iloc[2] == 0
-    steps = stepped_score(pd.Series([3.0, 8.0, 20.0]), [[5, 1.0], [10, 0.5]])
-    assert steps.tolist() == [1.0, 0.5, 0.0]
+    assert near.iloc[0] == 0.5 and near.iloc[1] > 0.99 and np.isnan(near.iloc[2])
+    steps = stepped_score(pd.Series([3.0, 8.0, 20.0, np.nan]), [[5, 1.0], [10, 0.5]])
+    assert steps.tolist()[:3] == [1.0, 0.5, 0.0] and np.isnan(steps.iloc[3])
 
 
 def test_mazziotta_pareto():
@@ -56,28 +65,39 @@ def test_mazziotta_pareto():
     assert weighted["mean"].iloc[0] == pytest.approx(105)
 
 
-def composite_manifests():
+TEST_CONFIG = Path(__file__).with_name("composite_test_config.yaml")
+PARAMS = {"parameters": {"snapshot": "synthetic"}}
+
+
+def tree():
+    return copy.deepcopy(nodes.load_config(TEST_CONFIG))
+
+
+def composite_manifests(config):
     return {
         m.name: m
-        for m in plugin.create_snapshot_plugin().node_manifests
+        for m in PluginDefinition(
+            nodes=nodes.composite_metrics(snapshot.SnapshotParameters, config)
+        ).node_manifests
         if m.name.startswith("reimagina_composite_")
     }
 
 
 def test_one_node_per_composite_wired_as_the_tree():
-    manifests = composite_manifests()
+    manifests = composite_manifests(tree())
     inputs = {
         name: {k: v.output for k, v in m.inputs.items()}
         for name, m in manifests.items()
     }
-    # The bundled tree names no boundary: composites read every block.
+    # The tree names no boundary: composites read every block.
     assert inputs == {
         "reimagina_composite_health": {
-            "accessibility": "reimagina_accessibility_blocks"
+            "population_access": "reimagina_population_access_blocks",
+            "accessibility": "reimagina_accessibility_blocks",
         },
         "reimagina_composite_proximity": {
             "health": "reimagina_composite_health_blocks",
-            "accessibility": "reimagina_accessibility_blocks",
+            "population_access": "reimagina_population_access_blocks",
         },
         "reimagina_composite_urban_form": {"built_form": "reimagina_built_form_blocks"},
         "reimagina_composite_index": {
@@ -95,47 +115,55 @@ def test_one_node_per_composite_wired_as_the_tree():
         "penalty",
         "n",
     ]
-    # The production graph has the same composites.
-    production = {m.name for m in plugin.create_plugin().node_manifests}
-    assert set(manifests) <= production
+
+
+def test_the_bundled_tree_is_in_both_graphs():
+    _, names = nodes.composite_outputs()
+    expected = {f"reimagina_composite_{name}" for name in names}
+    for definition in (plugin.create_plugin(), plugin.create_snapshot_plugin()):
+        assert expected <= {m.name for m in definition.node_manifests}
+
+
+def test_the_bundled_tree_over_the_synthetic_indicators():
+    index = run_snapshot("synthetic", "reimagina_composite_index")[
+        "reimagina_composite_index_blocks"
+    ]
+    assert index["index"].notna().any()
 
 
 def test_the_tree_over_the_synthetic_indicators():
-    index = run_snapshot("synthetic", "reimagina_composite_index")[
-        "reimagina_composite_index_blocks"
-    ].set_index("id")
-    proximity = run_snapshot("synthetic", "reimagina_composite_proximity")[
-        "reimagina_composite_proximity_blocks"
-    ].set_index("id")
-    health = run_snapshot("synthetic", "reimagina_composite_health")[
-        "reimagina_composite_health_blocks"
-    ].set_index("id")
-    access = run_snapshot("synthetic", "reimagina_accessibility")[
-        "reimagina_accessibility_blocks"
-    ].set_index("id")
-    # A leaf: the indicator, transformed and normalised as composite_config.yaml says.
+    runner = snapshot_runner(tree())
+
+    def run(name):
+        return runner.run(name, PARAMS)[f"{name}_blocks"].set_index("id")
+
+    index = run("reimagina_composite_index")
+    proximity = run("reimagina_composite_proximity")
+    health = run("reimagina_composite_health")
+    access = run("reimagina_population_access")
+    # A leaf: the indicator, transformed and normalised as the tree says.
     clinic = normalize_indicators(
-        access["distance_to_health"].reindex(health.index),
-        transform={"soft_threshold": 10},
+        access["distance_m_health"].reindex(health.index),
+        transform={"soft_threshold": 300},
         reference=0.5,
         goalposts={"min": 0, "max": 1},
     )
-    assert health["health_facilities"].tolist() == pytest.approx(clinic.tolist())
+    assert health["health_facilities"].tolist() == pytest.approx(
+        clinic.tolist(), nan_ok=True
+    )
     # A parent reads its child composite's index.
-    assert proximity["health"].tolist() == pytest.approx(health["index"].tolist())
+    assert proximity["health"].tolist() == pytest.approx(
+        health["index"].tolist(), nan_ok=True
+    )
     expected = build_composite([index["proximity"], index["urban_form"]], min_valid=1)[
         "index"
     ]
-    assert index["index"].tolist() == pytest.approx(expected.tolist())
-    # A block without homes has no urban form; the root needs one child.
+    assert index["index"].tolist() == pytest.approx(expected.tolist(), nan_ok=True)
+    # A block without residents has no distances and no homes: no index.
     empty = index.loc["block-empty"]
-    assert np.isnan(empty["urban_form"]) and empty["n"] == 1
-    assert empty["index"] == pytest.approx(empty["proximity"])
-    assert index["index"].between(60, 140).all()
-
-
-def tree():
-    return copy.deepcopy(nodes.load_config())
+    assert np.isnan(empty["urban_form"]) and np.isnan(empty["proximity"])
+    assert empty["n"] == 0 and np.isnan(empty["index"])
+    assert index["index"].dropna().between(60, 140).all()
 
 
 def health(config):
@@ -147,7 +175,7 @@ def health(config):
     [
         (lambda c: c.update(element="streets"), "element must be one of"),
         (lambda c: health(c)["children"][0].update(source="osm"), "source must be one of"),
-        (lambda c: health(c)["children"][0].update(variable="lighting_score"),
+        (lambda c: health(c)["children"][1].update(variable="lighting_score"),
          "accessibility has no column 'lighting_score'"),
         (lambda c: health(c)["children"][0].pop("goalposts"), "ampi needs"),
         (lambda c: health(c)["children"][0].update(transform={"radius": 5}),
@@ -175,7 +203,7 @@ LEAF = {"source": "accessibility", "transform": {"soft_threshold": 15},
 
 
 def dag():
-    """The bundled tree, and a second index reusing its health composite."""
+    """The test tree, and a second index reusing its health composite."""
     config = tree()
     config["trees"].append(
         {"name": "care", "children": [
@@ -206,7 +234,7 @@ def test_a_composite_reused_by_two_indices():
         "accessibility": "reimagina_accessibility_blocks",
     }
     runner = snapshot_runner(config)
-    params = {"parameters": {"snapshot": "synthetic"}}
+    params = PARAMS
     out = runner.run("reimagina_composite_care", params)[
         "reimagina_composite_care_blocks"
     ]
@@ -215,10 +243,10 @@ def test_a_composite_reused_by_two_indices():
     ].set_index("id")["index"]
     out = out.set_index("id")
     assert out["health"].tolist() == pytest.approx(
-        health_index.reindex(out.index).tolist()
+        health_index.reindex(out.index).tolist(), nan_ok=True
     )
     expected = build_composite([out["health"], out["school"]], weights=[2, 1])["index"]
-    assert out["index"].tolist() == pytest.approx(expected.tolist())
+    assert out["index"].tolist() == pytest.approx(expected.tolist(), nan_ok=True)
 
 
 @pytest.mark.parametrize(
@@ -271,6 +299,11 @@ def snapshot_runner(config):
             accessibility_metric(
                 snapshot.SnapshotParameters, "reimagina_prepared_pois",
                 "reimagina_prepared_network_nodes", "reimagina_prepared_network_edges",
+            ),
+            *population_access_metrics(
+                snapshot.SnapshotParameters, "reimagina_prepared_lots",
+                "reimagina_prepared_pois", "reimagina_prepared_network_nodes",
+                "reimagina_prepared_network_edges", lambda: DESTINATION_COVERAGE_M,
             ),
             *nodes.composite_metrics(snapshot.SnapshotParameters, config),
         ]
@@ -349,9 +382,9 @@ def test_composites_written_as_one_value_per_element():
 def test_the_write_reads_every_composite():
     manifests = {m.name: m for m in plugin.create_plugin().node_manifests}
     write = manifests["reimagina_scenario_composites"].inputs
+    _, names = nodes.composite_outputs()
     assert {k: v.output for k, v in write.items()} == {
-        f"composite_{name}": f"reimagina_composite_{name}_blocks"
-        for name in ("health", "proximity", "urban_form", "index")
+        f"composite_{name}": f"reimagina_composite_{name}_blocks" for name in names
     }
     assert "composites" in manifests["reimagina_scenario_write"].inputs
 
@@ -360,7 +393,8 @@ def test_a_baseline_registers_the_composite_keys():
     from reimagina_test_port.ingestion import catalogs
 
     rows = {(row[0], row[1]): row for row in catalogs.indicator_rows()}
-    for name in ("health", "proximity", "urban_form", "index"):
+    _, names = nodes.composite_outputs()
+    for name in names:
         *_, unit, value_type, job = rows[("block", f"composite_{name}")]
         assert (unit, value_type, job) == ("score", "number", "composites")
     assert ("lot", "composite_index") not in rows  # the tree's element only

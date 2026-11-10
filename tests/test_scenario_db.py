@@ -566,7 +566,7 @@ def test_write_baseline_is_idempotent(dsn):
     assert (BLOCK, "distance_to_public_space") not in values
     # Composites: each one's index, on blocks.
     assert 40 < values[(BLOCK, "composite_index")][0] < 160
-    assert values[(BLOCK, "composite_health")][0] > 0
+    assert values[(BLOCK, "composite_social_infrastructure")][0] > 0
     assert not any(e == HOUSE and k.startswith("composite_") for e, k in values)
     # Accessibility is stored on blocks only; a lot shows its block's.
     assert not any(
