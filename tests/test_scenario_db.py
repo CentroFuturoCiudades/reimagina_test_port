@@ -905,7 +905,8 @@ def test_write_new_baseline(new_baseline, dsn):
     # The blocks already exist: reused, not created. 23 lot and block values, 4 of
     # the amenity (no name) and 4 of the establishment (no workers). The catalogs
     # get the 10 attributes they lacked (housing.floor_share, the block's targets,
-    # 4 of the amenity and 3 of the establishment) and block.density; the dry run
+    # 4 of the amenity and 3 of the establishment), block.density and the
+    # composites' keys (the scenario writer registers those too); the dry run
     # rolled its rows back.
     assert first == {
         "elements": 8,
@@ -913,7 +914,7 @@ def test_write_new_baseline(new_baseline, dsn):
         "attribute_values": 31,
         "elements_removed": 0,
         "attributes_added": 10,
-        "indicators_added": 1,
+        "indicators_added": 1 + len(composite_catalog.catalog_rows()),
         "by_type": {"block": 2, "lot": 4, "amenity": 1, "establishment": 1},
     }
     assert counts(dsn, NEW_BASELINE) == (8, 31)
