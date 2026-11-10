@@ -5,6 +5,7 @@ test creates and drops its own. See docs/verification.md for the container.
 """
 
 import importlib.util
+import logging
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -24,6 +25,9 @@ from reimagina_test_port import plugin
 from reimagina_test_port.common import schema
 from reimagina_test_port.indicators.accessibility import model as accessibility
 from reimagina_test_port.indicators.accessibility import nodes as accessibility_nodes
+from reimagina_test_port.indicators.population_access import (
+    nodes as population_access_nodes,
+)
 from reimagina_test_port.ingestion import baseline_writer, catalogs
 from reimagina_test_port.ingestion import nodes as ingestion_nodes
 from reimagina_test_port.scenario import contract
@@ -323,6 +327,7 @@ def seed_catalog(conn) -> None:
         "minutes",
         *accessibility_nodes.DISTANCE_KEYS,
         *accessibility_nodes.SCORE_KEYS,
+        *population_access_nodes.KEYS,
     ]
     for element_type in ("lot", "block"):
         for key in keys:
@@ -580,6 +585,34 @@ def test_write_fork_stores_only_differences(dsn):
     again = write(FORK)
     assert (again["values_written"], again["values_cleared"]) == (0, 0)
     assert stored(dsn, FORK) == fork
+
+
+def test_write_population_access(dsn):
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            "UPDATE reimagina_urbano.poi_catalog SET params = '{\"coverage_m\": 300}' "
+            "WHERE poi_type IN ('health', 'health_services')"
+        )
+    write(BASELINE)
+    values = stored(dsn, BASELINE)
+    assert values[(BLOCK, "population_with_access_health_services")][0] == 93
+    assert values[(BLOCK, "distance_m_health_services")][0] > 0
+    # Only blocks are written.
+    assert (HOUSE, "distance_m_health_services") not in values
+    # No POIs of the type: no distance.
+    assert (BLOCK, "distance_m_public_space") not in values
+    # A partial run keeps the values of the other types.
+    run_metric("reimagina_scenario_population_access", BASELINE, poi_types=["health"])
+    assert stored(dsn, BASELINE) == values
+
+
+def test_population_access_without_coverage_uses_the_default(dsn, caplog):
+    # The seeded poi_catalog has no coverage_m.
+    with caplog.at_level(logging.WARNING):
+        write(BASELINE)
+    assert "without coverage_m" in caplog.text
+    access = stored(dsn, BASELINE)[(BLOCK, "population_with_access_health_services")]
+    assert access[0] == 93
 
 
 def test_write_clears_values_back_to_baseline(dsn):

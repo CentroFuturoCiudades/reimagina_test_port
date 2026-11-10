@@ -97,6 +97,11 @@ _POI_RULES_QUERY = sql.SQL(
     "WHERE status = 'active' ORDER BY poi_type"
 ).format(**_TABLES)
 
+_POI_COVERAGE_QUERY = sql.SQL(
+    "SELECT poi_type, (params ->> 'coverage_m')::float FROM {poi_catalog} "
+    "WHERE status = 'active' AND params ->> 'coverage_m' IS NOT NULL"
+).format(**_TABLES)
+
 # Starts from those attribute values and only then looks up their state, instead
 # of resolving every element of the scenario first. Capacity stays NULL, as
 # before: the model counts each destination once.
@@ -256,6 +261,13 @@ def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
     return gpd.GeoDataFrame(
         frame.drop(columns="geometry"), geometry=_geometry(frame["geometry"]), crs=CRS
     )
+
+
+def read_coverage_m() -> dict[str, float]:
+    """Coverage distance, in metres, of the active poi_catalog types that have one."""
+    with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
+        cur.execute(_POI_COVERAGE_QUERY)
+        return dict(cur.fetchall())
 
 
 def read_road_network_uri(scenario_id: str) -> str | None:

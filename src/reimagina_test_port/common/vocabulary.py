@@ -17,6 +17,7 @@ from __future__ import annotations
 
 __all__ = [
     "DESTINATION_ACCESSIBILITY_PARAMS",
+    "DESTINATION_COVERAGE_M",
     "DESTINATION_TYPES",
 ]
 
@@ -35,6 +36,23 @@ DESTINATION_TYPES = (
     "care",
     "community_culture_recreation",
 )
+
+# Metros de cobertura de cada tipo para las corridas sin base (snapshot): los
+# `params.coverage_m` de `poi_catalog`. Con base se leen de ahí.
+DESTINATION_COVERAGE_M = {
+    "public_space": 300,
+    "fresh_food": 300,
+    "food": 300,
+    "convenience_store": 300,
+    "petrol_station": 250,
+    "manufacturing": 1_000,
+    "education": 500,
+    "primary_education": 300,
+    "health": 300,
+    "health_services": 500,
+    "care": 300,
+    "community_culture_recreation": 300,
+}
 
 
 # =============================================================================
