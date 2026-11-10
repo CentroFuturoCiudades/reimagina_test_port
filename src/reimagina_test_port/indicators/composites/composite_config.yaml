@@ -23,12 +23,17 @@
 #   method     ampi (needs reference and goalposts {min, max}) or mpi (mean, sd)
 #   weight     its weight in its composite (default 1)
 # Composites:
+#   label      optional: its name in indicator_catalog (Spanish, as the web shows)
 #   phenomenon positive (higher index is better) or negative
 #   min_valid  how many children must have a value (default: all)
 #   weight     its weight in its parent (default 1)
 #
 # Normalised scores sit around 100: AMPI puts the reference at 100 and moves 60
 # points across the goalposts; MPI puts the mean at 100 and 10 points per SD.
+#
+# The plugin registers each composite's composite_<name> key and its inputs in
+# indicator_catalog / indicator_input before writing (composites/catalog.py): a
+# composite added here needs no migration.
 #
 # The tree follows composite_indices > uli of MX_Mexicali_2025_ULI.yml:
 #
@@ -58,17 +63,20 @@
 element: blocks
 trees:
   - name: index
+    label: Índice de entornos vivibles
     phenomenon: positive
     min_valid: 1
     children:
       # -- Social infrastructure ------------------------------------------------
       - name: social_infrastructure
+        label: Infraestructura social
         phenomenon: positive
         min_valid: 1
         children:
           # Acceso a servicios diarios: social infrastructure, mobility and
           # transport, economic development.
           - name: daily_services
+            label: Acceso a servicios diarios
             phenomenon: positive
             weight: 0.3333
             children:
@@ -127,6 +135,7 @@ trees:
 
           # Acceso a salud, educación y cuidados.
           - name: health_education_care
+            label: Acceso a salud, educación y cuidados
             phenomenon: positive
             children:
               # ULI primary_school: primary schools within 300 m.
@@ -183,6 +192,7 @@ trees:
 
           # Acceso a espacios comunitarios, culturales y recreativos.
           - name: community_culture_recreation
+            label: Acceso a espacios comunitarios, culturales y recreativos
             phenomenon: positive
             children:
               # ULI ccr_any: community, culture and recreation within 300 m.
@@ -207,6 +217,7 @@ trees:
           # social infrastructure. Of its components only net residential
           # density is in the database; the ULI's walkability index is not.
           - name: walkability
+            label: Índice de caminabilidad
             phenomenon: positive
             weight: 0.3333
             children:
@@ -223,6 +234,7 @@ trees:
 
       # -- Mobility and transport -----------------------------------------------
       - name: mobility_transport
+        label: Movilidad y transporte
         phenomenon: positive
         min_valid: 1
         children:
@@ -231,12 +243,14 @@ trees:
 
       # -- Economic development -------------------------------------------------
       - name: economic_development
+        label: Desarrollo económico
         phenomenon: positive
         min_valid: 1
         children:
           - {ref: daily_services, weight: 0.3333}
           # Acceso a fuentes de empleo.
           - name: employment
+            label: Acceso a fuentes de empleo
             phenomenon: positive
             children:
               # ULI manufacturing_1000m: binary access within 1 km.
@@ -259,11 +273,13 @@ trees:
 
       # -- Ambient environment --------------------------------------------------
       - name: ambient_environment
+        label: Entorno medioambiental
         phenomenon: positive
         min_valid: 1
         children:
           # Acceso a parques: ambient environment, built environment.
           - name: parks
+            label: Acceso a parques
             phenomenon: positive
             weight: 0.5
             children:
@@ -287,6 +303,7 @@ trees:
 
       # -- Built environment ----------------------------------------------------
       - name: built_environment
+        label: Ambiente construido
         phenomenon: positive
         min_valid: 1
         children:

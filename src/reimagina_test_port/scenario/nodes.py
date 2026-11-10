@@ -6,6 +6,7 @@ reimagina_scenario_write."""
 
 import inspect
 import logging
+from collections.abc import Callable
 from typing import Any
 
 import geopandas as gpd
@@ -217,11 +218,13 @@ def write_group(
     keys: dict[str, str],
     *,
     node: str,
+    prepare: Callable[[Any], Any] | None = None,
     log: Any = logger,
 ) -> pd.DataFrame:
     """Write one group of keys (built-form or accessibility) in its own transaction.
 
-    ``tables`` maps each element type written (``lot``, ``block``) to its values.
+    ``tables`` maps each element type written (``lot``, ``block``) to its values;
+    ``prepare`` runs on that transaction before the catalog check.
     """
     with timed("prepare values", log):
         values = pd.concat(
@@ -239,6 +242,7 @@ def write_group(
             full=parameters.full,
             job_run_id=parameters.job_run_id,
             dry_run=parameters.dry_run,
+            prepare=prepare,
             log=log,
         )
     except writer.ScenarioNotFoundError as exc:
@@ -372,7 +376,9 @@ def composite_values(tables: dict[str, gpd.GeoDataFrame]) -> pd.DataFrame:
 
 def composites_write():
     """reimagina_scenario_composites: every composite of composite_config.yaml,
-    its index under composite_<name>, in its own transaction."""
+    its index under composite_<name>, in its own transaction. The composites'
+    catalog rows are registered from the tree first, in that transaction."""
+    from reimagina_test_port.indicators.composites import catalog
     from reimagina_test_port.indicators.composites.composite_metric import (
         ELEMENT_TYPES,
         composite_key,
@@ -392,6 +398,7 @@ def composites_write():
             {ELEMENT_TYPES[element]: composite_values(tables)},
             keys,
             node="reimagina_scenario_composites",
+            prepare=catalog.register,
             log=arguments["context"].logger,
         )
 
@@ -410,7 +417,9 @@ def composites_write():
             f"to Reimagina's element_state_indicator_value as composite_<name> "
             f"({', '.join(sorted(keys))}), on {element}, under the same rules as "
             "reimagina_scenario_indicators. Elements outside the composites' "
-            "boundary get none. Other indicators are not touched."
+            "boundary get none. Other indicators are not touched. Their "
+            "indicator_catalog and indicator_input rows are registered from the "
+            "tree first, in the same transaction."
         ),
         inputs=inputs,
         outputs={"reimagina_scenario_composites": WRITE_DECLARATION},

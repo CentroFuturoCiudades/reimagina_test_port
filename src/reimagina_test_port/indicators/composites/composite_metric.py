@@ -54,7 +54,7 @@ LEAF_KEYS = {
     "name", "source", "variable", "polarity", "method", "transform", "reference",
     "goalposts", "mean", "sd", "compress", "weight",
 }  # fmt: skip
-COMPOSITE_KEYS = {"name", "phenomenon", "min_valid", "weight", "children"}
+COMPOSITE_KEYS = {"name", "label", "phenomenon", "min_valid", "weight", "children"}
 RESULT = ["index", "mean", "penalty", "n"]
 # Child names become output columns and handler arguments: none of these.
 RESERVED = {*RESULT, *IDENTITY, "geometry", *SOURCES, "parameters", "context",

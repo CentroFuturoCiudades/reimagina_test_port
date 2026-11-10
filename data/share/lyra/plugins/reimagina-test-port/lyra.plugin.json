@@ -4351,7 +4351,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Compute a scenario's composite indicators and write each one's index to Reimagina's element_state_indicator_value as composite_<name> (composite_ambient_environment, composite_built_environment, composite_community_culture_recreation, composite_daily_services, composite_economic_development, composite_employment, composite_health_education_care, composite_index, composite_mobility_transport, composite_parks, composite_social_infrastructure, composite_walkability), on blocks, under the same rules as reimagina_scenario_indicators. Elements outside the composites' boundary get none. Other indicators are not touched.",
+      "description": "Compute a scenario's composite indicators and write each one's index to Reimagina's element_state_indicator_value as composite_<name> (composite_ambient_environment, composite_built_environment, composite_community_culture_recreation, composite_daily_services, composite_economic_development, composite_employment, composite_health_education_care, composite_index, composite_mobility_transport, composite_parks, composite_social_infrastructure, composite_walkability), on blocks, under the same rules as reimagina_scenario_indicators. Elements outside the composites' boundary get none. Other indicators are not touched. Their indicator_catalog and indicator_input rows are registered from the tree first, in the same transaction.",
       "inputs": {
         "composite_ambient_environment": {
           "arguments": {},

@@ -25,9 +25,7 @@ from reimagina_test_port import plugin
 from reimagina_test_port.common import schema
 from reimagina_test_port.indicators.accessibility import model as accessibility
 from reimagina_test_port.indicators.accessibility import nodes as accessibility_nodes
-from reimagina_test_port.indicators.composites.composite_metric import (
-    composite_outputs,
-)
+from reimagina_test_port.indicators.composites import catalog as composite_catalog
 from reimagina_test_port.indicators.population_access import (
     nodes as population_access_nodes,
 )
@@ -124,6 +122,13 @@ CREATE TABLE indicator_catalog (
     job_code text,
     status indicator_catalog_status NOT NULL DEFAULT 'active',
     UNIQUE (element_type, key)
+);
+CREATE TABLE indicator_input (
+    id serial PRIMARY KEY,
+    indicator_id integer NOT NULL REFERENCES indicator_catalog (id),
+    input_attribute_id integer,
+    input_indicator_id integer REFERENCES indicator_catalog (id),
+    external_source text
 );
 CREATE TABLE element_state_indicator_value (
     scenario_id uuid NOT NULL REFERENCES scenarios (id),
@@ -332,14 +337,6 @@ def seed_catalog(conn) -> None:
         *accessibility_nodes.SCORE_KEYS,
         *population_access_nodes.KEYS,
     ]
-    _, composites = composite_outputs()
-    for name in composites:  # stored on blocks only
-        conn.execute(
-            "INSERT INTO reimagina_urbano.indicator_catalog "
-            "(element_type, key, name, value_type, scope) "
-            "VALUES ('block', %s, %s, 'number', 'scenario')",
-            (f"composite_{name}", name),
-        )
     for element_type in ("lot", "block"):
         for key in keys:
             conn.execute(
@@ -687,6 +684,42 @@ def test_dry_run_and_job_run(dsn):
     values = stored(dsn, BASELINE)
     assert values[(HOUSE, "num_levels")][2] is None
     assert values[(SHOP, "num_levels")][2] == job
+
+
+def test_composites_register_their_catalog_rows(dsn):
+    # No composite key is seeded: the composites' write registers them.
+    run_metric("reimagina_scenario_composites", BASELINE, dry_run=True)
+    with psycopg.connect(dsn) as conn:
+        assert not conn.execute(
+            "SELECT 1 FROM reimagina_urbano.indicator_catalog "
+            "WHERE key LIKE 'composite%%'"
+        ).fetchall()  # a dry run rolls the registration back too
+        conn.execute(
+            "INSERT INTO reimagina_urbano.indicator_catalog "
+            "(element_type, key, name, value_type, scope, job_code) VALUES "
+            "('block', 'composite_retired', 'x', 'number', 'scenario', 'composites')"
+        )
+    run_metric("reimagina_scenario_composites", BASELINE)
+    run_metric("reimagina_scenario_composites", BASELINE)  # idempotent
+    with psycopg.connect(dsn) as conn:
+        rows = dict(
+            conn.execute(
+                "SELECT key, status::text FROM reimagina_urbano.indicator_catalog "
+                "WHERE job_code = 'composites'"
+            ).fetchall()
+        )
+        inputs = conn.execute(
+            "SELECT ic.element_type::text, ic.key, inp.key "
+            "FROM reimagina_urbano.indicator_input ii "
+            "JOIN reimagina_urbano.indicator_catalog ic ON ic.id = ii.indicator_id "
+            "JOIN reimagina_urbano.indicator_catalog inp "
+            "ON inp.id = ii.input_indicator_id"
+        ).fetchall()
+    names = [row[1] for row in composite_catalog.catalog_rows()]
+    assert rows == {**dict.fromkeys(names, "active"), "composite_retired": "deprecated"}
+    assert sorted(inputs) == sorted(composite_catalog.input_pairs())
+    values = stored(dsn, BASELINE)
+    assert any(key == "composite_index" for _, key in values)
 
 
 def test_write_checks_the_indicator_catalog(dsn):

@@ -2,7 +2,9 @@
 
 ``attribute_catalog`` gets every attribute the baseline writes, and
 ``indicator_catalog`` every indicator the scenario writer computes on lots and
-blocks, and each composite of composite_config.yaml on its elements. A row already there is left as it is (``ON CONFLICT DO NOTHING``): the
+blocks, and each composite of composite_config.yaml on its elements (the scenario
+writer also registers those, ``composites.catalog``). A row already there is left
+as it is (``ON CONFLICT DO NOTHING``): the
 API's migrations own existing rows, so an existing enum without a value the
 baseline uses still fails the contract check. Types, units and names follow the
 API's seed (alembic ``c8e1a4d92f37``) and ``urban_fabric.md``.
@@ -19,11 +21,7 @@ from psycopg import sql
 from reimagina_test_port.common.rules import LAND_USES
 from reimagina_test_port.common.schema import UNITS
 from reimagina_test_port.indicators.accessibility.nodes import ACCESSIBILITY_KEYS
-from reimagina_test_port.indicators.composites.composite_metric import (
-    ELEMENT_TYPES,
-    composite_key,
-    composite_outputs,
-)
+from reimagina_test_port.indicators.composites import catalog as composite_catalog
 from reimagina_test_port.indicators.population_access.nodes import (
     ACCESS_KEYS,
     DISTANCE_KEYS,
@@ -135,22 +133,11 @@ def attribute_rows(
 def indicator_rows() -> list[tuple[str, str, str, str | None, str, str]]:
     """``indicator_catalog`` rows of every indicator, on lots and blocks, and of
     every composite (its index, around 100) on the composites' elements."""
-    element, composites = composite_outputs()
     return [
         (element_type, key, name, unit, value_type, job_code)
         for element_type in INDICATOR_ELEMENT_TYPES
         for key, (name, unit, value_type, job_code) in INDICATORS.items()
-    ] + [
-        (
-            ELEMENT_TYPES[element],
-            composite_key(name),
-            f"Indice compuesto {name.replace('_', ' ')}",
-            "score",
-            "number",
-            "composites",
-        )
-        for name in composites
-    ]
+    ] + composite_catalog.catalog_rows()
 
 
 def upsert(

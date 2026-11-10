@@ -398,3 +398,39 @@ def test_a_baseline_registers_the_composite_keys():
         *_, unit, value_type, job = rows[("block", f"composite_{name}")]
         assert (unit, value_type, job) == ("score", "number", "composites")
     assert ("lot", "composite_index") not in rows  # the tree's element only
+
+
+def test_catalog_rows_and_inputs_come_from_the_tree():
+    from reimagina_test_port.indicators.composites import catalog
+
+    config = tree()
+    health(config)["label"] = "Salud"
+    health(config)["children"].append(
+        {"name": "clinic_pct", "source": "population_access",
+         "variable": "share_with_access_health", "reference": 0.5,
+         "goalposts": {"min": 0, "max": 1}}
+    )  # fmt: skip
+    rows = {row[1]: row for row in catalog.catalog_rows(config)}
+    assert rows["composite_health"] == (
+        "block", "composite_health", "Salud", "score", "number", "composites"
+    )  # fmt: skip
+    assert rows["composite_index"][2] == "Indice compuesto index"
+    inputs = catalog.input_pairs(config)
+    health_inputs = [
+        key for _, composite, key in inputs if composite == "composite_health"
+    ]
+    # A share reads its count and the residents; a composite reads its children.
+    assert health_inputs == [
+        "distance_m_health", "distance_to_health_services",
+        "population_with_access_health", "population",
+    ]  # fmt: skip
+    assert ("block", "composite_index", "composite_proximity") in inputs
+    assert len(inputs) == len(set(inputs))
+
+
+def test_the_bundled_tree_has_a_label_per_composite():
+    from reimagina_test_port.indicators.composites import catalog
+
+    assert all(
+        not row[2].startswith("Indice compuesto") for row in catalog.catalog_rows()
+    )
