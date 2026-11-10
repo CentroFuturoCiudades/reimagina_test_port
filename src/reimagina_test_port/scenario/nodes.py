@@ -1,7 +1,8 @@
 """Lyra nodes over a Reimagina scenario: reimagina_scenario (its lots and blocks),
 reimagina_scenario_pois and reimagina_road_network (accessibility inputs), and the
 writes reimagina_scenario_indicators, reimagina_scenario_accessibility,
-reimagina_scenario_population_access and reimagina_scenario_write."""
+reimagina_scenario_population_access, reimagina_scenario_poi_diversity and
+reimagina_scenario_write."""
 
 import logging
 from typing import Any
@@ -37,7 +38,10 @@ from reimagina_test_port.indicators.accessibility.nodes import (
     NODES_DECLARATION,
     POIS_DECLARATION,
 )
-from reimagina_test_port.indicators.population_access.nodes import PoiType
+from reimagina_test_port.indicators.population_access.nodes import (
+    DIVERSITY_KEY,
+    PoiType,
+)
 from reimagina_test_port.scenario import source, writer
 
 logger = logging.getLogger(__name__)
@@ -353,18 +357,44 @@ def scenario_population_access(
 
 
 @metric(
+    name="reimagina_scenario_poi_diversity",
+    description=(
+        "Compute a scenario's POI diversity and write it to Reimagina's "
+        "element_state_indicator_value, under the same rules as "
+        "reimagina_scenario_indicators. Only blocks are written."
+    ),
+    inputs={"blocks": Dependency("reimagina_poi_diversity_blocks")},
+    outputs={"reimagina_scenario_poi_diversity": WRITE_DECLARATION},
+)
+def scenario_poi_diversity(
+    parameters: WriteParameters,
+    blocks: gpd.GeoDataFrame,
+    context: RunContext,
+) -> pd.DataFrame:
+    """Block values, in their own transaction."""
+    return write_group(
+        parameters,
+        {"block": blocks},
+        {DIVERSITY_KEY: "number"},
+        node="reimagina_scenario_poi_diversity",
+        log=context.logger,
+    )
+
+
+@metric(
     name="reimagina_scenario_write",
     description=(
-        "Compute and write a scenario's built-form indicators, accessibility and "
-        "population access: reimagina_scenario_indicators, "
-        "reimagina_scenario_accessibility and "
-        "reimagina_scenario_population_access, each in its own transaction. The "
-        "result adds up all three."
+        "Compute and write a scenario's built-form indicators, accessibility, "
+        "population access and POI diversity: reimagina_scenario_indicators, "
+        "reimagina_scenario_accessibility, reimagina_scenario_population_access "
+        "and reimagina_scenario_poi_diversity, each in its own transaction. The "
+        "result adds up all four."
     ),
     inputs={
         "indicators": Dependency("reimagina_scenario_indicators"),
         "accessibility": Dependency("reimagina_scenario_accessibility"),
         "population_access": Dependency("reimagina_scenario_population_access"),
+        "poi_diversity": Dependency("reimagina_scenario_poi_diversity"),
     },
     outputs={"reimagina_scenario_write": WRITE_DECLARATION},
 )
@@ -373,9 +403,10 @@ def scenario_write(
     indicators: pd.DataFrame,
     accessibility: pd.DataFrame,
     population_access: pd.DataFrame,
+    poi_diversity: pd.DataFrame,
 ) -> pd.DataFrame:
     """Final node: the writes' summary in one row."""
-    writes = pd.concat([indicators, accessibility, population_access])
+    writes = pd.concat([indicators, accessibility, population_access, poi_diversity])
     return pd.DataFrame(
         [
             {

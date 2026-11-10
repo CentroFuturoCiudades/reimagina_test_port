@@ -73,13 +73,14 @@ def test_entropy_of_the_types_reached():
         crs=CRS,
     )
     types = ["a", "b", "a", "a", "b", "a", "b", "a"]
-    values = poi_diversity(lots, pois, types, street(), CRS, 100, 4)
+    # k = 2: the types the POIs have.
+    values = poi_diversity(lots, pois, types, street(), CRS, 100)
     np.testing.assert_allclose(
-        values, [normalised(1, 1, k=4), normalised(3, 1, k=4), 0, np.nan]
+        values, [normalised(1, 1, k=2), normalised(3, 1, k=2), 0, np.nan]
     )
     # One type reached is 0, not -0.0.
     assert not np.signbit(values[2])
-    assert normalised(1, 1, k=4) == pytest.approx(0.5)
+    assert normalised(1, 1, k=2) == pytest.approx(1)
 
 
 def test_blocks_average_their_lots_weighted_by_population():
@@ -96,7 +97,7 @@ def test_blocks_average_their_lots_weighted_by_population():
     assert np.isnan(block[1:]).all()
 
 
-def test_snapshot_counts_the_catalog_types():
+def test_snapshot_counts_the_types_received():
     runner = LocalRunner.from_definitions(
         {"reimagina-test-port": create_snapshot_plugin()}
     )
@@ -104,9 +105,9 @@ def test_snapshot_counts_the_catalog_types():
         "reimagina_poi_diversity", {"parameters": {"snapshot": "synthetic"}}
     )
     lots = outputs["reimagina_poi_diversity_lots"]["poi_diversity"]
-    # Four POIs of four catalog types, all within reach of most lots, out of k = 12;
-    # the fifth POI's type is not in the catalog and does not count.
-    assert lots.max() == pytest.approx(np.log(4) / np.log(12))
-    assert lots.between(0, 1).all()
+    # Five POIs of five types, so k = 5: every lot reaches all five but one, which
+    # reaches four.
+    assert sorted(lots.round(6).unique()) == pytest.approx([np.log(4) / np.log(5), 1])
+    assert lots.lt(1).sum() == 1
     blocks = outputs["reimagina_poi_diversity_blocks"].set_index("id")
     assert np.isnan(blocks.loc["block-empty", "poi_diversity"])

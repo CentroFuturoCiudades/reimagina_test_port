@@ -61,6 +61,7 @@ def create_plugin() -> PluginDefinition:
             scenario_nodes.scenario_indicators,
             scenario_nodes.scenario_accessibility,
             scenario_nodes.scenario_population_access,
+            scenario_nodes.scenario_poi_diversity,
             scenario_nodes.scenario_write,
             ingestion_nodes.baseline_dataset,
             ingestion_nodes.baseline_elements,

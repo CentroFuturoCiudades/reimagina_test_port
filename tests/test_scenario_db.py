@@ -328,6 +328,7 @@ def seed_catalog(conn) -> None:
         *accessibility_nodes.DISTANCE_KEYS,
         *accessibility_nodes.SCORE_KEYS,
         *population_access_nodes.KEYS,
+        population_access_nodes.DIVERSITY_KEY,
     ]
     for element_type in ("lot", "block"):
         for key in keys:
@@ -613,6 +614,21 @@ def test_population_access_without_coverage_uses_the_default(dsn, caplog):
     assert "without coverage_m" in caplog.text
     access = stored(dsn, BASELINE)[(BLOCK, "population_with_access_health_services")]
     assert access[0] == 93
+
+
+def test_write_poi_diversity(dsn):
+    write(BASELINE)
+    values = stored(dsn, BASELINE)
+    # The clinic is of health and health_services, the pharmacy of health_services:
+    # one and two POIs of k = 2 types.
+    share = np.array([1, 2]) / 3
+    expected = -(share * np.log(share)).sum() / np.log(2)
+    assert values[(BLOCK, "poi_diversity")][0] == pytest.approx(expected, abs=1e-4)
+    # Only blocks are written.
+    assert (HOUSE, "poi_diversity") not in values
+    # The fork keeps only the park: one type, so 0 where the house now is.
+    write(FORK)
+    assert stored(dsn, FORK)[(BLOCK_2, "poi_diversity")][0] == 0
 
 
 def test_write_clears_values_back_to_baseline(dsn):

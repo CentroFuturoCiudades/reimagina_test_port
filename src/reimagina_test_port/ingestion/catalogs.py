@@ -22,6 +22,7 @@ from reimagina_test_port.indicators.accessibility.nodes import ACCESSIBILITY_KEY
 from reimagina_test_port.indicators.population_access.nodes import (
     ACCESS_KEYS,
     DISTANCE_KEYS,
+    DIVERSITY_KEY,
 )
 from reimagina_test_port.ingestion.crosswalk import (
     AMENITY_CATEGORIES,
@@ -77,6 +78,7 @@ INDICATORS = {
         key: (f"Poblacion con acceso a {key[23:]}", None, "number", "population_access")
         for key in ACCESS_KEYS
     },
+    DIVERSITY_KEY: ("Diversidad de destinos a 500 m", None, "number", "poi_diversity"),
 }
 INDICATOR_ELEMENT_TYPES = ("lot", "block")
 if missing := sorted(set(UNITS) - set(INDICATORS)):

@@ -204,15 +204,14 @@ def population_access_metrics(
 
 DIVERSITY_KEY = "poi_diversity"
 DIVERSITY_M = 500
-# The classes of the diversity: every poi_catalog type, so k = 12.
-DIVERSITY_TYPES = DESTINATION_TYPES
 DIVERSITY_COLUMN = column(
     DIVERSITY_KEY,
     "number",
     Unit.RATIO,
     "Shannon entropy of the poi_types of the POIs within 500 m over the road "
-    "network, over ln k (0 = one type or none, 1 = all k equally); for a block, its "
-    "lots' average weighted by population. Null without geometry or residents.",
+    "network, over ln k, k being how many types the POIs have (0 = one type or "
+    "none, 1 = all k equally); for a block, its lots' average weighted by "
+    "population. Null without geometry or residents.",
 )
 
 
@@ -236,19 +235,17 @@ def poi_diversity_metric(
         crs = resolve_access_crs(lots)
         with timed("road network", context.logger):
             network = street_network(nodes, edges)
-        counted = pois[pois[POI_TYPE_COLUMN].isin(DIVERSITY_TYPES)]
         with timed("POI diversity", context.logger):
             values = diversity(
                 lots,
                 blocks,
                 poi_diversity(
                     lots,
-                    counted.geometry,
-                    counted[POI_TYPE_COLUMN],
+                    pois.geometry,
+                    pois[POI_TYPE_COLUMN],
                     network,
                     crs,
                     DIVERSITY_M,
-                    len(DIVERSITY_TYPES),
                 ),
             )
         return {
@@ -267,7 +264,7 @@ def poi_diversity_metric(
         description=(
             "Diversity of the POIs within walking distance, by poi_type: the "
             "Shannon entropy of the types of the POIs within 500 m over the road "
-            "network, over ln k, k being how many poi_catalog types there are. Lots "
+            "network, over ln k, k being how many types the POIs have. Lots "
             "count the POIs their entries reach, walked as in "
             "reimagina_nearest_poi_distance; blocks average their lots weighted by "
             "population."

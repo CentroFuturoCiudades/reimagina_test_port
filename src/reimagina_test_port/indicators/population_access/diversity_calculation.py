@@ -4,8 +4,8 @@ Shannon entropy of the types of the POIs reached, over its maximum,
     D = -sum(p_i ln p_i) / ln k,
 
 where p_i is the share of the POIs reached that are of type i and k is how many
-types are counted. A lot reaching nothing, or only one type, scores 0; one reaching
-as many POIs of each of the k types scores 1. A POI of several types counts once in
+types the POIs given have. A lot reaching nothing, or only one type, scores 0; one
+reaching as many POIs of each of the k types scores 1. A POI of several types counts once in
 each, however many entries it has.
 
 A POI is reached when the walk to it is within the radius, walked as in
@@ -133,20 +133,19 @@ def poi_diversity(
     network: StreetNetwork,
     crs: str,
     radius: float,
-    k: int,
 ) -> np.ndarray:
     """D per lot, in order; NaN without geometry. ``pois`` has one row per POI and
-    type, ``types`` its poi_type; ``radius`` is in metres and ``k`` is how many
-    types are counted. Rows at the same place are walked once."""
+    type, ``types`` its poi_type, and ``radius`` is in metres. Rows at the same
+    place are walked once."""
     origins = entries(
         gpd.GeoSeries(lots.geometry.to_numpy(), crs=lots.crs).to_crs(crs), network
     )
     values = np.full(len(lots), np.nan)
     values[origins["owner"].unique()] = 0.0
-    if pois.empty or k < 2:
+    kind, kinds = pd.factorize(np.asarray(types))
+    if len(kinds) < 2:
         return values
     place, places = pd.factorize(pois.to_wkb())
-    kind, kinds = pd.factorize(np.asarray(types))
     rows = pd.DataFrame({"destination": place, "kind": kind})
     # POIs reached by lot and type, added up a chunk of places at a time.
     counts = np.zeros((len(lots), len(kinds)))
@@ -166,7 +165,7 @@ def poi_diversity(
     share = counts[reached] / total[reached, None]
     # As sum(p ln 1/p), 0 where p = 0: a negated sum of zeros would give -0.0.
     surprise = np.log(np.divide(1, share, where=share > 0, out=np.ones_like(share)))
-    values[reached] = (share * surprise).sum(axis=1) / np.log(k)
+    values[reached] = (share * surprise).sum(axis=1) / np.log(len(kinds))
     return values
 
 
