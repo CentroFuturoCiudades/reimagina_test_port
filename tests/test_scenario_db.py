@@ -1081,3 +1081,87 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch):
     assert (row["elements"], row["elements_created"], row["dry_run"]) == (8, 6, False)
     written = [row[c] for c in ("blocks", "lots", "amenities", "establishments")]
     assert written == [2, 4, 1, 1]
+
+
+# ------------------------------------------------------------------ street network
+
+
+@pytest.fixture
+def offline_network(monkeypatch, tmp_path):
+    """Mexicali with a local lake folder, one square of blocks and OSM a triangle."""
+    import dataclasses
+
+    from reimagina_test_port.common import lake
+    from reimagina_test_port.ingestion import network
+    from reimagina_test_port.ingestion.cities import CITIES
+
+    city = CITIES["mexicali"]
+    lake_folder = tmp_path / "lake"
+    monkeypatch.setitem(
+        CITIES,
+        "mexicali",
+        dataclasses.replace(
+            city,
+            streets=dataclasses.replace(city.streets, output_prefix=str(lake_folder)),
+        ),
+    )
+    square = gpd.GeoSeries([box(-115.46, 32.61, -115.45, 32.62)], crs=4326)
+    monkeypatch.setattr(
+        lake,
+        "read_parquet",
+        lambda uri, columns: pd.DataFrame({"geometry": square.to_wkb()}),
+    )
+    nodes = pd.DataFrame(
+        {"x": [0.0, 100.0, 0.0], "y": [0.0, 0.0, 100.0]},
+        index=pd.Index([1, 2, 3], name="id"),
+    )
+    edges = pd.DataFrame(
+        {"from": [1, 2, 3], "to": [2, 3, 1], "length": [100, 141.4, 100]}
+    )
+    monkeypatch.setattr(
+        network, "osm_network", lambda blocks, crs, params, boundary: (nodes, edges)
+    )
+    return lake_folder
+
+
+def write_network(project_id: str, *, dry_run: bool) -> dict:
+    runner = LocalRunner.from_definitions(
+        {"reimagina-test-port": plugin.create_plugin()}
+    )
+    result = runner.run(
+        "reimagina_street_network_write",
+        {
+            "parameters": {
+                "city": "mexicali",
+                "project_id": project_id,
+                "dry_run": dry_run,
+            }
+        },
+    )
+    return result["reimagina_street_network_write"].iloc[0].to_dict()
+
+
+def test_street_network_write(dsn, network_uri, offline_network):
+    from reimagina_test_port.indicators.accessibility.network import read_network
+
+    dry = write_network(PROJECT, dry_run=True)
+    assert dry["previous_road_network_uri"] == network_uri
+    assert dry["road_network_uri"].startswith(str(offline_network))
+    assert (dry["nodes"], dry["edges"]) == (3, 3)
+    assert not offline_network.exists()  # nothing uploaded
+    assert scenario.read_road_network_uri(BASELINE) == network_uri
+
+    written = write_network(PROJECT, dry_run=False)
+    assert written["road_network_uri"] == dry["road_network_uri"]  # named by contents
+    assert scenario.read_road_network_uri(FORK) == written["road_network_uri"]
+    tables = read_network(Path(written["road_network_uri"]))
+    assert len(tables["nodes"]) == 3
+    # Again: the same file is kept, the project already points at it.
+    again = write_network(PROJECT, dry_run=False)
+    assert again["previous_road_network_uri"] == written["road_network_uri"]
+
+
+def test_street_network_write_unknown_project(dsn, offline_network):
+    with pytest.raises(GraphExecutionError) as failure:
+        write_network(str(uuid4()), dry_run=True)
+    assert isinstance(failure.value.__cause__, MetricInputError)
