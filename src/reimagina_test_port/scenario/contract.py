@@ -1,6 +1,8 @@
 """The catalog keys this plugin writes, checked against Reimagina's database.
 
-The API owns ``attribute_catalog`` and ``indicator_catalog`` (alembic). Before
+The API owns ``attribute_catalog`` and ``indicator_catalog`` (alembic), except
+the composites' keys, which the plugin registers from composite_config.yaml
+(``indicators.composites.catalog``). Before
 writing, the plugin checks that every key it writes is active there, with a
 compatible value type and, for enums, the values it uses; otherwise it fails
 and names what to add, instead of silently skipping keys.
