@@ -1,8 +1,9 @@
-"""Read-only access to the CFC data lake (``az://container/path`` URIs).
+"""Access to the CFC data lake (``az://container/path`` URIs).
 
 From reimagina-lyra ``ingestion/lake.py``. Authenticates with
 ``DefaultAzureCredential``: the worker's managed identity, or ``az login``
-locally. Local paths are accepted too.
+locally. Local paths are accepted too. Everything reads, except ``upload`` (the
+street network's H5), which never overwrites a file.
 """
 
 import shutil
@@ -60,6 +61,23 @@ def list_names(uri: str) -> list[str]:
     if uri.startswith("az://"):
         return [p.rsplit("/", 1)[-1] for p in filesystem().ls(uri, detail=False)]
     return sorted(p.name for p in Path(uri).iterdir())
+
+
+def upload(path: Path, uri: str) -> str:
+    """Copy a local file to ``uri`` (``az://`` or a local path); an existing file
+    there fails with ``FileExistsError``."""
+    if uri.startswith("az://"):
+        fs = filesystem()
+        if fs.exists(uri):
+            raise FileExistsError(uri)
+        fs.put_file(str(path), uri)
+    else:
+        target = Path(uri)
+        if target.exists():
+            raise FileExistsError(uri)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, target)
+    return uri
 
 
 def read_parquet(uri: str, columns: list[str]) -> pd.DataFrame:

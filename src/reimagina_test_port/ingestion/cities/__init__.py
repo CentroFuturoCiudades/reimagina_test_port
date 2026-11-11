@@ -22,6 +22,32 @@ class CityConfigError(ValueError):
     """A city YAML lacks a value or has one this preset does not know."""
 
 
+# The only street source: OpenStreetMap through Overpass (osmnx).
+OSM_STREETS_URI = "osm://overpass"
+
+
+@dataclass(frozen=True)
+class NetworkParams:
+    """``sources.streets.params`` of a city YAML."""
+
+    # Overpass filter of the ways kept; None: osmnx's walk network.
+    custom_filter: str | None = None
+    # Keep pieces not connected to the rest (gated communities).
+    retain_all: bool = True
+    # Metres of OSM fetched around the blocks.
+    margin_m: float = 500.0
+    # Lake folder the H5 is uploaded to.
+    output_prefix: str = ""
+    # merge_streets: a new street end within snap_m of a network node is that node.
+    snap_m: float = 15.0
+    # merge_streets: a loose end within split_max_m of a network edge splits it.
+    split_max_m: float = 60.0
+    # merge_streets: gaps up to this length between pieces are bridged.
+    connector_max_m: float = 5.0
+    # merge_streets: line ends this close are one node.
+    precision_m: float = 0.1
+
+
 @dataclass(frozen=True)
 class CityPreset:
     name: str
@@ -73,6 +99,9 @@ class CityPreset:
     # Space allocation by lot type: land_use -> housing.floor_share (0-100), until
     # the allocation is computed per lot. A land use not listed has no value.
     floor_share_by_land_use: dict[str, float] = field(default_factory=dict)
+    # sources.streets: OpenStreetMap's network (ingestion/network.py). None: the
+    # city has no street network step.
+    streets: NetworkParams | None = None
 
     @property
     def cve_code(self) -> str:
@@ -142,6 +171,37 @@ def from_yaml(path: Path) -> CityPreset:
         if "existing_land_use" in sources.values
         else (None, _Section(None, "existing_land_use"))
     )
+    streets_uri, streets = (
+        source("streets")
+        if "streets" in sources.values
+        else (None, _Section(None, "streets"))
+    )
+    if streets_uri not in (None, OSM_STREETS_URI):
+        msg = f"{path.name}: sources.streets: uri must be {OSM_STREETS_URI}"
+        raise CityConfigError(msg)
+    network = (
+        NetworkParams(
+            custom_filter=streets.optional("custom_filter", None),
+            retain_all=bool(streets.optional("retain_all", True)),
+            output_prefix=str(streets.required("output_prefix")).rstrip("/"),
+            **{
+                name: float(
+                    streets.optional(
+                        name, NetworkParams.__dataclass_fields__[name].default
+                    )
+                )
+                for name in (
+                    "margin_m",
+                    "snap_m",
+                    "split_max_m",
+                    "connector_max_m",
+                    "precision_m",
+                )
+            },
+        )
+        if streets_uri
+        else None
+    )
     lots, amenities, points, space_allocation = (
         params.section("lots"),
         params.section("amenities"),
@@ -201,6 +261,7 @@ def from_yaml(path: Path) -> CityPreset:
             amenities.optional("default_capacity", default("default_capacity"))
         ),
         floor_share_by_land_use=shares,
+        streets=network,
         lot_max_distance_m=float(
             points.optional("lot_max_distance_m", default("lot_max_distance_m"))
         ),
@@ -217,7 +278,7 @@ def from_yaml(path: Path) -> CityPreset:
     )
     for section in (
         blocks, census, parcels, zoning, heights, raw_amenities, denue, existing,
-        lots, amenities, points, space_allocation, sources, params, config,
+        streets, lots, amenities, points, space_allocation, sources, params, config,
     ):  # fmt: skip
         section.done()
     # Imported here: raw_amenities needs geopandas, the presets do not.

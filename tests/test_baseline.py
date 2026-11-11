@@ -505,6 +505,15 @@ def test_mexicali_yaml():
         "uso_de_suelo/usos_de_suelo_finales.geojson"
     )
     assert city.existing_land_use_column == "USOSUELO24"
+    assert city.streets is not None
+    assert city.streets.custom_filter.startswith('["highway"]["area"!~"yes"]')
+    assert city.streets.retain_all
+    assert city.streets.output_prefix.endswith("cleaned/vialidades")
+
+
+def test_streets_are_optional(tmp_path):
+    path = write_city(tmp_path, "mexicali", lambda c: c["sources"].pop("streets"))
+    assert cities.from_yaml(path).streets is None
 
 
 def test_existing_land_use_is_optional(tmp_path):
@@ -545,6 +554,9 @@ def write_city(tmp_path: Path, name: str, change) -> Path:
         (lambda c: c["params"]["lots"].update(typo=1), r"params.lots: unknown keys \['typo'\]"),
         (lambda c: c["sources"].update(roads={"uri": "x"}), r"sources: unknown keys \['roads'\]"),
         (lambda c: c.update(city="tijuana"), "must be tijuana.yaml"),
+        (lambda c: c["sources"]["streets"].update(uri="osm://drive"), "uri must be osm://overpass"),
+        (lambda c: c["sources"]["streets"]["params"].pop("output_prefix"), "output_prefix is required"),
+        (lambda c: c["sources"]["streets"]["params"].update(typo=1), r"streets.params: unknown keys \['typo'\]"),
     ],
 )  # fmt: skip
 def test_city_yaml_errors(tmp_path, change, message):
