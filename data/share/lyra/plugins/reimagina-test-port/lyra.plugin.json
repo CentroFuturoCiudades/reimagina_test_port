@@ -4934,7 +4934,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's street network from scratch: OpenStreetMap's ways over the city's blocks plus a margin, with the city's filter (Mexicali: the ULI's pedestrian network), in its metric CRS. With streets_uri, those streets replace the network inside their zone (zone_uri, or their convex hull) and are sewn to it, as exe_reimagina's Condesa network.",
+      "description": "Build a city's street network from scratch: OpenStreetMap's ways over the convex hull of the city's blocks plus a margin, within its municipality (sources.streets.boundary_uri), with the city's filter (Mexicali: the ULI's pedestrian network), in its metric CRS. With streets_uri, those streets replace the network inside their zone (zone_uri, or their convex hull) and are sewn to it, as exe_reimagina's Condesa network.",
       "inputs": {},
       "name": "reimagina_street_network",
       "outputs": {

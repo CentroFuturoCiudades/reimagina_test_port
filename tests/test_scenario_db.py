@@ -1119,7 +1119,7 @@ def offline_network(monkeypatch, tmp_path):
         {"from": [1, 2, 3], "to": [2, 3, 1], "length": [100, 141.4, 100]}
     )
     monkeypatch.setattr(
-        network, "osm_network", lambda blocks, crs, params: (nodes, edges)
+        network, "osm_network", lambda blocks, crs, params, boundary: (nodes, edges)
     )
     return lake_folder
 

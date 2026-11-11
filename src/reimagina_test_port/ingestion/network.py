@@ -4,9 +4,10 @@ From exe_reimagina: ``src/data_prep/osm_network.py`` (OSM to pandana) and
 ``scripts/escenarios/condesa/build_network.py`` (a redesigned street layout sewn
 into the city's network). Two steps:
 
-1. ``osm_network`` (always): OpenStreetMap's streets over the city's blocks plus a
-   margin, with the city's ``custom_filter`` (Mexicali: the ULI's pedestrian
-   definition, which keeps private and gated streets), in the city's metric CRS.
+1. ``osm_network`` (always): OpenStreetMap's streets over the convex hull of the
+   city's blocks plus a margin, within the municipality, with the city's ``custom_filter`` (Mexicali: the
+   ULI's pedestrian definition, which keeps private and gated streets), in the
+   city's metric CRS.
 2. ``merge_streets`` (optional): a file of street lines replaces the network
    inside its zone (the lines' convex hull, or a polygon given apart). Network
    edges whose midpoint lies in the zone are removed; the new lines are noded
@@ -45,10 +46,31 @@ NODE_ID_FLOOR = 9_000_000_000
 # ----------------------------------------------------------------------- step 1
 
 
-def study_area(blocks: gpd.GeoSeries, crs: str, margin_m: float) -> shapely.Geometry:
-    """The blocks plus ``margin_m``, in EPSG:4326, to fetch OSM over."""
+def study_area(
+    blocks: gpd.GeoSeries,
+    crs: str,
+    margin_m: float,
+    boundary: gpd.GeoSeries | None = None,
+) -> shapely.Geometry:
+    """The blocks' convex hull plus ``margin_m``, within ``boundary`` when given,
+    in EPSG:4326, to fetch OSM over.
+
+    The hull, not the blocks alone: it holds the roads between the city and its
+    outlying localities, which would otherwise be pieces apart from the rest
+    (exe_reimagina's ``roads.py`` fetched the blocks' bounding box). The
+    boundary, the municipality, keeps out what lies across it: Calexico's
+    streets, which OSM joins to Mexicali's at the border crossings (the ULI's
+    issue #610; exe_reimagina fetched the municipality).
+    """
     metric = blocks.to_crs(crs)
-    area = shapely.union_all(shapely.buffer(metric.to_numpy(), margin_m))
+    hull = shapely.convex_hull(
+        shapely.multipoints(shapely.get_coordinates(metric.to_numpy()))
+    )
+    area = shapely.buffer(hull, margin_m)
+    if boundary is not None:
+        area = shapely.intersection(
+            area, shapely.union_all(boundary.to_crs(crs).to_numpy())
+        )
     return gpd.GeoSeries([area], crs=crs).to_crs(OSM_CRS).iloc[0]
 
 
@@ -98,10 +120,13 @@ def graph_tables(graph, crs: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def osm_network(
-    blocks: gpd.GeoSeries, crs: str, params: NetworkParams
+    blocks: gpd.GeoSeries,
+    crs: str,
+    params: NetworkParams,
+    boundary: gpd.GeoSeries | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Step 1: the city's network from OpenStreetMap."""
-    area = study_area(blocks, crs, params.margin_m)
+    area = study_area(blocks, crs, params.margin_m, boundary)
     nodes, edges = graph_tables(osm_graph(area, params), crs)
     logger.info("OSM: %s nodes / %s edges", f"{len(nodes):,}", f"{len(edges):,}")
     return nodes, edges

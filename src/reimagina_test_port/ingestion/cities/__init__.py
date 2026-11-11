@@ -38,6 +38,9 @@ class NetworkParams:
     margin_m: float = 500.0
     # Lake folder the H5 is uploaded to.
     output_prefix: str = ""
+    # (Geo)Parquet of the polygon OSM is fetched within (the municipality); None:
+    # the blocks' hull alone.
+    boundary_uri: str | None = None
     # merge_streets: a new street end within snap_m of a network node is that node.
     snap_m: float = 15.0
     # merge_streets: a loose end within split_max_m of a network edge splits it.
@@ -184,6 +187,7 @@ def from_yaml(path: Path) -> CityPreset:
             custom_filter=streets.optional("custom_filter", None),
             retain_all=bool(streets.optional("retain_all", True)),
             output_prefix=str(streets.required("output_prefix")).rstrip("/"),
+            boundary_uri=streets.optional("boundary_uri", None),
             **{
                 name: float(
                     streets.optional(

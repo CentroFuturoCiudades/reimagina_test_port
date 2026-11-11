@@ -347,8 +347,11 @@ from exe_reimagina's `src/data_prep/osm_network.py` (OSM to pandana) and
 `scripts/escenarios/condesa/build_network.py` (a redesign sewn into the city's
 network). The city YAML's `sources.streets` (`uri: osm://overpass`) sets it up.
 
-1. Always, from scratch: OpenStreetMap's ways over the city's blocks plus
-   `margin_m`, through Overpass (osmnx), with the city's `custom_filter`, two-way,
+1. Always, from scratch: OpenStreetMap's ways over the convex hull of the city's
+   blocks plus `margin_m` (so the roads between the city and its outlying
+   localities are in, as in exe_reimagina's `roads.py`), within the municipality
+   (`boundary_uri`: OSM joins Calexico's streets to Mexicali's at the border
+   crossings, the ULI's issue #610), through Overpass (osmnx), with the city's `custom_filter`, two-way,
    in the city's CRS (the blocks' UTM zone, which the indicators expect).
    Mexicali's filter is the pedestrian network of `MX_Mexicali_2025_ULI.yml`
    (`network.pedestrian`): unlike osmnx's `walk` it keeps private and gated

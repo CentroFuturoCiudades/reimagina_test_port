@@ -352,7 +352,8 @@ def _network_input_error(field: str, message: str) -> MetricInputError:
     name="reimagina_street_network",
     description=(
         "Build a city's street network from scratch: OpenStreetMap's ways over "
-        "the city's blocks plus a margin, with the city's filter (Mexicali: the "
+        "the convex hull of the city's blocks plus a margin, within its "
+        "municipality (sources.streets.boundary_uri), with the city's filter (Mexicali: the "
         "ULI's pedestrian network), in its metric CRS. With streets_uri, those "
         "streets replace the network inside their zone (zone_uri, or their "
         "convex hull) and are sewn to it, as exe_reimagina's Condesa network."
@@ -378,7 +379,13 @@ def street_network(
         raw = lake.read_parquet(city.blocks_uri, ["geometry"])
         blocks = gpd.GeoSeries.from_wkb(raw["geometry"], crs="EPSG:4326")
     with timed("OpenStreetMap", context.logger):
-        nodes, edges = network.osm_network(blocks, city.target_crs, city.streets)
+        boundary = None
+        if city.streets.boundary_uri:
+            raw = lake.read_parquet(city.streets.boundary_uri, ["geometry"])
+            boundary = gpd.GeoSeries.from_wkb(raw["geometry"], crs="EPSG:4326")
+        nodes, edges = network.osm_network(
+            blocks, city.target_crs, city.streets, boundary
+        )
     if parameters.streets_uri:
         folder = context.temp_dir / "streets"
         lines = network.read_geometries(

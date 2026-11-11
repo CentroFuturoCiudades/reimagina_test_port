@@ -103,6 +103,27 @@ def test_study_area_covers_blocks_and_margin():
     assert not area.iloc[0].contains(block.buffer(210))
 
 
+def test_study_area_holds_the_roads_between_localities():
+    # Two localities 5 km apart: the road between them is inside the area.
+    near, far = (
+        box(640000, 3610000, 640100, 3610100),
+        box(645000, 3610000, 645100, 3610100),
+    )
+    blocks = gpd.GeoSeries([near, far], crs=CRS).to_crs(4326)
+    area = gpd.GeoSeries([network.study_area(blocks, CRS, 200)], crs=4326).to_crs(CRS)
+    assert area.iloc[0].contains(LineString([(640100, 3610050), (645000, 3610050)]))
+
+
+def test_study_area_stops_at_the_boundary():
+    block = box(640000, 3610000, 640100, 3610100)
+    blocks = gpd.GeoSeries([block], crs=CRS).to_crs(4326)
+    # A boundary that ends 50 m north of the block: the margin stops there.
+    boundary = gpd.GeoSeries([box(639000, 3609000, 641000, 3610150)], crs=CRS)
+    area = network.study_area(blocks, CRS, 200, boundary.to_crs(4326))
+    _, _, _, top = gpd.GeoSeries([area], crs=4326).to_crs(CRS).total_bounds
+    assert top == pytest.approx(3610150, abs=1)
+
+
 # ------------------------------------------------------------------ step 2
 
 
@@ -215,7 +236,9 @@ def offline(monkeypatch, tmp_path):
         "read_parquet",
         lambda uri, columns: pd.DataFrame({"geometry": square.to_wkb()}),
     )
-    monkeypatch.setattr(network, "osm_network", lambda blocks, crs, params: grid())
+    monkeypatch.setattr(
+        network, "osm_network", lambda blocks, crs, params, boundary: grid()
+    )
     return city
 
 
