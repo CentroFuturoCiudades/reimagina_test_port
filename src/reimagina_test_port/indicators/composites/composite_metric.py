@@ -32,11 +32,13 @@ from reimagina_test_port.indicators.composites.composite import (
     build_composite,
     normalize_indicators,
 )
+from reimagina_test_port.indicators.land_use import calculation as land_use
 from reimagina_test_port.indicators.population_access.nodes import (
     ACCESS_KEYS,
     DISTANCE_KEYS,
     SHARE_KEYS,
 )
+from reimagina_test_port.indicators.streets import calculation as streets
 
 CONFIG = Path(__file__).with_name("composite_config.yaml")
 # A leaf's source -> its Lyra output prefix and columns; the output is
@@ -48,6 +50,8 @@ SOURCES = {
         "reimagina_population_access",
         DISTANCE_KEYS + ACCESS_KEYS + SHARE_KEYS,
     ),
+    "land_use": ("reimagina_land_use", land_use.KEYS),
+    "streets": ("reimagina_streets", streets.KEYS),
 }
 ELEMENTS = ("blocks", "lots")
 LEAF_KEYS = {

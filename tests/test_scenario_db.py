@@ -19,16 +19,18 @@ import pytest
 from lyra.sdk import GraphExecutionError, LocalRunner
 from lyra.sdk.errors import MetricInputError
 from psycopg import conninfo, sql
-from shapely.geometry import box
+from shapely.geometry import LineString, box
 
 from reimagina_test_port import plugin
 from reimagina_test_port.common import schema
 from reimagina_test_port.indicators.accessibility import model as accessibility
 from reimagina_test_port.indicators.accessibility import nodes as accessibility_nodes
 from reimagina_test_port.indicators.composites import catalog as composite_catalog
+from reimagina_test_port.indicators.land_use import calculation as land_use_calculation
 from reimagina_test_port.indicators.population_access import (
     nodes as population_access_nodes,
 )
+from reimagina_test_port.indicators.streets import calculation as streets_calculation
 from reimagina_test_port.ingestion import baseline_writer, catalogs
 from reimagina_test_port.ingestion import nodes as ingestion_nodes
 from reimagina_test_port.scenario import contract
@@ -60,7 +62,7 @@ CREATE EXTENSION postgis;
 CREATE SCHEMA reimagina_urbano;
 SET search_path = reimagina_urbano, public;
 CREATE TYPE element_type AS ENUM (
-    'block', 'lot', 'building', 'tree', 'amenity', 'establishment'
+    'block', 'lot', 'building', 'tree', 'amenity', 'establishment', 'right_of_way'
 );
 CREATE TYPE attribute_value_type AS ENUM ('number', 'integer', 'text', 'enum', 'json');
 CREATE TABLE projects (id uuid PRIMARY KEY, road_network_uri text);
@@ -336,6 +338,8 @@ def seed_catalog(conn) -> None:
         *accessibility_nodes.DISTANCE_KEYS,
         *accessibility_nodes.SCORE_KEYS,
         *population_access_nodes.KEYS,
+        *land_use_calculation.KEYS,
+        *streets_calculation.KEYS,
     ]
     for element_type in ("lot", "block"):
         for key in keys:
@@ -1053,8 +1057,8 @@ def test_migrate_fork_edits(new_baseline, dsn):
         module.migrate(dsn, FORK, NEW_FORK, apply=False)
 
 
-def test_baseline_write_metric(new_baseline, dsn, monkeypatch):
-    from reimagina_test_port.ingestion import baseline
+def test_baseline_write_metric(new_baseline, dsn, monkeypatch, offline_network):
+    from reimagina_test_port.ingestion import baseline, streets
 
     tables = new_tables()
     monkeypatch.setattr(
@@ -1068,6 +1072,19 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch):
             "report": {},
         },
     )
+    street = gpd.GeoDataFrame(
+        {
+            "id": [str(uuid4())],
+            "parent_id": [None],
+            "source_record_ref": ["1-2"],
+            "bands.use": ['["sidewalk", "protected_bike_lane", "lanes", "sidewalk"]'],
+            "bands.share": ["[20, 10, 50, 20]"],
+            "streetlights": [50.0],
+        },
+        geometry=[LineString([(-115.5, 32.6), (-115.49, 32.6)])],
+        crs=4326,
+    )
+    monkeypatch.setattr(streets, "build", lambda *_: street)
     runner = LocalRunner.from_definitions(
         {"reimagina-test-port": plugin.create_plugin()}
     )
@@ -1078,9 +1095,25 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch):
     parameters["scenario_id"] = NEW_BASELINE
     result = runner.run("reimagina_baseline_write", {"parameters": parameters})
     row = result["reimagina_baseline_write"].iloc[0].to_dict()
-    assert (row["elements"], row["elements_created"], row["dry_run"]) == (8, 6, False)
-    written = [row[c] for c in ("blocks", "lots", "amenities", "establishments")]
-    assert written == [2, 4, 1, 1]
+    assert (row["elements"], row["elements_created"], row["dry_run"]) == (9, 7, False)
+    columns = ("blocks", "lots", "amenities", "establishments", "rights_of_way")
+    assert [row[c] for c in columns] == [2, 4, 1, 1, 1]
+    # A street's bands are stored as JSON lists; its streetlights as a number.
+    with psycopg.connect(dsn) as conn:
+        values = dict(
+            conn.execute(
+                "SELECT ac.key, coalesce(v.value_json::text, v.value_num::text) "
+                "FROM reimagina_urbano.element_state_attribute_value v "
+                "JOIN reimagina_urbano.attribute_catalog ac ON ac.id = v.attribute_id "
+                "WHERE v.element_id = %s::uuid",
+                (street["id"].iloc[0],),
+            ).fetchall()
+        )
+    assert values == {
+        "bands.use": '["sidewalk", "protected_bike_lane", "lanes", "sidewalk"]',
+        "bands.share": "[20, 10, 50, 20]",
+        "streetlights": "50",
+    }
 
 
 # ------------------------------------------------------------------ street network

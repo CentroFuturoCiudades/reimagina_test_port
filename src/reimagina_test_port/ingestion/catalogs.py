@@ -48,6 +48,9 @@ ATTRIBUTES = {
     ("amenity", "area_m2"): ("number", None, "m2"),
     ("establishment", "category"): ("enum", ESTABLISHMENT_CATEGORIES, None),
     ("establishment", "num_workers"): ("integer", None, None),
+    ("right_of_way", "bands.use"): ("json", None, None),
+    ("right_of_way", "bands.share"): ("json", None, "%"),
+    ("right_of_way", "streetlights"): ("number", None, "%"),
 }
 
 # key -> (name, unit, value_type, job_code), on lots and blocks.
@@ -80,6 +83,38 @@ INDICATORS = {
         key: (f"Poblacion con acceso a {key[23:]}", None, "number", "population_access")
         for key in ACCESS_KEYS
     },
+    "net_residential_density": (
+        "Densidad residencial neta",
+        "viv/ha",
+        "number",
+        "land_use",
+    ),
+    "commercial_land_share": (
+        "Proporcion de suelo comercial",
+        None,
+        "number",
+        "land_use",
+    ),
+    "land_use_mix": ("Mezcla de usos de suelo", None, "number", "land_use"),
+    "intersection_density": (
+        "Conectividad de calles (intersecciones por km2)",
+        None,
+        "number",
+        "streets",
+    ),
+    "bike_lane_coverage": ("Cobertura de ciclovias", None, "number", "streets"),
+    "protected_bike_lane_coverage": (
+        "Cobertura de ciclovias protegidas",
+        None,
+        "number",
+        "streets",
+    ),
+    "street_lighting_coverage": (
+        "Cobertura de alumbrado publico",
+        None,
+        "number",
+        "streets",
+    ),
 }
 INDICATOR_ELEMENT_TYPES = ("lot", "block")
 if missing := sorted(set(UNITS) - set(INDICATORS)):

@@ -13,7 +13,7 @@ import rasterio
 import yaml
 from lyra.sdk import LocalRunner
 from rasterio.transform import from_origin
-from shapely.geometry import Point, box
+from shapely.geometry import LineString, Point, box
 
 from reimagina_test_port import plugin
 from reimagina_test_port.common import lake
@@ -21,10 +21,17 @@ from reimagina_test_port.ingestion import (
     baseline,
     cadastral,
     cities,
+    network,
     prep,
     raw_amenities,
+    streets,
 )
-from reimagina_test_port.ingestion.cities import CITIES
+from reimagina_test_port.ingestion.cities import (
+    CITIES,
+    BikeLanes,
+    Source,
+    StreetLighting,
+)
 
 CRS = "EPSG:32611"
 KEYS = ("Numdel", "Colonia", "Manzana", "Lote", "Fraccion")
@@ -316,6 +323,60 @@ def write_sources(root: Path) -> dict[str, str]:
         "denue_uri": str(root / "denue.csv"),
         "tiles_uri": str(root / "tiles"),
         "manifests_uri": str(root / "manifests"),
+        **write_streets(root),
+    }
+
+
+# The street network (reimagina_street_network): three streets, in the city's CRS;
+# the first both ways, the third from its higher node.
+NETWORK_NODES = pd.DataFrame(
+    {"x": [0.0, 40, 60, 100, 0, 40], "y": [-5.0, -5, -5, -5, 50, 50]},
+    index=pd.Index([1, 2, 3, 4, 5, 6], name="id"),
+)
+NETWORK_EDGES = pd.DataFrame(
+    {"from": [1, 2, 3, 6], "to": [2, 1, 4, 5], "length": [40.0, 40, 40, 40]}
+)
+STREET_KEYS = ["1-2", "3-4", "5-6"]
+
+
+def network_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The network as reimagina_street_network returns it."""
+    edges = NETWORK_EDGES.rename(columns={"length": "distance"}).assign(two_way=True)
+    return NETWORK_NODES.reset_index(), edges
+
+
+def write_streets(root: Path) -> dict:
+    """The block faces (lit, not lit, unanswered, another municipality's) and two
+    bike lanes along the network's streets, as local files."""
+    # Each face 5-7 m from its street and 40 m or more from the others.
+    gpd.GeoDataFrame(
+        {"CVE_MUN": ["002", "002", "002", "002", "003", "002"],
+         "ALUMPUB": ["1", "3", "1", "9", "3", "8"]},
+        geometry=[LineString([(5, -12), (35, -12)]), LineString([(5, 0), (35, 0)]),
+                  LineString([(65, -12), (95, -12)]), LineString([(65, 0), (95, 0)]),
+                  LineString([(65, -8), (95, -8)]), LineString([(5, 45), (35, 45)])],
+        crs=CRS,
+    ).to_file(root / "faces.geojson")  # fmt: skip
+    gpd.GeoDataFrame(
+        {"TIPO": ["SEGREGADO INDEPENDIENTE", "COMPARTIDO"]},
+        geometry=[LineString([(0, 0), (40, 0)]), LineString([(0, 60), (40, 60)])],
+        crs=CRS,
+    ).to_file(root / "lanes.geojson")
+    return {
+        "street_lighting": StreetLighting(
+            Source(str(root / "faces.geojson")),
+            column="ALUMPUB",
+            lit=("1",),
+            unlit=("3",),
+            where={"CVE_MUN": "002"},
+            max_distance_m=25,
+        ),
+        "bike_lanes": BikeLanes(
+            Source(str(root / "lanes.geojson")),
+            type_column="TIPO",
+            protected=("SEGREGADO INDEPENDIENTE",),
+            max_distance_m=15,
+        ),
     }
 
 
@@ -332,7 +393,13 @@ def city(tmp_path, monkeypatch):
     monkeypatch.setattr(
         lake, "read_parquet", lambda uri, columns: original(str(local[uri]), columns)
     )
-    return preset
+    # OpenStreetMap is the network above; no municipality boundary to read.
+    monkeypatch.setattr(
+        network,
+        "osm_network",
+        lambda blocks, crs, params, boundary: (NETWORK_NODES, NETWORK_EDGES),
+    )
+    return replace(preset, streets=replace(preset.streets, boundary_uri=None))
 
 
 def test_build(city, tmp_path):
@@ -472,6 +539,40 @@ def test_build(city, tmp_path):
     assert again["amenities"]["id"].tolist() == result["amenities"]["id"].tolist()
 
 
+def test_streets(city, tmp_path):
+    table = streets.build(city, *network_tables(), tmp_path / "work")
+    table = table.set_index("source_record_ref")
+    # One element per street, whatever the direction of its edges.
+    assert table.index.tolist() == STREET_KEYS
+    first, second, third = STREET_KEYS
+    # Faces 1 and 3 next to it: half lit; 1 and 9 (unanswered): lit, the other
+    # municipality's face aside; only an 8: no value.
+    assert table.loc[first, "streetlights"] == 50
+    assert table.loc[second, "streetlights"] == 100
+    assert pd.isna(table.loc[third, "streetlights"])
+    # The protected lane runs 5 m from the first street: a band of its own. The
+    # shared one, 10 m from the third, makes its lanes shared_lanes. The second's
+    # midpoint is 40 m from the protected lane's end: lanes only.
+    bands = {key: json.loads(use) for key, use in table["bands.use"].items()}
+    assert bands[first] == ["sidewalk", "protected_bike_lane", "lanes", "sidewalk"]
+    assert bands[third] == ["sidewalk", "shared_lanes", "sidewalk"]
+    assert bands[second] == ["sidewalk", "lanes", "sidewalk"]
+    for use, share in zip(table["bands.use"], table["bands.share"], strict=True):
+        assert len(json.loads(use)) == len(json.loads(share))
+        assert sum(json.loads(share)) == 100
+    assert table.loc[first, "id"] == str(
+        uuid.uuid5(NAMESPACE, f"mexicali:right_of_way:{first}")
+    )
+    assert table.crs.to_epsg() == 4326
+
+
+def test_streets_without_lighting_or_lanes(city, tmp_path):
+    bare = replace(city, street_lighting=None, bike_lanes=None)
+    table = streets.build(bare, *network_tables(), tmp_path)
+    assert table["streetlights"].isna().all()
+    assert set(table["bands.use"]) == {'["sidewalk", "lanes", "sidewalk"]'}
+
+
 def test_baseline_metric(city, monkeypatch):
     monkeypatch.setitem(CITIES, "mexicali", city)
     runner = LocalRunner.from_definitions(
@@ -484,6 +585,7 @@ def test_baseline_metric(city, monkeypatch):
     assert len(tables["reimagina_baseline_elements_blocks"]) == 2
     assert len(tables["reimagina_baseline_elements_amenities"]) == 2
     assert len(tables["reimagina_baseline_elements_establishments"]) == 3
+    assert len(tables["reimagina_baseline_elements_right_of_way"]) == 3
 
 
 # ------------------------------------------------------------------ city YAMLs
@@ -510,10 +612,23 @@ def test_mexicali_yaml():
     assert city.streets.retain_all
     assert city.streets.output_prefix.endswith("cleaned/vialidades")
 
+    assert city.street_lighting.max_distance_m == 25
+    assert city.street_lighting.source.member.endswith("INV2020_IND_EU_FTE_02.shp")
+    # Relative paths are the package's files.
+    assert city.bike_lanes.source.uri == str(
+        cities.PACKAGE / "data/mexicali/ciclovia_exist.geojson"
+    )
+    assert city.bike_lanes.type_column == "TIPO"
+
 
 def test_streets_are_optional(tmp_path):
-    path = write_city(tmp_path, "mexicali", lambda c: c["sources"].pop("streets"))
-    assert cities.from_yaml(path).streets is None
+    def drop(config):
+        # Lighting and bike lanes are over the network: they go with it.
+        for name in ("streets", "street_lighting", "bike_lanes"):
+            config["sources"].pop(name)
+
+    preset = cities.from_yaml(write_city(tmp_path, "mexicali", drop))
+    assert (preset.streets, preset.street_lighting, preset.bike_lanes) == (None,) * 3
 
 
 def test_existing_land_use_is_optional(tmp_path):

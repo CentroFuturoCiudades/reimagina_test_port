@@ -19,6 +19,9 @@ src/reimagina_test_port/
 ├── indicators/    one subpackage per indicator type, each with its nodes.py
 │   ├── built_form/      calculation.py
 │   ├── accessibility/   model.py, metrics.py, fastpath.py, network.py
+│   ├── population_access/ calculation.py (GHSCI walks from lot entries)
+│   ├── land_use/        calculation.py (density, commercial share, land use mix)
+│   ├── streets/         calculation.py (bike lanes, lighting, connectivity)
 │   └── composites/      composite.py (the math), composite_config.yaml (the tree),
 │                        composite_metric.py (its nodes)
 └── common/        shared: lake, vocabulary, schema (element identity,
@@ -45,9 +48,15 @@ lots and blocks built from the data lake by the `reimagina_baseline` dataset;
 nothing is written. `reimagina_baseline_write` writes them into a baseline
 scenario. `create_plugin()` registers this graph.
 
+`reimagina_land_use` and `reimagina_streets` (below) are
+written by `reimagina_scenario_land_use` and
+`reimagina_scenario_streets`, which `reimagina_scenario_write` also runs.
+
 `create_snapshot_plugin()` registers the same metrics over
 `reimagina_prepared_snapshot` and `reimagina_prepared_accessibility` instead,
-which read prepared GeoParquet files. It is for offline tests and examples; it is
+which read prepared GeoParquet files, except land use and streets: they
+are plain `@metric` functions over the scenario's datasets, so they run over
+scenarios only (their tests call the functions directly). It is for offline tests and examples; it is
 not in the manifest or the image.
 
 ## Scenario source
@@ -119,6 +128,50 @@ uses minutes ("min"), which Lyra cannot declare, so those columns have no unit.
 the CFC lake, or a local path), downloads it into the job's scratch folder with
 `DefaultAzureCredential`, and returns the pandana H5's nodes and edges (its first
 impedance as `distance`). A project without the URI fails as an input error.
+
+## ULI block indicators
+
+Ported from uli_mexicali_calculations_notebooks
+(`inidcadores_finales_export.ipynb`) and the GHSCI outputs it sits beside, per
+block, from the scenario's elements instead of the notebook's polygons, so a
+scenario that changes its lots changes them. Each group is a metric with one
+block output and its own write; a block without the inputs a value needs is null,
+never 0.
+
+- `reimagina_land_use` (walkability index): `net_residential_density`, homes per
+  hectare of the lots that hold homes (the notebook's *Habitacional*), a lot's
+  homes as urban_fabric.md's *A lot's homes*: built space (`area` × `cos` ×
+  `num_levels`) × `housing.floor_share` ÷ 100 ÷ `housing.unit_size_m2`, rounded;
+  `land_use` takes no part, and a lot missing one of them is left out. Built
+  form still counts homes the original way (from `land_use` and `unit_size_m2`).
+  `commercial_land_share`, the share of the block's lot area in `commerce` or
+  `office` (*Comercio y servicios*); `land_use_mix`, the entropy of the lots'
+  land uses by area over the log of the number of uses present, as the notebook
+  (one use is 0). Inputs: the source lots only; the scenario reads
+  `housing.floor_share` and `housing.unit_size_m2` with the other lot attributes.
+- `reimagina_streets`: what the streets within 500 m of the block are like, as
+  shares (0-1) of their length. Streets are `right_of_way` elements (lines) with
+  their make-up as attributes (urban_fabric.md). `bike_lane_coverage` and
+  `protected_bike_lane_coverage`: streets whose bands (`bands.use`) have a
+  `shared_lanes` or `protected_bike_lane`, or only a protected one; a lane is part
+  of its street, so the notebook's 100 m tolerance between lanes and centrelines
+  is not needed. `street_lighting_coverage` (ULI "Presence of street lighting"):
+  each street's `streetlights` (share of its length lit, 0-100, from INEGI's
+  block faces) weighted by its length, over the streets that have the value.
+  The notebook measures streets inside its polygons; a block has none inside.
+  `reimagina_scenario_rights_of_way` returns each street's two lane flags (Lyra
+  has no list column) and `streetlights`. Until a baseline has `right_of_way`
+  streets (`reimagina_baseline_streets`), these three are null.
+  `intersection_density` (ULI "Street connectivity") comes from the road network
+  instead (pandana, from the node nearest the block's representative point):
+  nodes joining three or more streets within 1 km, per km² of a 1 km circle
+  (GHSCI divides by the buffered network and consolidates intersections within
+  12 m).
+
+Streets are read as POIs are: from their attribute values (`bands.use` or
+`streetlights`), so a street without either is not read. The keys are in
+`indicator_catalog` (job codes `land_use`, `streets`) and
+are composite sources.
 
 ## Composites
 
@@ -374,14 +427,46 @@ overwritten) and sets the project's `road_network_uri`, returning the previous
 one. A dry run builds the H5 without uploading it or changing the project. Then
 `reimagina_scenario_write` recomputes accessibility over the new network.
 
+### Rights of way
+
+`reimagina_baseline_streets` (`ingestion/streets.py`) turns that network into the
+baseline's `right_of_way` elements (urban_fabric.md, *Right of way*): one per
+street, a pair of nodes whatever the direction of its edges, as the straight line
+between them, keyed `<lower id>-<higher id>` (`source_record_ref`), id
+`uuid5(NS, "<city>:right_of_way:<key>")`, no parent. The network is the ULI's
+pedestrian one, so footways and paths are streets too. Two optional sources of
+the city YAML fill its attributes; another city changes the files and columns:
+
+- `sources.street_lighting`: block faces with a lighting answer (`column`), after
+  `where` (a national file's municipality). `streetlights` (0-100) is the share of
+  lit faces (`lit`) among the answered ones (`lit` or `unlit`) whose midpoint lies
+  within `max_distance_m` (25) of the street; without one it has no value.
+  Mexicali: INEGI's 2020 housing inventory (`ALUMPUB` 1 lit, 3 not, 7-9
+  unanswered), national and one file per state.
+- `sources.bike_lanes`: the city's own lane lines. A street whose midpoint lies
+  within `max_distance_m` (15) of one has a bike lane: a `protected_bike_lane`
+  band when the lane's `type_column` is in `protected`, else its lanes are
+  `shared_lanes`. Mexicali: IMIP's existing lanes (`TIPO`).
+
+The traffic lanes are one band, `lanes`: their total space, not lane by lane.
+Only a protected bike lane takes a band of its own, next to the sidewalk.
+`bands.use` and `bands.share` are a default profile until widths are loaded:
+`sidewalk, lanes, sidewalk` (20/60/20), `sidewalk, shared_lanes, sidewalk`
+(20/60/20) or `sidewalk, protected_bike_lane, lanes, sidewalk` (20/10/50/20),
+written as JSON lists; the writer stores `json` attributes in `value_json`. A
+relative `uri` is a file of the package (`src/reimagina_test_port/data/...`):
+Mexicali's block faces are `data/inegi/02_Frentes_INV2020_shp.zip` and its bike
+lanes `data/mexicali/ciclovia_exist.geojson`. `reimagina_baseline_write` writes
+them with the rest; it needs `right_of_way` in the API's `element_type` enum.
+
 ## Baseline writer
 
 `reimagina_baseline_write(city, project_id, scenario_id)` fills an existing
 baseline scenario (created in the API, without forks) in one transaction:
 `elements` (new ids only; an existing element, such as a block shared with
 another baseline, is reused unchanged), `element_state` and
-`element_state_attribute_value`, for blocks, lots, amenities and
-establishments. The API's `element_type` enum must include `amenity` (it has
+`element_state_attribute_value`, for blocks, lots, amenities,
+establishments and streets (`right_of_way`). The API's `element_type` enum must include `amenity` (it has
 `establishment`); otherwise the write fails naming the missing types. Before
 writing, `ingestion/catalogs.py` adds the `attribute_catalog` rows of
 `BASELINE_ATTRIBUTES` and the `indicator_catalog` rows of every built-form and

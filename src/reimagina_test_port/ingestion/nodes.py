@@ -1,7 +1,8 @@
 """Lyra nodes that build a city's baseline from the data lake and write it into a
 Reimagina baseline scenario: reimagina_baseline, reimagina_baseline_elements and
-reimagina_baseline_write. The elements are blocks, lots, amenities and
-establishments. Its street network: reimagina_street_network,
+reimagina_baseline_write. The elements are blocks, lots, amenities,
+establishments and rights of way (reimagina_baseline_streets, over the street
+network). Its street network: reimagina_street_network,
 reimagina_street_network_tables and reimagina_street_network_write
 (ingestion/network.py)."""
 
@@ -70,6 +71,32 @@ def point_declaration(attributes: dict[str, str]) -> TableOutput:
     )
 
 
+RIGHT_OF_WAY_DECLARATION = TableOutput(
+    columns=[
+        *identity_columns(),
+        column(
+            "bands.use",
+            "string",
+            None,
+            "The street's bands, left to right, as a JSON list: sidewalk, lanes "
+            "(all traffic lanes), shared_lanes (the lanes, shared with bikes), "
+            "protected_bike_lane (its own band), median.",
+        ),
+        column(
+            "bands.share",
+            "string",
+            None,
+            "Each band's share (0-100) of the width, as a JSON list.",
+        ),
+        column(
+            "streetlights",
+            "number",
+            Unit.PERCENT,
+            "Share of its block faces with street lighting.",
+        ),
+    ],
+    geometry="geometry",
+)
 AMENITY_DECLARATION = point_declaration(AMENITY_ATTRIBUTES)
 ESTABLISHMENT_DECLARATION = point_declaration(ESTABLISHMENT_ATTRIBUTES)
 
@@ -170,20 +197,56 @@ def baseline_dataset(
     }
 
 
+@metric(
+    name="reimagina_baseline_streets",
+    description=(
+        "A city's streets as right_of_way elements, one per street of its street "
+        "network (reimagina_street_network), with streetlights from the block faces "
+        "near each street and a bike lane band where the street's midpoint lies "
+        "near one of the city's bike lanes (sources.street_lighting, "
+        "sources.bike_lanes)."
+    ),
+    inputs={
+        "nodes": Dependency("reimagina_street_network_nodes"),
+        "edges": Dependency("reimagina_street_network_edges"),
+    },
+    outputs={"reimagina_baseline_right_of_way": RIGHT_OF_WAY_DECLARATION},
+)
+def baseline_streets(
+    parameters: BaselineParameters,
+    nodes: pd.DataFrame,
+    edges: pd.DataFrame,
+    context: RunContext,
+) -> gpd.GeoDataFrame:
+    """Download the lighting and bike lane files into the job's scratch folder and
+    build the table."""
+    from reimagina_test_port.ingestion import streets
+
+    table = streets.build(CITIES[parameters.city], nodes, edges, context.temp_dir)
+    context.logger.info(
+        "Streets: %d, with streetlights %d, with a bike lane %d",
+        len(table),
+        int(table["streetlights"].notna().sum()),
+        int(table["bands.use"].str.contains("shared_lanes|protected_bike_lane").sum()),
+    )
+    return table
+
+
 BASELINE_INPUTS = {
     "lots": Dependency("reimagina_baseline_lots"),
     "blocks": Dependency("reimagina_baseline_blocks"),
     "amenities": Dependency("reimagina_baseline_amenities"),
     "establishments": Dependency("reimagina_baseline_establishments"),
+    "right_of_way": Dependency("reimagina_baseline_right_of_way"),
 }
 
 
 @metric(
     name="reimagina_baseline_elements",
     description=(
-        "Return a city's baseline lots, blocks, amenities and establishments as "
-        "built from the data lake (reimagina_baseline). Nothing is written to "
-        "Reimagina's database."
+        "Return a city's baseline lots, blocks, amenities, establishments and "
+        "streets as built from the data lake (reimagina_baseline, "
+        "reimagina_baseline_streets). Nothing is written to Reimagina's database."
     ),
     inputs=BASELINE_INPUTS,
     outputs={
@@ -191,6 +254,7 @@ BASELINE_INPUTS = {
         "reimagina_baseline_elements_blocks": baseline_declaration(blocks=True),
         "reimagina_baseline_elements_amenities": AMENITY_DECLARATION,
         "reimagina_baseline_elements_establishments": ESTABLISHMENT_DECLARATION,
+        "reimagina_baseline_elements_right_of_way": RIGHT_OF_WAY_DECLARATION,
     },
 )
 def baseline_elements(
@@ -199,13 +263,15 @@ def baseline_elements(
     blocks: gpd.GeoDataFrame,
     amenities: gpd.GeoDataFrame,
     establishments: gpd.GeoDataFrame,
+    right_of_way: gpd.GeoDataFrame,
 ) -> dict[str, gpd.GeoDataFrame]:
-    """The dataset's tables."""
+    """The datasets' tables."""
     return {
         "reimagina_baseline_elements_lots": lots,
         "reimagina_baseline_elements_blocks": blocks,
         "reimagina_baseline_elements_amenities": amenities,
         "reimagina_baseline_elements_establishments": establishments,
+        "reimagina_baseline_elements_right_of_way": right_of_way,
     }
 
 
@@ -240,6 +306,11 @@ BASELINE_ATTRIBUTES = {
     },
     "amenity": AMENITY_ATTRIBUTES,
     "establishment": ESTABLISHMENT_ATTRIBUTES,
+    "right_of_way": {
+        "bands.use": "json",
+        "bands.share": "json",
+        "streetlights": "number",
+    },
 }
 # Element type -> column of the write summary with its elements in the scenario.
 WRITTEN_COLUMNS = {
@@ -247,12 +318,16 @@ WRITTEN_COLUMNS = {
     "lot": "lots",
     "amenity": "amenities",
     "establishment": "establishments",
+    "right_of_way": "rights_of_way",
 }
 BASELINE_WRITE_DECLARATION = TableOutput(
     columns=[
         TableColumn(name=name, type="integer", unit=Unit.COUNT, description=description)
         for name, description in (
-            ("elements", "Blocks, lots, amenities and establishments written."),
+            (
+                "elements",
+                "Blocks, lots, amenities, establishments and streets written.",
+            ),
             ("elements_created", "Elements new to the database."),
             ("attribute_values", "Attribute values written."),
             ("elements_removed", "Scenario elements no longer in the baseline."),
@@ -280,8 +355,9 @@ BASELINE_WRITE_DECLARATION = TableOutput(
     description=(
         "Build a city's baseline from the data lake (reimagina_baseline) and write "
         "it into an existing baseline scenario of a project: elements, state and "
-        "attribute values of blocks, lots, amenities and establishments, in one "
-        "transaction. Existing elements are reused "
+        "attribute values of blocks, lots, amenities, establishments and streets "
+        "(right_of_way, from reimagina_baseline_streets; left out when the city "
+        "has none), in one transaction. Existing elements are reused "
         "unchanged; running it again replaces the scenario's rows. Missing "
         "attribute_catalog and indicator_catalog rows are added first; existing "
         "ones are left as they are and must be active. Compute indicators "
@@ -296,20 +372,26 @@ def baseline_write(
     blocks: gpd.GeoDataFrame,
     amenities: gpd.GeoDataFrame,
     establishments: gpd.GeoDataFrame,
+    right_of_way: gpd.GeoDataFrame,
 ) -> pd.DataFrame:
     """Final node: one summary row."""
     from reimagina_test_port.ingestion import baseline_writer
 
+    tables = {
+        "block": blocks,
+        "lot": lots,
+        "amenity": amenities,
+        "establishment": establishments,
+        "right_of_way": right_of_way,
+    }
+    # A city without streets writes none, so its database needs no right_of_way type.
+    if right_of_way.empty:
+        del tables["right_of_way"]
     try:
         counts = baseline_writer.write_baseline(
             parameters.project_id,
             parameters.scenario_id,
-            {
-                "block": blocks,
-                "lot": lots,
-                "amenity": amenities,
-                "establishment": establishments,
-            },
+            tables,
             BASELINE_ATTRIBUTES,
             dry_run=parameters.dry_run,
         )
@@ -318,7 +400,7 @@ def baseline_write(
             "reimagina_baseline_write", "parameters.scenario_id", str(exc)
         ) from exc
     by_type = counts.pop("by_type")
-    written = {name: by_type[t] for t, name in WRITTEN_COLUMNS.items()}
+    written = {name: by_type.get(t, 0) for t, name in WRITTEN_COLUMNS.items()}
     return pd.DataFrame([{**counts, **written, "dry_run": parameters.dry_run}])
 
 

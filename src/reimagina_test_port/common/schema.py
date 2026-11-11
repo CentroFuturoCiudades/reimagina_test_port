@@ -12,6 +12,9 @@ ATTRIBUTES = [
     "unit_size_m2",
     "people_per_household",
     "occupancy_rate",
+    # urban_fabric.md's lot housing (A lot's homes); read by land_use's density.
+    "housing.floor_share",
+    "housing.unit_size_m2",
 ]
 UNITS = {
     "cos": Unit.RATIO,
@@ -55,6 +58,8 @@ def source_declaration(*, blocks: bool = False) -> TableOutput:
                     {
                         "people_per_household": Unit.COUNT,
                         "occupancy_rate": Unit.RATIO,
+                        "housing.floor_share": Unit.PERCENT,
+                        "housing.unit_size_m2": Unit.SQUARE_METRE,
                     }
                     | UNITS
                 )[key],
