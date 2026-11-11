@@ -1,14 +1,16 @@
 """Lyra nodes of population access to the poi_catalog types over the road network:
 
 - reimagina_nearest_poi_distance: metres from each lot to its nearest POI of each type.
-- reimagina_population_access: residents within each type's coverage distance, and the
-  average distance to its nearest POI, per lot and per block.
+- reimagina_population_access: residents within each type's coverage distance, their
+  share of the residents, and the average distance to its nearest POI, per lot and
+  per block.
 """
 
 from collections.abc import Callable, Mapping, Sequence
 from typing import Literal
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 from lyra.sdk import (
     Dependency,
@@ -40,6 +42,8 @@ PoiType = Literal[DESTINATION_TYPES]  # ty: ignore[invalid-type-form]
 DISTANCE_KEYS = [f"distance_m_{poi_type}" for poi_type in DESTINATION_TYPES]
 ACCESS_KEYS = [f"population_with_access_{poi_type}" for poi_type in DESTINATION_TYPES]
 KEYS = [*DISTANCE_KEYS, *ACCESS_KEYS]
+# Read by the composites, not written: population_with_access_<type> / population.
+SHARE_KEYS = [f"share_with_access_{poi_type}" for poi_type in DESTINATION_TYPES]
 
 DISTANCE_COLUMNS = [
     column(
@@ -60,15 +64,31 @@ ACCESS_COLUMNS = [
     )
     for key in ACCESS_KEYS
 ]
+SHARE_COLUMNS = [
+    column(
+        key,
+        "number",
+        None,
+        "Share (0-1) of the residents within the type's coverage distance of one of "
+        "its POIs ('Percentage of population with access'). Null without residents.",
+    )
+    for key in SHARE_KEYS
+]
 
 
 def result_frame(source: gpd.GeoDataFrame, values: pd.DataFrame) -> gpd.GeoDataFrame:
-    """Identity and geometry of ``source`` with every key, in its order; the keys of
-    types not measured stay null."""
+    """Identity and geometry of ``source`` with every key, in its order, and each
+    type's share of ``source``'s population; the keys of types not measured stay
+    null."""
     result = source[IDENTITY + ["geometry"]].copy()
     values = values.reindex(columns=KEYS)
     for key in KEYS:
         result[key] = values[key].to_numpy()
+    population = pd.to_numeric(source["population"]).astype("float64").to_numpy()
+    with np.errstate(invalid="ignore", divide="ignore"):
+        for access, share in zip(ACCESS_KEYS, SHARE_KEYS, strict=True):
+            counted = result[access].to_numpy(dtype="float64")
+            result[share] = np.where(population > 0, counted / population, np.nan)
     return result
 
 
@@ -148,7 +168,12 @@ def population_access_metrics(
     distance_handler.__annotations__["parameters"] = PopulationAccessParameters
     access_handler.__annotations__["parameters"] = PopulationAccessParameters
     population_access_output = TableOutput(
-        columns=[*identity_columns(), *DISTANCE_COLUMNS, *ACCESS_COLUMNS],
+        columns=[
+            *identity_columns(),
+            *DISTANCE_COLUMNS,
+            *ACCESS_COLUMNS,
+            *SHARE_COLUMNS,
+        ],
         geometry="geometry",
     )
     return [

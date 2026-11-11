@@ -12,7 +12,7 @@ what it computes. ``full`` sends everything.
 import logging
 import math
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 from uuid import UUID
 
@@ -236,12 +236,15 @@ def write_indicators(
     full: bool = False,
     job_run_id: str | None = None,
     dry_run: bool = False,
+    prepare: Callable[[psycopg.Cursor], Any] | None = None,
     log: Any = logger,
 ) -> tuple[int, int]:
     """Write the owned ``keys`` (``{key: kind}``) of ``values`` in one transaction.
 
     ``values`` comes from ``long_values``. Every key must be active in
-    ``indicator_catalog`` for each element type written (``contract.check``).
+    ``indicator_catalog`` for each element type written (``contract.check``);
+    ``prepare``, when given, runs first on the same transaction (the composites
+    register their keys there).
     ``job_run_id`` is recorded only when that job_run exists. A dry run computes
     the changes and rolls them back.
 
@@ -271,6 +274,8 @@ def write_indicators(
             )
             if cur.fetchone() is None:
                 job_run_id = None
+        if prepare is not None:
+            log.info("prepare: %s", prepare(cur))
         required = {
             (element_type, key): kind
             for element_type in sorted(pd.unique(values["element_type"]))
