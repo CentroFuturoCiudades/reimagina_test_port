@@ -14,6 +14,10 @@ over its street network (``reimagina_street_network``, ``ingestion/network.py``)
   ``protected_bike_lane``, next to the sidewalk; any other is shared: the street's
   lanes, used by bikes too, so its ``lanes`` band is ``shared_lanes``.
 
+- ``sources.tree_canopy`` (optional): ``tree_coverage`` (0-100), the share of a
+  street's area under canopy (``ingestion/canopy.py``). Only a street drawn as a
+  polygon has one: today's lines get none.
+
 The traffic lanes are one band, ``lanes``: their total space, not lane by lane.
 ``bands.use`` and ``bands.share`` are a default profile until street widths are
 loaded; both are written as JSON lists (Lyra tables have no list column).
@@ -28,6 +32,7 @@ import pandas as pd
 import shapely
 
 from reimagina_test_port.common import lake
+from reimagina_test_port.ingestion import canopy
 from reimagina_test_port.ingestion.cadastral import stable_element_uuid
 from reimagina_test_port.ingestion.cities import (
     BikeLanes,
@@ -36,7 +41,12 @@ from reimagina_test_port.ingestion.cities import (
     StreetLighting,
 )
 
-ATTRIBUTES = {"bands.use": "json", "bands.share": "json", "streetlights": "number"}
+ATTRIBUTES = {
+    "bands.use": "json",
+    "bands.share": "json",
+    "streetlights": "number",
+    "tree_coverage": "number",
+}
 PROFILES = {
     None: (["sidewalk", "lanes", "sidewalk"], [20, 60, 20]),
     "shared_lanes": (["sidewalk", "shared_lanes", "sidewalk"], [20, 60, 20]),
@@ -140,6 +150,9 @@ def build(
     if (bike := city.bike_lanes) is not None:
         lines = read(bike.source, workdir / "bike_lanes", [bike.type_column])
         lanes = lane_bands(streets, lines, bike)
+    trees = pd.Series(np.nan, index=streets.index)
+    if city.tree_canopy is not None:
+        trees = canopy.tree_coverage(streets, city.tree_canopy, workdir)
     bands = [PROFILES[None if pd.isna(lane) else lane] for lane in lanes]
     frame = pd.DataFrame(
         {
@@ -151,6 +164,7 @@ def build(
             "bands.use": [json.dumps(use) for use, _ in bands],
             "bands.share": [json.dumps(share) for _, share in bands],
             "streetlights": lit.to_numpy(),
+            "tree_coverage": trees.to_numpy(),
         }
     )
     return gpd.GeoDataFrame(frame, geometry=streets.to_crs(4326).to_numpy(), crs=4326)

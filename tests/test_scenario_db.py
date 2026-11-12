@@ -845,6 +845,7 @@ def new_tables(count: int = 4):
             "occupancy_rate": [0.9, None, None, None][:count],
             "housing.floor_share": [100.0, 100.0, 80.0, None][:count],
             "commerce_type": [None, "shop", None, None][:count],
+            "tree_coverage": [12.5, None, None, None][:count],
         },
         geometry=[lot_box(i, 0.00002) for i in range(count)],
         crs=4326,
@@ -961,20 +962,20 @@ def test_write_new_baseline(new_baseline, dsn):
     first = write_new_baseline()
     # The blocks already exist: reused, not created. 23 lot and block values, 4 of
     # the amenity (no name) and 4 of the establishment (no workers). The catalogs
-    # get the 10 attributes they lacked (housing.floor_share, the block's targets,
-    # 4 of the amenity and 3 of the establishment), block.density and the
+    # get the 11 attributes they lacked (housing.floor_share, tree_coverage, the
+    # block's targets, 4 of the amenity and 3 of the establishment), block.density and the
     # composites' keys (the scenario writer registers those too); the dry run
     # rolled its rows back.
     assert first == {
         "elements": 8,
         "elements_created": 6,
-        "attribute_values": 31,
+        "attribute_values": 32,  # with the first lot's tree_coverage
         "elements_removed": 0,
-        "attributes_added": 10,
+        "attributes_added": 11,
         "indicators_added": 1 + len(composite_catalog.catalog_rows()),
         "by_type": {"block": 2, "lot": 4, "amenity": 1, "establishment": 1},
     }
-    assert counts(dsn, NEW_BASELINE) == (8, 31)
+    assert counts(dsn, NEW_BASELINE) == (8, 32)
     with psycopg.connect(dsn) as conn:
         # Added rows take the plugin's types and units; existing ones stay.
         rows = dict(
@@ -1133,8 +1134,10 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch, offline_network):
             "bands.use": ['["sidewalk", "protected_bike_lane", "lanes", "sidewalk"]'],
             "bands.share": ["[20, 10, 50, 20]"],
             "streetlights": [50.0],
+            "tree_coverage": [30.0],
         },
-        geometry=[LineString([(-115.5, 32.6), (-115.49, 32.6)])],
+        # A right of way drawn as a polygon.
+        geometry=[LineString([(-115.5, 32.6), (-115.49, 32.6)]).buffer(0.0001)],
         crs=4326,
     )
     monkeypatch.setattr(streets, "build", lambda *_: street)
@@ -1151,22 +1154,35 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch, offline_network):
     assert (row["elements"], row["elements_created"], row["dry_run"]) == (9, 7, False)
     columns = ("blocks", "lots", "amenities", "establishments", "rights_of_way")
     assert [row[c] for c in columns] == [2, 4, 1, 1, 1]
-    # A street's bands are stored as JSON lists; its streetlights as a number.
-    with psycopg.connect(dsn) as conn:
-        values = dict(
-            conn.execute(
-                "SELECT ac.key, coalesce(v.value_json::text, v.value_num::text) "
-                "FROM reimagina_urbano.element_state_attribute_value v "
-                "JOIN reimagina_urbano.attribute_catalog ac ON ac.id = v.attribute_id "
-                "WHERE v.element_id = %s::uuid",
-                (street["id"].iloc[0],),
-            ).fetchall()
-        )
-    assert values == {
+
+    # A street's bands are stored as JSON lists; its streetlights and
+    # tree_coverage as numbers. A lot's tree_coverage too.
+    def stored(element_id: str) -> dict:
+        with psycopg.connect(dsn) as conn:
+            return dict(
+                conn.execute(
+                    "SELECT ac.key, coalesce(v.value_json::text, v.value_num::text) "
+                    "FROM reimagina_urbano.element_state_attribute_value v "
+                    "JOIN reimagina_urbano.attribute_catalog ac "
+                    "ON ac.id = v.attribute_id WHERE v.element_id = %s::uuid",
+                    (element_id,),
+                ).fetchall()
+            )
+
+    assert stored(street["id"].iloc[0]) == {
         "bands.use": '["sidewalk", "protected_bike_lane", "lanes", "sidewalk"]',
         "bands.share": "[20, 10, 50, 20]",
         "streetlights": "50",
+        "tree_coverage": "30",
     }
+    assert stored(tables["lot"]["id"].iloc[0])["tree_coverage"] == "12.5"
+    with psycopg.connect(dsn) as conn:
+        catalog = conn.execute(
+            "SELECT element_type::text, value_type::text, unit "
+            "FROM reimagina_urbano.attribute_catalog WHERE key = 'tree_coverage' "
+            "ORDER BY 1"
+        ).fetchall()
+    assert catalog == [("lot", "number", "%"), ("right_of_way", "number", "%")]
 
 
 # ------------------------------------------------------------------ street network

@@ -31,6 +31,7 @@ from reimagina_test_port.ingestion.cities import (
     BikeLanes,
     Source,
     StreetLighting,
+    TreeCanopy,
 )
 
 CRS = "EPSG:32611"
@@ -315,7 +316,15 @@ def write_sources(root: Path) -> dict[str, str]:
     (manifests / "m.json").write_text(
         json.dumps({"name": "81_EPSG_32611_2023", "tilesets": [{"sources": [source]}]})
     )
+    # Canopy height at 1 m: 10 m trees west of x = 10, none east of it.
+    canopy = np.where(np.arange(120) < 20, 10, 0).astype("uint8")[None, :].repeat(60, 0)
+    with rasterio.open(
+        root / "canopy.tif", "w", driver="GTiff", width=120, height=60, count=1,
+        dtype="uint8", crs=CRS, transform=from_origin(-10, 50, 1, 1),
+    ) as raster:  # fmt: skip
+        raster.write(canopy, 1)
     return {
+        "tree_canopy": TreeCanopy(str(root / "canopy.tif")),
         "lots_uri": str(root / "lots" / "PREDIOS.shp"),
         "normativa_uri": str(root / "normativa.geojson"),
         "existing_land_use_uri": str(root / "existing_land_use.geojson"),
@@ -484,6 +493,10 @@ def test_build(city, tmp_path):
     assert lots.loc["1-A-7-2#2", "housing.floor_share"] == 100
     assert lots.loc["1-B-8-1", "housing.floor_share"] == 0
     assert lots.loc["sin_clave", "housing.floor_share"] == 0
+    # Canopy west of x = 10: half of the lots starting at x = 0, none of the rest.
+    west = lots.geometry.to_crs(CRS).bounds["minx"].round(6) == 0
+    assert lots.loc[west, "tree_coverage"].tolist() == [50.0, 50.0]
+    assert (lots.loc[~west, "tree_coverage"] == 0).all()
     assert blocks.loc[CVEGEO[0], "housing.people_per_household"] == 3.25
     # Targets: declared, unset when loaded.
     assert blocks[["lot.size_m2", "lot.frontage_m"]].isna().all().all()
@@ -550,6 +563,8 @@ def test_streets(city, tmp_path):
     assert table.loc[first, "streetlights"] == 50
     assert table.loc[second, "streetlights"] == 100
     assert pd.isna(table.loc[third, "streetlights"])
+    # Lines have no area: no tree_coverage, and the canopy raster is not read.
+    assert table["tree_coverage"].isna().all()
     # The protected lane runs 5 m from the first street: a band of its own. The
     # shared one, 10 m from the third, makes its lanes shared_lanes. The second's
     # midpoint is 40 m from the protected lane's end: lanes only.

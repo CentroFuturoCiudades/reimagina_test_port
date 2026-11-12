@@ -483,7 +483,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's baseline elements from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights, the city's amenity layers (normalized into the amenities file) and the DENUE. Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE record is an amenity or an establishment by the SCIAN crosswalk; with the amenities file's, they go to the nearest lot within 50 m as a point at its center, and each lot's land use follows from what it holds.",
+      "description": "Build a city's baseline elements from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights, Meta's canopy height (each lot's tree_coverage), the city's amenity layers (normalized into the amenities file) and the DENUE. Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE record is an amenity or an establishment by the SCIAN crosswalk; with the amenities file's, they go to the nearest lot within 50 m as a point at its center, and each lot's land use follows from what it holds.",
       "inputs": {},
       "name": "reimagina_baseline",
       "outputs": {
@@ -755,6 +755,13 @@
             {
               "description": "housing.floor share",
               "name": "housing.floor_share",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
+            },
+            {
+              "description": "tree coverage",
+              "name": "tree_coverage",
               "nullable": true,
               "type": "number",
               "unit": "percent"
@@ -1097,6 +1104,13 @@
               "nullable": true,
               "type": "number",
               "unit": "percent"
+            },
+            {
+              "description": "tree coverage",
+              "name": "tree_coverage",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
             }
           ],
           "geometry": "geometry",
@@ -1142,6 +1156,13 @@
             {
               "description": "Share of its block faces with street lighting.",
               "name": "streetlights",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
+            },
+            {
+              "description": "Share of its area under tree canopy (Meta's canopy height); only a street drawn as a polygon has one.",
+              "name": "tree_coverage",
               "nullable": true,
               "type": "number",
               "unit": "percent"
@@ -1241,6 +1262,13 @@
             {
               "description": "Share of its block faces with street lighting.",
               "name": "streetlights",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
+            },
+            {
+              "description": "Share of its area under tree canopy (Meta's canopy height); only a street drawn as a polygon has one.",
+              "name": "tree_coverage",
               "nullable": true,
               "type": "number",
               "unit": "percent"
