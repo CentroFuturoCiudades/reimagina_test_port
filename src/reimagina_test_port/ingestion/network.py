@@ -97,10 +97,23 @@ def osm_graph(area: shapely.Geometry, params: NetworkParams):
     )
 
 
+# OSM tags the edges keep, as text, for ``street_fit`` (ingestion/streets.py).
+OSM_TAGS = ("highway", "name", "lanes")
+
+
+def _first_tag(value: object) -> str | None:
+    """osmnx joins the ways it simplifies into one edge: their values, a list. The
+    first, as text; None when missing."""
+    if isinstance(value, (list, tuple, np.ndarray)):
+        value = value[0] if len(value) else None
+    return None if value is None or pd.isna(value) else str(value)
+
+
 def osm_tables(graph) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Nodes (``id`` index, ``x``, ``y`` in EPSG:4326) and edges (``from``, ``to``,
-    ``length`` in metres, ``geometry``: the way's shape, EPSG:4326) of an osmnx
-    graph; parallel edges keep the shortest."""
+    ``length`` in metres, ``highway``, ``name``, ``lanes`` (OSM's, as text, the first
+    of a list; None when the way has none), ``geometry``: the way's shape,
+    EPSG:4326) of an osmnx graph; parallel edges keep the shortest."""
     import osmnx as ox
 
     nodes, edges = ox.graph_to_gdfs(graph)
@@ -116,6 +129,14 @@ def osm_tables(graph) -> tuple[pd.DataFrame, pd.DataFrame]:
                 "from": edges["u"].astype("int64"),
                 "to": edges["v"].astype("int64"),
                 "length": edges["length"].astype("float64"),
+                **{
+                    tag: (
+                        edges[tag].map(_first_tag)
+                        if tag in edges
+                        else pd.Series(None, index=edges.index, dtype=object)
+                    )
+                    for tag in OSM_TAGS
+                },
                 "geometry": edges.geometry.to_numpy(),
             }
         )
@@ -156,6 +177,7 @@ def osm_cache_uris(
         shapely.to_wkb(area),
         str(params.custom_filter).encode(),
         str(params.retain_all).encode(),
+        b"v2",  # v2: edges carry OSM_TAGS
     ):
         digest.update(part)
     stem = f"{prefix.rstrip('/')}/osm_{cve_code}_{digest.hexdigest()[:10]}"
@@ -167,7 +189,7 @@ def read_osm_cache(uris: tuple[str, str]) -> tuple[pd.DataFrame, pd.DataFrame]:
     from reimagina_test_port.common import lake
 
     nodes = lake.read_parquet(uris[0], ["id", "x", "y"]).set_index("id")
-    edges = lake.read_parquet(uris[1], ["from", "to", "length", "geometry"])
+    edges = lake.read_parquet(uris[1], ["from", "to", "length", *OSM_TAGS, "geometry"])
     return nodes, edges.assign(geometry=shapely.from_wkb(edges["geometry"]))
 
 
@@ -354,6 +376,11 @@ def sew(
     )
 
 
+def _tags(edge: pd.Series) -> dict:
+    """``edge``'s OSM tags: what the pieces it is split into keep."""
+    return {tag: edge[tag] for tag in OSM_TAGS if tag in edge.index}
+
+
 def _split(
     nodes: pd.DataFrame,
     edge: pd.Series,
@@ -368,12 +395,24 @@ def _split(
     for position, node, distance in sorted(at):
         point = line.interpolate(position)
         nodes.loc[next_id] = [point.x, point.y]
-        rows.append({"from": previous, "to": next_id, "length": position - previous_at})
+        rows.append(
+            {
+                "from": previous,
+                "to": next_id,
+                "length": position - previous_at,
+                **_tags(edge),
+            }
+        )
         rows.append({"from": next_id, "to": node, "length": max(distance, 0.1)})
         previous, previous_at = next_id, position
         next_id += 1
     rows.append(
-        {"from": previous, "to": edge["to"], "length": line.length - previous_at}
+        {
+            "from": previous,
+            "to": edge["to"],
+            "length": line.length - previous_at,
+            **_tags(edge),
+        }
     )
     return rows, next_id
 
@@ -470,8 +509,13 @@ def bridge_pieces(
             at = float(shapely.line_locate_point(segs[k], point))
             nodes.loc[next_id] = xy
             rows += [
-                {"from": edge["from"], "to": next_id, "length": at},
-                {"from": next_id, "to": edge["to"], "length": segs[k].length - at},
+                {"from": edge["from"], "to": next_id, "length": at, **_tags(edge)},
+                {
+                    "from": next_id,
+                    "to": edge["to"],
+                    "length": segs[k].length - at,
+                    **_tags(edge),
+                },
             ]
             ends.append(next_id)
             dropped.append(frame.index[k])

@@ -470,6 +470,24 @@ Mexicali's block faces are `data/inegi/02_Frentes_INV2020_shp.zip` and its bike
 lanes `data/mexicali/ciclovia_exist.geojson`. `reimagina_baseline_write` writes
 them with the rest; it needs `right_of_way` in the API's `element_type` enum.
 
+**Fitting the streets (`sources.streets.params.refine`, off by default).** The
+network's edges keep OSM's `highway`, `name` and `lanes`. With `refine: true`, the
+vehicular streets (every class but `pedestrian`; an edge without `highway`, from
+merged streets, is `residential`) go through `ingestion/street_fit.py`, which
+measures each street against the cadastre's lots (`parcels`): one right of way per
+stretch from intersection to intersection (a dual carriageway is one, keyed by its
+lowest `<lo>-<hi>`), its axis centred between the lot fronts, and `bands.use` /
+`bands.share` the measured width's (sidewalk, lanes, median, lanes, sidewalk; the
+bike lane inserted on its side). Pedestrian streets are as above. Two matches
+scale with the width: faces count within `max(max_distance_m, width / 2 +
+front_tolerance_m)`, and a lane counts if `min_share` of the axis lies within
+`max(max_distance_m, width / 2)` of it, on its side. `params.fit` overrides
+`street_fit.DEFAULTS`. The attributes written are the same three; width, lanes and
+name are used and not written. `refine` lives in `reimagina_baseline_streets`, so it
+changes neither the network nor its H5. Turning it on changes the vehicular keys:
+the writer replaces those elements. Where there are no lots, a side takes its
+class's default width (`measured_sides < 2`).
+
 ## Baseline writer
 
 `reimagina_baseline_write(city, project_id, scenario_id)` fills an existing
