@@ -564,8 +564,11 @@ def test_streets(city, tmp_path):
     assert table.loc[first, "streetlights"] == 50
     assert table.loc[second, "streetlights"] == 100
     assert pd.isna(table.loc[third, "streetlights"])
-    # Lines have no area: no tree_coverage, and the canopy raster is not read.
-    assert table["tree_coverage"].isna().all()
+    # tree_coverage over each street's polygon (x 0-40 or 60-100, 10 m wide): trees
+    # west of x = 10. The third's polygon is half off the raster: its on-raster half.
+    assert table.loc[first, "tree_coverage"] == 25
+    assert table.loc[second, "tree_coverage"] == 0
+    assert table.loc[third, "tree_coverage"] == 25
     # The protected lane runs 5 m from the first street: a band of its own. The
     # shared one, 10 m from the third, makes its lanes shared_lanes. The second's
     # midpoint is 40 m from the protected lane's end: lanes only.
