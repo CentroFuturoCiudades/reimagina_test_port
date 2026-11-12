@@ -242,13 +242,16 @@ def test_lot_attributes_keep_conditional_keys() -> None:
     expect_equal(
         residential,
         {"land_use": "multifamily", "cos": 0.6, "num_levels": 3.2, "area": 200.0,
-         "unit_size_m2": 75.0, "people_per_household": 3.46, "occupancy_rate": 0.9},
+         "housing.unit_size_m2": 75.0, "housing.people_per_household": 3.46,
+         "occupancy_rate": 0.9},
     )  # fmt: skip
     commerce = elements.lot_attributes(
         "commerce", 0.5, 1.0, 100.0, 80.0, 3.0, 0.9, "tienda comercial"
     )
     expect_equal(commerce["commerce_type"], "shop")
-    expect_equal(set(commerce) & {"unit_size_m2", "people_per_household"}, set())
+    expect_equal(
+        set(commerce) & {"housing.unit_size_m2", "housing.people_per_household"}, set()
+    )
 
 
 # ---------------------------------------------------------------------- crosswalk

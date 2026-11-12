@@ -9,12 +9,11 @@ ATTRIBUTES = [
     "num_levels",
     "area",
     "land_use",
-    "unit_size_m2",
-    "people_per_household",
     "occupancy_rate",
-    # urban_fabric.md's lot housing (A lot's homes); read by land_use's density.
+    # urban_fabric.md's lot housing (A lot's homes).
     "housing.floor_share",
     "housing.unit_size_m2",
+    "housing.people_per_household",
 ]
 UNITS = {
     "cos": Unit.RATIO,
@@ -56,7 +55,7 @@ def source_declaration(*, blocks: bool = False) -> TableOutput:
                 if key == "land_use"
                 else (
                     {
-                        "people_per_household": Unit.COUNT,
+                        "housing.people_per_household": Unit.COUNT,
                         "occupancy_rate": Unit.RATIO,
                         "housing.floor_share": Unit.PERCENT,
                         "housing.unit_size_m2": Unit.SQUARE_METRE,

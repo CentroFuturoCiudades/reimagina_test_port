@@ -108,7 +108,7 @@ def baseline_declaration(*, blocks: bool) -> TableOutput:
         attributes = [
             column("vivtot", "number", Unit.COUNT, "Census dwellings of the block."),
             column(
-                "people_per_household",
+                "housing.people_per_household",
                 "number",
                 Unit.COUNT,
                 "Census average occupants per inhabited dwelling.",
@@ -128,7 +128,8 @@ def baseline_declaration(*, blocks: bool) -> TableOutput:
         ]
     else:
         units = {
-            "people_per_household": Unit.COUNT,
+            "housing.unit_size_m2": Unit.SQUARE_METRE,
+            "housing.people_per_household": Unit.COUNT,
             "occupancy_rate": Unit.RATIO,
             "housing.floor_share": Unit.PERCENT,
         }
@@ -150,8 +151,8 @@ BASELINE_LOT_ATTRIBUTES = [
     "cos",
     "num_levels",
     "area",
-    "unit_size_m2",
-    "people_per_household",
+    "housing.unit_size_m2",
+    "housing.people_per_household",
     "occupancy_rate",
     "commerce_type",
     "housing.floor_share",
@@ -300,7 +301,7 @@ BASELINE_ATTRIBUTES = {
     },
     "block": {
         "vivtot": "number",
-        "people_per_household": "number",
+        "housing.people_per_household": "number",
         "lot.size_m2": "number",
         "lot.frontage_m": "number",
     },

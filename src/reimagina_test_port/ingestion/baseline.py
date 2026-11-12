@@ -46,15 +46,20 @@ LOT_ATTRIBUTES = [
     "cos",
     "num_levels",
     "area",
-    "unit_size_m2",
-    "people_per_household",
+    "housing.unit_size_m2",
+    "housing.people_per_household",
     "occupancy_rate",
     "commerce_type",
     "housing.floor_share",
 ]
 # lot.size_m2 and lot.frontage_m are targets: unset when the city is loaded
 # bottom-up (urban_fabric.md), so these columns stay empty.
-BLOCK_ATTRIBUTES = ["vivtot", "people_per_household", "lot.size_m2", "lot.frontage_m"]
+BLOCK_ATTRIBUTES = [
+    "vivtot",
+    "housing.people_per_household",
+    "lot.size_m2",
+    "lot.frontage_m",
+]
 
 
 def block_table(blocks: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -65,7 +70,7 @@ def block_table(blocks: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
             "parent_id": None,
             "source_record_ref": blocks["cvegeo"],
             "vivtot": pd.to_numeric(blocks["vivtot"], errors="coerce"),
-            "people_per_household": [
+            "housing.people_per_household": [
                 people_per_household(value) for value in blocks["prom_ocup"]
             ],
             "lot.size_m2": float("nan"),

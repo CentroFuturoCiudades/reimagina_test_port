@@ -484,7 +484,7 @@ def test_build(city, tmp_path):
     assert lots.loc["1-A-7-2#2", "housing.floor_share"] == 100
     assert lots.loc["1-B-8-1", "housing.floor_share"] == 0
     assert lots.loc["sin_clave", "housing.floor_share"] == 0
-    assert blocks.loc[CVEGEO[0], "people_per_household"] == 3.25
+    assert blocks.loc[CVEGEO[0], "housing.people_per_household"] == 3.25
     # Targets: declared, unset when loaded.
     assert blocks[["lot.size_m2", "lot.frontage_m"]].isna().all().all()
     # Amenities and establishments go to the lot holding them, or the nearest

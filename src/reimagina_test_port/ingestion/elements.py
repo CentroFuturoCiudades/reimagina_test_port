@@ -1,12 +1,12 @@
 """Blocks and lots to Reimagina elements: ids, parents, land use and attributes.
 
 Moved from exe_reimagina ``src/migration/elements.py``. Lot attributes follow
-``baseline_setup.md``: land_use, cos, num_levels, area, unit_size_m2 (multifamily
-and mixed_use), people_per_household and occupancy_rate (residential) and
-commerce_type. ``land_use`` is classified from the lot's contents (amenities and
+``baseline_setup.md``: land_use, cos, num_levels, area, housing.unit_size_m2
+(multifamily and mixed_use), housing.people_per_household and occupancy_rate
+(residential) and commerce_type. ``land_use`` is classified from the lot's contents (amenities and
 establishments), as reimagina_urbano_api ``ingestion_pipelines.md`` says; the
 amenity's category lives only on amenity elements. Block attributes: vivtot and
-people_per_household.
+housing.people_per_household.
 """
 
 import logging
@@ -168,7 +168,7 @@ def classify_land_use(
     *,
     mf_min_units: float,
 ) -> tuple[pd.Series, pd.Series]:
-    """``land_use`` per lot, from what it holds, and ``unit_size_m2``.
+    """``land_use`` per lot, from what it holds, and ``housing.unit_size_m2``.
 
     reimagina_urbano_api ``ingestion_pipelines.md`` (*Land use from contents*), with
     homes estimated from the census until the space allocation exists: a built lot
@@ -187,7 +187,7 @@ def classify_land_use(
       say which establishments are offices.
 
     Amenities don't change the class of a lot that also holds homes or
-    establishments. ``unit_size_m2`` is the block's multifamily and mixed-use
+    establishments. ``housing.unit_size_m2`` is the block's multifamily and mixed-use
     built-up area over its homes not in single-family lots.
     """
     vivtot = pd.to_numeric(lots["vivtot"], errors="coerce").astype(float)
@@ -256,7 +256,7 @@ def block_elements(blocks: gpd.GeoDataFrame) -> tuple[list[Element], dict[str, s
     ):
         attributes = {
             "vivtot": _int_or_none(vivtot),
-            "people_per_household": people_per_household(prom_ocup),
+            "housing.people_per_household": people_per_household(prom_ocup),
         }
         elements.append(
             Element(
@@ -287,10 +287,10 @@ def lot_attributes(  # noqa: PLR0913, PLR0917
         "cos": _float_or_none(cos),
         "num_levels": _float_or_none(num_levels),
         "area": _float_or_none(area),
-        "unit_size_m2": (
+        "housing.unit_size_m2": (
             _float_or_none(unit_size_m2) if lu in ("multifamily", "mixed_use") else None
         ),
-        "people_per_household": people_per_household(prom_ocup)
+        "housing.people_per_household": people_per_household(prom_ocup)
         if residential
         else None,
         "occupancy_rate": occupancy if residential else None,
