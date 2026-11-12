@@ -5505,7 +5505,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's street network from scratch: OpenStreetMap's ways over the convex hull of the city's blocks plus a margin, within its municipality (sources.streets.boundary_uri), with the city's filter (Mexicali: the ULI's pedestrian network), in its metric CRS. With streets_uri, those streets replace the network inside their zone (zone_uri, or their convex hull) and are sewn to it, as exe_reimagina's Condesa network.",
+      "description": "Build a city's street network from scratch: OpenStreetMap's ways over the convex hull of the city's blocks plus a margin, within its municipality (sources.streets.boundary_uri), with the city's filter (Mexicali: the ULI's pedestrian network), in its metric CRS. With streets_uri, those streets replace the network inside their zone (zone_uri, or their convex hull) and are sewn to it, as exe_reimagina's Condesa network. The OpenStreetMap download is saved in the lake beside the H5s and read from there by later runs (refresh_osm downloads it again).",
       "inputs": {},
       "name": "reimagina_street_network",
       "outputs": {
@@ -5540,7 +5540,7 @@
               "unit": null
             }
           ],
-          "geometry": null,
+          "geometry": "geometry",
           "kind": "table"
         },
         "reimagina_street_network_nodes": {
@@ -5582,6 +5582,12 @@
                 "description": "City preset (ingestion/cities/<city>.yaml).",
                 "title": "City",
                 "type": "string"
+              },
+              "refresh_osm": {
+                "default": false,
+                "description": "Download OpenStreetMap again instead of reading the copy saved in the lake by an earlier run, and replace that copy.",
+                "title": "Refresh Osm",
+                "type": "boolean"
               },
               "streets_uri": {
                 "anyOf": [
@@ -5678,7 +5684,7 @@
               "unit": null
             }
           ],
-          "geometry": null,
+          "geometry": "geometry",
           "kind": "table"
         },
         "reimagina_street_network_tables_nodes": {
@@ -5720,6 +5726,12 @@
                 "description": "City preset (ingestion/cities/<city>.yaml).",
                 "title": "City",
                 "type": "string"
+              },
+              "refresh_osm": {
+                "default": false,
+                "description": "Download OpenStreetMap again instead of reading the copy saved in the lake by an earlier run, and replace that copy.",
+                "title": "Refresh Osm",
+                "type": "boolean"
               },
               "streets_uri": {
                 "anyOf": [
@@ -5850,6 +5862,12 @@
                 "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                 "title": "Project Id",
                 "type": "string"
+              },
+              "refresh_osm": {
+                "default": false,
+                "description": "Download OpenStreetMap again instead of reading the copy saved in the lake by an earlier run, and replace that copy.",
+                "title": "Refresh Osm",
+                "type": "boolean"
               },
               "streets_uri": {
                 "anyOf": [
