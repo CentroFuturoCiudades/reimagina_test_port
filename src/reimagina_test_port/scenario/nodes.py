@@ -203,7 +203,7 @@ def read_elements(
 def scenario_rights_of_way(
     parameters: ScenarioParameters, context: DatasetContext
 ) -> gpd.GeoDataFrame:
-    """Streets (lines), with baseline fallback; a list column has no Lyra type, so
+    """Streets (polygons; an older baseline's, lines), with baseline fallback; a list column has no Lyra type, so
     bands.use leaves as two flags."""
     with timed("read streets", context.logger):
         streets = read_elements(

@@ -3,8 +3,10 @@
 ``calculate_cycling_street_proportion``), street lighting coverage and street
 connectivity.
 
-Streets are ``right_of_way`` elements (lines), with their make-up as attributes
-(urban_fabric.md):
+Streets are ``right_of_way`` elements (polygons, lot front to lot front; older
+baselines, lines), with their make-up as attributes (urban_fabric.md). A street's
+length within a block's neighbourhood is ``street_fit.strip_length`` of its polygon
+clipped to it (a line's, its length):
 
 - ``bike_lane_coverage``: share of street length with a bike lane band
   (``bands.use`` has ``shared_lanes`` or ``protected_bike_lane``);
@@ -16,12 +18,6 @@ Streets are ``right_of_way`` elements (lines), with their make-up as attributes
 The notebook measures the streets inside each polygon; a block has none inside
 (they run around it), so a block measures the streets within ``NEIGHBOURHOOD_M`` of
 it. All are 0-1, null without streets (with a value) around the block.
-
-Lengths are counted in pieces: each street is cut once into pieces of at most
-``PIECE_M``, and a piece counts in full for every block within ``NEIGHBOURHOOD_M`` of
-its midpoint. Only the pieces across that edge are off, by half a piece at most;
-clipping every street to every block's neighbourhood instead took about 70 s for
-Mexicali, against 9 s.
 
 - ``intersection_density`` (ULI "Street connectivity", over the road network with
   pandana): intersections (nodes joining three or more streets) within
@@ -40,11 +36,12 @@ import numpy as np
 import pandas as pd
 import shapely
 
+from reimagina_test_port.ingestion.street_fit import strip_length
+
 if TYPE_CHECKING:
     import pandana as pdna
 
 NEIGHBOURHOOD_M = 500.0
-PIECE_M = 25.0
 BIKE_BANDS = ("shared_lanes", "protected_bike_lane")
 LANE_KEYS = ["bike_lane_coverage", "protected_bike_lane_coverage"]
 COVERAGE_KEYS = [*LANE_KEYS, "street_lighting_coverage"]
@@ -68,28 +65,16 @@ def lane_flags(bands_use: pd.Series) -> pd.DataFrame:
     ).astype(bool)
 
 
-def pieces(lines: np.ndarray, size: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """``lines`` cut into equal pieces of at most ``size``: each piece's midpoint,
-    length and line (position in ``lines``). Missing or empty lines have none."""
-    owner = np.flatnonzero(~(shapely.is_missing(lines) | shapely.is_empty(lines)))
-    length = shapely.length(lines[owner])
-    count = np.maximum(1, np.ceil(length / size)).astype(np.int64)
-    line = np.repeat(owner, count)
-    piece = np.repeat(length / count, count)
-    step = np.arange(count.sum()) - np.repeat(np.cumsum(count) - count, count)
-    middle = shapely.line_interpolate_point(lines[line], (step + 0.5) * piece)
-    return middle, piece, line
-
-
 def coverage_by_block(
     blocks: gpd.GeoDataFrame, streets: gpd.GeoDataFrame, crs: str
 ) -> pd.DataFrame:
     """``COVERAGE_KEYS`` per block, in order; lengths in ``crs``."""
-    middle, piece, line = pieces(streets.geometry.to_crs(crs).to_numpy(), PIECE_M)
-    near, block = shapely.STRtree(blocks.geometry.to_crs(crs).to_numpy()).query(
-        middle, predicate="dwithin", distance=NEIGHBOURHOOD_M
-    )
-    street, length = line[near], piece[near]
+    shapes = streets.geometry.to_crs(crs).to_numpy()
+    # Reprojected polygons may come out slightly invalid.
+    shapes = np.where(shapely.is_valid(shapes), shapes, shapely.make_valid(shapes))
+    areas = shapely.buffer(blocks.geometry.to_crs(crs).to_numpy(), NEIGHBOURHOOD_M)
+    block, street = shapely.STRtree(shapes).query(areas, predicate="intersects")
+    length = strip_length(shapely.intersection(shapes[street], areas[block]))
     lit = pd.to_numeric(streets["streetlights"]).to_numpy("float64")[street] / 100
 
     def per_block(weights: np.ndarray) -> np.ndarray:

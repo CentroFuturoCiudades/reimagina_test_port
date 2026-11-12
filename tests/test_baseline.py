@@ -24,6 +24,7 @@ from reimagina_test_port.ingestion import (
     network,
     prep,
     raw_amenities,
+    street_fit,
     streets,
 )
 from reimagina_test_port.ingestion.cities import (
@@ -563,8 +564,11 @@ def test_streets(city, tmp_path):
     assert table.loc[first, "streetlights"] == 50
     assert table.loc[second, "streetlights"] == 100
     assert pd.isna(table.loc[third, "streetlights"])
-    # Lines have no area: no tree_coverage, and the canopy raster is not read.
-    assert table["tree_coverage"].isna().all()
+    # tree_coverage over each street's polygon (x 0-40 or 60-100, 10 m wide): trees
+    # west of x = 10. The third's polygon is half off the raster: its on-raster half.
+    assert table.loc[first, "tree_coverage"] == 25
+    assert table.loc[second, "tree_coverage"] == 0
+    assert table.loc[third, "tree_coverage"] == 25
     # The protected lane runs 5 m from the first street: a band of its own. The
     # shared one, 10 m from the third, makes its lanes shared_lanes. The second's
     # midpoint is 40 m from the protected lane's end: lanes only.
@@ -590,9 +594,15 @@ def test_streets_take_the_network_shapes(city, tmp_path):
     )
     bare = replace(city, street_lighting=None, bike_lanes=None)
     table = streets.build(bare, nodes, shaped, tmp_path).set_index("source_record_ref")
-    lines = table.geometry.to_crs(CRS)
-    assert lines["3-4"].equals_exact(bend, 0.01)
-    assert lines["1-2"].equals_exact(LineString([(0, -5), (40, -5)]), 0.01)
+    shapes = table.geometry.to_crs(CRS)
+    # A strip of the class's default width (residential: 10 m) around each line.
+    width = 2 * street_fit.DEFAULTS["default_half_width_m"]["residential"]
+    assert shapes["3-4"].buffer(0.2).contains(bend.interpolate(0.5, normalized=True))
+    assert street_fit.strip_width([shapes["3-4"]])[0] == pytest.approx(width, rel=0.1)
+    plain = LineString([(0, -5), (40, -5)]).buffer(width / 2, cap_style="flat")
+    # Less what its junction with the next street takes.
+    assert shapes["1-2"].difference(plain).area < 1
+    assert shapes["1-2"].area > 0.7 * plain.area
 
 
 def test_streets_without_lighting_or_lanes(city, tmp_path):
@@ -600,6 +610,307 @@ def test_streets_without_lighting_or_lanes(city, tmp_path):
     table = streets.build(bare, *network_tables(), tmp_path)
     assert table["streetlights"].isna().all()
     assert set(table["bands.use"]) == {'["sidewalk", "lanes", "sidewalk"]'}
+
+
+# A network to refine, south of the fixture's blocks (lots at y 0-40): one residential
+# street in two edges meeting at node 2 (each both ways; 2-3's shape is drawn from 3),
+# a trunk far away, and a footway.
+REFINED_NODES = pd.DataFrame(
+    {
+        "id": [1, 2, 3, 5, 6, 7, 8],
+        "x": [-10.0, 50, 110, 0, 100, 0, 50],
+        "y": [-5.0, -5, -5, -300, -300, 50, 50],
+    }
+)
+REFINED_EDGES = [  # from, to, highway, name, lanes, shape
+    (1, 2, "residential", "Calle Uno", "2;3", None),
+    (2, 1, "residential", "Calle Uno", "2;3", None),
+    (2, 3, "residential", "Calle Uno", None, LineString([(110, -5), (50, -5)])),
+    (3, 2, "residential", "Calle Uno", None, LineString([(110, -5), (50, -5)])),
+    (5, 6, "trunk", "Autopista", "4", None),
+    (6, 5, "trunk", "Autopista", "4", None),
+    (7, 8, "footway", None, None, None),
+    (8, 7, "footway", None, None, None),
+]
+
+
+def refined_network(rows=REFINED_EDGES) -> tuple[pd.DataFrame, gpd.GeoDataFrame]:
+    """Nodes and edges as reimagina_street_network returns them: EPSG:4326 shapes,
+    OSM's highway, name and lanes."""
+    xy = REFINED_NODES.set_index("id")[["x", "y"]]
+    lines = [
+        shape
+        if shape is not None
+        else LineString([xy.loc[a].to_numpy(), xy.loc[b].to_numpy()])
+        for a, b, *_, shape in rows
+    ]
+    edges = gpd.GeoDataFrame(
+        {
+            "from": [r[0] for r in rows],
+            "to": [r[1] for r in rows],
+            "distance": [line.length for line in lines],
+            "two_way": True,
+            "highway": [r[2] for r in rows],
+            "name": [r[3] for r in rows],
+            "lanes": [r[4] for r in rows],
+        },
+        geometry=lines,
+        crs=CRS,
+    ).to_crs(4326)
+    return REFINED_NODES, edges
+
+
+@pytest.fixture
+def refined_city(city):
+    config = replace(city.streets, refine=True)
+    return replace(city, streets=config, bike_lanes=None)
+
+
+def test_roads_from_network_dedupes_directions():
+    nodes, edges = refined_network()
+    roads = streets.roads_from_network(nodes, edges, CRS).set_index("road_key")
+    # Each way both directions is one road; the footway stays out.
+    assert sorted(roads.index) == ["1-2", "2-3", "5-6"]
+    assert roads.loc[["5-6"], "road_type"].tolist() == ["trunk"]
+    # 2-3's shape is drawn from 3: it starts there.
+    assert roads.loc["2-3", ["from_node", "to_node"]].tolist() == [3, 2]
+    assert roads.loc["1-2", ["from_node", "to_node"]].tolist() == [1, 2]
+    # "2;3" isn't a number: the class's default, not tagged.
+    assert roads.loc[["1-2", "2-3", "5-6"], "lanes"].tolist() == [2, 2, 4]
+    assert roads["lanes_tagged"].tolist() == [False, False, True]
+    assert roads.loc["1-2", "name"] == "Calle Uno"
+    assert roads.crs == CRS
+
+
+def test_roads_from_network_classes():
+    nodes, edges = refined_network(
+        [
+            (1, 2, None, None, None, None),  # a merged street: residential
+            (2, 3, "motorway_link", None, None, None),
+            (5, 6, "track", None, None, None),  # unknown: not vehicular
+            (7, 8, "pedestrian", None, None, None),
+        ]
+    )
+    roads = streets.roads_from_network(nodes, edges, CRS).set_index("road_key")
+    assert roads["road_type"].to_dict() == {"1-2": "residential", "2-3": "motorway"}
+
+
+def test_refined_streets(refined_city, tmp_path):
+    table = streets.build(refined_city, *refined_network(), tmp_path / "work")
+    # The two edges are one right of way, keyed by the first; the highway another;
+    # the footway as ever, by its nodes.
+    assert sorted(table.source_record_ref) == ["1-2", "5-6", "7-8"]
+    assert table.attrs["fit"] == {"fitted": 2, "both_sides": 0, "unfitted": 1}
+    table = table.set_index("source_record_ref", drop=False)
+    row = table.loc["1-2"]
+    assert row.id == str(uuid.uuid5(NAMESPACE, "mexicali:right_of_way:1-2"))
+    shape = gpd.GeoSeries([row.geometry], crs=4326).to_crs(CRS).iloc[0]
+    # A polygon, dead end to dead end: as long as its axis.
+    assert shape.geom_type == "Polygon" and shape.is_valid
+    assert street_fit.strip_length([shape])[0] == pytest.approx(120, abs=1)
+    # Bands: a measured width's, one value per band, summing 100.
+    for use, share in zip(table["bands.use"], table["bands.share"], strict=True):
+        assert len(json.loads(use)) == len(json.loads(share))
+        assert sum(json.loads(share)) == pytest.approx(100)
+    assert {"sidewalk", "lanes"} <= set(json.loads(row["bands.use"]))
+    assert table.crs.to_epsg() == 4326
+    # Only the three attributes: nothing of width, lanes or name is written.
+    assert list(table.columns) == [
+        "id", "parent_id", "source_record_ref", "bands.use", "bands.share",
+        "streetlights", "geometry",
+    ]  # fmt: skip
+
+
+def test_streets_are_polygons_with_their_attributes(city, refined_city, tmp_path):
+    for preset in (city, refined_city):
+        table = streets.build(preset, *refined_network(), tmp_path / preset.key)
+        assert set(table.geom_type) == {"Polygon"}
+        assert table.geometry.is_valid.all() and not table.geometry.is_empty.any()
+        assert list(table.columns) == [
+            "id", "parent_id", "source_record_ref", "bands.use", "bands.share",
+            "streetlights", "geometry",
+        ]  # fmt: skip
+        assert set(table.attrs["footprints"]) == {"inside", "simplified"}
+
+
+def test_refined_keeps_pedestrian(refined_city, tmp_path):
+    table = streets.build(refined_city, *refined_network(), tmp_path)
+    row = table.set_index("source_record_ref").loc["7-8"]
+    # As today: the fixed profile, on the edge's own line, keyed by its nodes.
+    assert json.loads(row["bands.use"]) == ["sidewalk", "lanes", "sidewalk"]
+    assert json.loads(row["bands.share"]) == [20, 60, 20]
+    assert row.id == str(uuid.uuid5(NAMESPACE, "mexicali:right_of_way:7-8"))
+
+
+def test_unrefined_streets_unchanged(city, tmp_path):
+    # Refine off: the network's tags change nothing.
+    nodes, edges = refined_network()
+    plain = streets.build(city, nodes, edges, tmp_path / "a")
+    untagged = streets.build(
+        city, nodes, edges.drop(columns=["highway", "name", "lanes"]), tmp_path / "b"
+    )
+    assert sorted(plain.source_record_ref) == ["1-2", "2-3", "5-6", "7-8"]
+    assert "fit" in plain.attrs and plain.attrs["fit"]["fitted"] == 0
+    # Only the polygons' widths follow the class (untagged: residential).
+    pd.testing.assert_frame_equal(
+        plain.drop(columns="geometry"), untagged.drop(columns="geometry")
+    )
+    assert set(plain.geom_type) == {"Polygon"} == set(untagged.geom_type)
+
+
+def bike_lanes_of(rows: list[tuple], path: Path) -> BikeLanes:
+    """A bike lanes file of rows (TIPO, line) in CRS."""
+    gpd.GeoDataFrame(
+        {"TIPO": [r[0] for r in rows]},
+        geometry=[LineString(r[1]) for r in rows],
+        crs=CRS,
+    ).to_file(path)
+    return BikeLanes(Source(str(path)), type_column="TIPO", protected=("SEGREGADO",))
+
+
+def test_refined_bike_lanes(refined_city, tmp_path):
+    # 7 m south of the street, along all of it: its right side (the axis runs west to
+    # east); the footway's lane would be the fixed profile's.
+    bike = bike_lanes_of(
+        [("SEGREGADO", [(-10, -12), (110, -12)])], tmp_path / "lanes.geojson"
+    )
+    table = streets.build(
+        replace(refined_city, bike_lanes=bike), *refined_network(), tmp_path / "w"
+    ).set_index("source_record_ref")
+    row = table.loc["1-2"]
+    use, share = json.loads(row["bands.use"]), json.loads(row["bands.share"])
+    assert use == ["sidewalk", "lanes", "protected_bike_lane", "sidewalk"]
+    assert sum(share) == pytest.approx(100)
+    assert "protected_bike_lane" not in table.loc["5-6", "bands.use"]
+
+
+def test_refined_lane_bands(tmp_path):
+    # An avenue 40 m wide, west to east: its lanes reach 20 m, past the 15 m.
+    axes = gpd.GeoSeries(
+        [LineString([(0, 0), (200, 0)]), LineString([(0, 500), (200, 500)]),
+         LineString([(0, 1000), (200, 1000)])],
+        index=["shared", "partial", "both"],
+        crs=CRS,
+    )  # fmt: skip
+    bike = bike_lanes_of(
+        [
+            ("COMPARTIDO", [(0, 18), (200, 18)]),
+            # Along 30% of it: not enough.
+            ("SEGREGADO", [(0, 482), (60, 482)]),
+            ("COMPARTIDO", [(0, 1018), (200, 1018)]),
+            ("SEGREGADO", [(0, 982), (200, 982)]),
+        ],
+        tmp_path / "lanes.geojson",
+    )
+    lines = gpd.read_file(bike.source.uri)
+    found = streets.refined_lane_bands(axes, np.array([40.0] * 3), lines, bike)
+    assert found.loc["shared"].tolist() == ["shared_lanes", "left"]
+    assert found.loc["partial"].isna().all()
+    # Protected and shared: protected wins.
+    assert found.loc["both"].tolist() == ["protected_bike_lane", "right"]
+    # At 15 m, the avenue's lanes are too far.
+    narrow = streets.refined_lane_bands(axes, np.array([10.0] * 3), lines, bike)
+    assert narrow["kind"].isna().all()
+
+
+def test_with_bike_lane():
+    use = ["sidewalk", "lanes", "median", "lanes", "sidewalk"]
+    share = [15.0, 30.0, 10.0, 30.0, 15.0]
+    assert streets.with_bike_lane(use, share, "shared_lanes", "right", 40, 2) == (
+        ["sidewalk", "lanes", "median", "shared_lanes", "sidewalk"],
+        share,
+    )
+    # 2 m of 40: 5% from the left lanes, next to the left sidewalk.
+    assert streets.with_bike_lane(use, share, "protected_bike_lane", "left", 40, 2) == (
+        ["sidewalk", "protected_bike_lane", "lanes", "median", "lanes", "sidewalk"],
+        [15.0, 5.0, 25.0, 10.0, 30.0, 15.0],
+    )
+    # Never more than half the lanes.
+    one = streets.with_bike_lane(
+        ["sidewalk", "lanes", "sidewalk"], [40, 20, 40], "protected_bike_lane",
+        "right", 5, 2,
+    )  # fmt: skip
+    assert one == (
+        ["sidewalk", "lanes", "protected_bike_lane", "sidewalk"],
+        [40, 10.0, 10.0, 40],
+    )
+    assert streets.with_bike_lane(use, share, None, None, 40, 2) == (use, share)
+
+
+def test_refined_lighting():
+    # A face 32 m from the axis of an avenue 60 m wide: max(25, 30 + 5) = 35 m.
+    street = gpd.GeoSeries([LineString([(0, 0), (100, 0)])], crs=CRS)
+    faces = gpd.GeoDataFrame(
+        {"ALUMPUB": ["1"]}, geometry=[LineString([(20, 32), (80, 32)])], crs=CRS
+    )
+    lighting = StreetLighting(
+        Source("unused"), column="ALUMPUB", lit=("1",), unlit=("3",)
+    )
+    lit = streets.streetlights(street, faces, lighting, np.array([60.0]))
+    assert lit.iloc[0] == 100
+    # Unrefined, 25 m; 40 m wide, max(25, 20 + 5) = 25 m: out of reach.
+    assert pd.isna(streets.streetlights(street, faces, lighting).iloc[0])
+    narrow = streets.streetlights(street, faces, lighting, np.array([40.0]))
+    assert pd.isna(narrow.iloc[0])
+    # An unfitted street (NaN width) keeps max_distance_m.
+    assert pd.isna(
+        streets.streetlights(street, faces, lighting, np.array([np.nan])).iloc[0]
+    )
+
+
+def test_refined_streets_in_the_yaml(tmp_path):
+    def refine(config):
+        config["sources"]["streets"]["params"].update(
+            refine=True, fit={"max_half_width_m": 30}
+        )
+        config["sources"]["bike_lanes"]["params"].update(
+            min_share=0.6, protected_width_m=2.5
+        )
+        config["sources"]["street_lighting"]["params"].update(front_tolerance_m=3)
+
+    city = cities.from_yaml(write_city(tmp_path, "mexicali", refine))
+    assert city.streets.refine and city.streets.fit == {"max_half_width_m": 30}
+    assert (city.bike_lanes.min_share, city.bike_lanes.protected_width_m) == (0.6, 2.5)
+    assert city.street_lighting.front_tolerance_m == 3
+    defaults = CITIES["mexicali"]
+    assert (defaults.bike_lanes.min_share, defaults.bike_lanes.protected_width_m) == (
+        0.5,
+        2.0,
+    )
+    assert defaults.street_lighting.front_tolerance_m == 5
+    # Off unless the YAML says so.
+    assert not defaults.streets.refine and defaults.streets.fit == {}
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (lambda p: p.update(fit={"typo": 1}), r"fit: unknown keys \['typo'\]"),
+    ],
+)
+def test_refined_yaml_errors(tmp_path, change, message):
+    with pytest.raises(cities.CityConfigError, match=message):
+        cities.from_yaml(
+            write_city(
+                tmp_path,
+                "mexicali",
+                lambda c: change(c["sources"]["streets"]["params"]),
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "bad", [{"min_share": 0}, {"min_share": 1.5}, {"protected_width_m": 0}]
+)
+def test_bike_lane_params_are_checked(tmp_path, bad):
+    with pytest.raises(cities.CityConfigError, match="must be"):
+        cities.from_yaml(
+            write_city(
+                tmp_path,
+                "mexicali",
+                lambda c: c["sources"]["bike_lanes"]["params"].update(bad),
+            )
+        )
 
 
 def test_baseline_metric(city, monkeypatch):

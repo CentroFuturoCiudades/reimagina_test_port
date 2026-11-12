@@ -1209,7 +1209,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "A city's streets as right_of_way elements, one per street of its street network (reimagina_street_network), with streetlights from the block faces near each street and a bike lane band where the street's midpoint lies near one of the city's bike lanes (sources.street_lighting, sources.bike_lanes).",
+      "description": "A city's streets as right_of_way elements, one per street of its street network (reimagina_street_network), with streetlights from the block faces near each street and a bike lane band where the street's midpoint lies near one of the city's bike lanes (sources.street_lighting, sources.bike_lanes). With sources.streets.params.refine, the vehicular streets are fitted to the cadastre's lots instead: one right of way per stretch from intersection to intersection, centred between the lot fronts, with bands of the measured width and the lighting and bike lane matches scaled to it; pedestrian streets stay as above.",
       "inputs": {
         "edges": {
           "arguments": {},
@@ -5563,6 +5563,27 @@
               "nullable": false,
               "type": "boolean",
               "unit": null
+            },
+            {
+              "description": "OpenStreetMap's highway tag (its first, if several).",
+              "name": "highway",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "OpenStreetMap's street name.",
+              "name": "name",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "OpenStreetMap's lanes tag, as text (both directions).",
+              "name": "lanes",
+              "nullable": false,
+              "type": "string",
+              "unit": null
             }
           ],
           "geometry": "geometry",
@@ -5706,6 +5727,27 @@
               "name": "two_way",
               "nullable": false,
               "type": "boolean",
+              "unit": null
+            },
+            {
+              "description": "OpenStreetMap's highway tag (its first, if several).",
+              "name": "highway",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "OpenStreetMap's street name.",
+              "name": "name",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "OpenStreetMap's lanes tag, as text (both directions).",
+              "name": "lanes",
+              "nullable": false,
+              "type": "string",
               "unit": null
             }
           ],

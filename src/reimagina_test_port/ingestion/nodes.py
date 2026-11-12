@@ -215,7 +215,11 @@ def baseline_dataset(
         "network (reimagina_street_network), with streetlights from the block faces "
         "near each street and a bike lane band where the street's midpoint lies "
         "near one of the city's bike lanes (sources.street_lighting, "
-        "sources.bike_lanes)."
+        "sources.bike_lanes). With sources.streets.params.refine, the vehicular "
+        "streets are fitted to the cadastre's lots instead: one right of way per "
+        "stretch from intersection to intersection, centred between the lot fronts, "
+        "with bands of the measured width and the lighting and bike lane matches "
+        "scaled to it; pedestrian streets stay as above."
     ),
     inputs={
         "nodes": Dependency("reimagina_street_network_nodes"),
@@ -234,6 +238,14 @@ def baseline_streets(
     from reimagina_test_port.ingestion import streets
 
     table = streets.build(CITIES[parameters.city], nodes, edges, context.temp_dir)
+    fit = table.attrs.get("fit")
+    if fit and fit["fitted"]:
+        context.logger.info(
+            "Streets fitted to the lots: %d (both sides measured: %d), as ever: %d",
+            fit["fitted"],
+            fit["both_sides"],
+            fit["unfitted"],
+        )
     context.logger.info(
         "Streets: %d, with streetlights %d, with a bike lane %d",
         len(table),
@@ -446,8 +458,31 @@ class NetworkParameters(BaselineParameters):
 
 
 # The road network's edges with each street's shape, in the city's metric CRS.
+# plus OpenStreetMap's highway, name and lanes (text), which refine fits the streets
+# with (ingestion/street_fit.py); none where the network added the edge.
 STREET_EDGES_DECLARATION = TableOutput(
-    columns=EDGES_DECLARATION.columns, geometry="geometry"
+    columns=[
+        *EDGES_DECLARATION.columns,
+        TableColumn(
+            name="highway",
+            type="string",
+            unit=None,
+            description="OpenStreetMap's highway tag (its first, if several).",
+        ),
+        TableColumn(
+            name="name",
+            type="string",
+            unit=None,
+            description="OpenStreetMap's street name.",
+        ),
+        TableColumn(
+            name="lanes",
+            type="string",
+            unit=None,
+            description="OpenStreetMap's lanes tag, as text (both directions).",
+        ),
+    ],
+    geometry="geometry",
 )
 
 
@@ -527,7 +562,9 @@ def street_network(
     return {
         "reimagina_street_network_nodes": nodes.reset_index(),
         "reimagina_street_network_edges": gpd.GeoDataFrame(
-            edges[["from", "to"]].assign(distance=edges["length"], two_way=True),
+            edges[["from", "to"]]
+            .assign(distance=edges["length"], two_way=True)
+            .join(edges.reindex(columns=list(network.OSM_TAGS))),
             geometry=lines,
             crs=city.target_crs,
         ),

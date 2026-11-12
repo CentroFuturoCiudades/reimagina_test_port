@@ -51,6 +51,10 @@ class NetworkParams:
     connector_max_m: float = 5.0
     # merge_streets: line ends this close are one node.
     precision_m: float = 0.1
+    # reimagina_baseline_streets: fit the vehicular streets to the cadastre's lots
+    # (ingestion/street_fit.py). ``fit`` overrides street_fit.DEFAULTS.
+    refine: bool = False
+    fit: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -75,6 +79,9 @@ class StreetLighting:
     # Rows kept: column -> value (a national file's municipality, say).
     where: dict[str, str] = field(default_factory=dict)
     max_distance_m: float = 25.0
+    # A refined street's fronts are width/2 from its axis: faces within
+    # max(max_distance_m, width/2 + front_tolerance_m) count.
+    front_tolerance_m: float = 5.0
 
 
 @dataclass(frozen=True)
@@ -87,6 +94,11 @@ class BikeLanes:
     protected: tuple[str, ...]
     # A street whose midpoint is this close to a lane has it.
     max_distance_m: float = 15.0
+    # A refined street has a lane if at least this share (0-1] of its axis lies
+    # within max(max_distance_m, width/2) of one.
+    min_share: float = 0.5
+    # A refined street's protected lane takes this width (at most half its lanes').
+    protected_width_m: float = 2.0
 
 
 @dataclass(frozen=True)
@@ -200,6 +212,19 @@ class _Section:
             raise CityConfigError(msg)
 
 
+def _fit_params(value: Any, name: str) -> dict[str, Any]:
+    """``sources.streets.params.fit``: overrides of ``street_fit.DEFAULTS``; an
+    unknown key is an error."""
+    fit = _mapping(value, f"{name}: sources.streets.params.fit")
+    # Imported here: street_fit needs geopandas, the presets do not.
+    from reimagina_test_port.ingestion.street_fit import DEFAULTS
+
+    if unknown := sorted(set(fit) - set(DEFAULTS)):
+        msg = f"{name}: sources.streets.params.fit: unknown keys {unknown}"
+        raise CityConfigError(msg)
+    return fit
+
+
 def from_yaml(path: Path) -> CityPreset:
     """The preset of one city YAML; missing or unknown keys raise ``CityConfigError``."""
     config = _Section(yaml.safe_load(path.read_text(encoding="utf-8")), path.name)
@@ -241,6 +266,8 @@ def from_yaml(path: Path) -> CityPreset:
             custom_filter=streets.optional("custom_filter", None),
             retain_all=bool(streets.optional("retain_all", True)),
             output_prefix=str(streets.required("output_prefix")).rstrip("/"),
+            refine=bool(streets.optional("refine", False)),
+            fit=_fit_params(streets.optional("fit", None), path.name),
             boundary_uri=streets.optional("boundary_uri", None),
             **{
                 name: float(
@@ -283,6 +310,7 @@ def from_yaml(path: Path) -> CityPreset:
                 for k, v in _mapping(options.optional("where", None), "where").items()
             },
             max_distance_m=float(options.optional("max_distance_m", 25.0)),
+            front_tolerance_m=float(options.optional("front_tolerance_m", 5.0)),
         )
         options.done()
     if (entry := file("bike_lanes")) is not None:
@@ -292,7 +320,15 @@ def from_yaml(path: Path) -> CityPreset:
             type_column=str(options.required("type_column")),
             protected=tuple(map(str, options.optional("protected", []))),
             max_distance_m=float(options.optional("max_distance_m", 15.0)),
+            min_share=float(options.optional("min_share", 0.5)),
+            protected_width_m=float(options.optional("protected_width_m", 2.0)),
         )
+        if not 0 < bike_lanes.min_share <= 1:
+            msg = f"{path.name}: sources.bike_lanes: min_share must be in (0, 1]"
+            raise CityConfigError(msg)
+        if bike_lanes.protected_width_m <= 0:
+            msg = f"{path.name}: sources.bike_lanes: protected_width_m must be > 0"
+            raise CityConfigError(msg)
         options.done()
     canopy = None
     if (entry := file("tree_canopy")) is not None:
