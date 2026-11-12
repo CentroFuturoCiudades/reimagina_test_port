@@ -628,9 +628,10 @@ def test_mexicali_yaml():
 
     assert city.street_lighting.max_distance_m == 25
     assert city.street_lighting.source.member.endswith("INV2020_IND_EU_FTE_02.shp")
-    # Relative paths are the package's files.
-    assert city.bike_lanes.source.uri == str(
-        cities.PACKAGE / "data/mexicali/ciclovia_exist.geojson"
+    # Both files are in the lake, beside the city's other sources.
+    assert city.street_lighting.source.uri.startswith("az://raw/inegi/")
+    assert city.bike_lanes.source.uri.endswith(
+        "imip/ciclovia_exist/ciclovia_exist.geojson"
     )
     assert city.bike_lanes.type_column == "TIPO"
 
