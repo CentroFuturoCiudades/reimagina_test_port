@@ -231,6 +231,14 @@ baseline again, or belong to an element no longer present, are removed. Rows
 whose stored value is unchanged are not rewritten and keep their `job_run_id`
 and `computed_at`, so writing the same scenario again changes nothing.
 
+`accessibility_<type>` is a percentile rank among all blocks, so a change
+anywhere moves every block it passes in the ranking by about 1/blocks
+(0.0001 after rounding). To keep a fork from storing those shifts for the whole
+city, a fork keeps the baseline's `accessibility_<type>` where its own differs by
+less than 0.001 (`ACCESSIBILITY_SCORE_TOLERANCE`); the value it shows is then off
+by less than that. The comparison is always against the baseline, so the error
+does not accumulate across writes. Other keys keep the exact comparison.
+
 For a fork, values that cannot have changed are not sent to the database at
 all. A lot the fork did not edit (no `element_state` row) and that has no stored
 fork value has its baseline value, which is what it computes. Blocks are always
