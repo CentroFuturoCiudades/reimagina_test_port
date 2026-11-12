@@ -45,8 +45,9 @@ fail explicitly; there is no fallback to synthetic data.
 Both files require unique, nonempty string `id` values, a nullable `parent_id`
 column, and a GeoParquet `geometry` column with a declared CRS. An optional
 `source_record_ref` column is carried through, with null substituted when absent.
-The lot table consumes `cos`, `num_levels`, `area`, `land_use`, `unit_size_m2`,
-`people_per_household`, and `occupancy_rate`. Missing attributes are treated as
+The lot table consumes `cos`, `num_levels`, `area`, `land_use`,
+`housing.unit_size_m2`, `housing.people_per_household`, `housing.floor_share` and
+`occupancy_rate`. Missing attributes are treated as
 null. Extra input columns are not propagated. Areas are supplied square metres;
 the plugin does not infer area from geometry or repair geometries.
 

@@ -1,6 +1,7 @@
 """Write a city's baseline elements as a Reimagina baseline scenario.
 
-The elements are blocks, lots, amenities and establishments; each element type
+The elements are blocks, lots, amenities, establishments and rights of way; each
+element type
 must exist in the database's ``element_type`` enum. Missing ``attribute_catalog``
 and ``indicator_catalog`` rows are added first (``catalogs.upsert``), existing
 ones left as they are.
@@ -13,6 +14,7 @@ again replaces the scenario's own rows. Indicators are computed afterwards with
 ``reimagina_scenario_write``.
 """
 
+import json
 import math
 from typing import Any
 
@@ -90,8 +92,9 @@ _UPSERT_STATE = sql.SQL(
 _INSERT_ATTRIBUTES = sql.SQL(
     """
     INSERT INTO {element_state_attribute_value}
-        (scenario_id, element_id, attribute_id, value_num, value_text)
-    SELECT %(scenario)s::uuid, element_id, attribute_id, value_num, value_text
+        (scenario_id, element_id, attribute_id, value_num, value_text, value_json)
+    SELECT %(scenario)s::uuid, element_id, attribute_id, value_num, value_text,
+           value_json
     FROM baseline_attributes
     """
 ).format(**_TABLES)
@@ -145,13 +148,16 @@ def _check_scenario(cur: psycopg.Cursor, project_id: str, scenario_id: str) -> N
         raise BaselineScenarioError(msg)
 
 
-def _encode(value: Any, value_type: str) -> tuple[float | None, str | None]:
-    """``(value_num, value_text)``; both None for a missing value."""
+def _encode(value: Any, value_type: str) -> tuple[float | None, str | None, str | None]:
+    """``(value_num, value_text, value_json)``; all None for a missing value. A json
+    value may arrive already encoded, as a string."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
-        return None, None
+        return None, None, None
     if value_type in ("number", "integer"):
-        return float(value), None
-    return None, str(value)
+        return float(value), None, None
+    if value_type == "json":
+        return None, None, value if isinstance(value, str) else json.dumps(value)
+    return None, str(value), None
 
 
 def write_baseline(
@@ -165,7 +171,8 @@ def write_baseline(
     """Write ``tables`` (``{element_type: table}``) into the baseline.
 
     ``attributes`` maps each element type to ``{column: kind}``, the columns
-    written as attribute values. A dry run rolls everything back.
+    written as attribute values; types not in ``tables`` are ignored. A dry run
+    rolls everything back.
 
     Returns:
         Counts: ``elements``, ``elements_created``, ``attribute_values``,
@@ -174,6 +181,7 @@ def write_baseline(
         ``by_type`` (``{element_type: elements}``, the scenario's state rows of
         each type of ``tables`` after the write, read back from the database).
     """
+    attributes = {t: columns for t, columns in attributes.items() if t in tables}
     required = {
         (element_type, key): kind
         for element_type, columns in attributes.items()
@@ -196,7 +204,8 @@ def write_baseline(
         )
         cur.execute(
             "CREATE TEMP TABLE baseline_attributes (element_id uuid, "
-            "attribute_id integer, value_num double precision, value_text text) "
+            "attribute_id integer, value_num double precision, value_text text, "
+            "value_json jsonb) "
             "ON COMMIT DROP"
         )
         values = 0
@@ -214,16 +223,16 @@ def write_baseline(
                     copy.write_row((identifier, element_type, parent, ref, geometry))
         with cur.copy(
             "COPY baseline_attributes (element_id, attribute_id, value_num, "
-            "value_text) FROM STDIN"
+            "value_text, value_json) FROM STDIN"
         ) as copy:
             for element_type, columns in attributes.items():
                 table = tables[element_type]
                 for key in columns:
                     attribute_id, value_type = ids[(element_type, key)]
                     for identifier, value in zip(table["id"], table[key], strict=True):
-                        num, text = _encode(value, value_type)
-                        if num is not None or text is not None:
-                            copy.write_row((identifier, attribute_id, num, text))
+                        encoded = _encode(value, value_type)
+                        if any(part is not None for part in encoded):
+                            copy.write_row((identifier, attribute_id, *encoded))
                             values += 1
         cur.execute("ANALYZE baseline_elements")
         params = {"scenario": scenario_id}

@@ -16,7 +16,7 @@ from psycopg import sql
 from reimagina_test_port.scenario.source import SCHEMA
 
 # Plugin kind -> catalog value types it can be stored as.
-KINDS = {"number": ("number", "integer"), "text": ("text", "enum")}
+KINDS = {"number": ("number", "integer"), "text": ("text", "enum"), "json": ("json",)}
 
 
 class ContractError(RuntimeError):

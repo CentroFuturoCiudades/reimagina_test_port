@@ -19,6 +19,13 @@ into the city's network). Two steps:
 ``save_h5`` writes the result with pandana; ``indicators/accessibility/network.py``
 reads it back. The H5 stores straight edges between nodes with their length in
 metres (``length``, the first impedance) and is two-way.
+
+Edges also carry their shape (``geometry``), for the streets built over the network
+(``ingestion/streets.py``): OSM's way, or the new street's line. Edges that step 2
+splits or adds as connectors have none (``shapes`` gives them the straight line).
+
+The OSM download is cached in the lake beside the H5s (``osm_cache_uris``), so a
+city's network is fetched from Overpass once.
 """
 
 import hashlib
@@ -90,24 +97,26 @@ def osm_graph(area: shapely.Geometry, params: NetworkParams):
     )
 
 
-def graph_tables(graph, crs: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Nodes (``id`` index, ``x``, ``y`` in ``crs``) and edges (``from``, ``to``,
-    ``length`` in metres) of an osmnx graph; parallel edges keep the shortest."""
+def osm_tables(graph) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Nodes (``id`` index, ``x``, ``y`` in EPSG:4326) and edges (``from``, ``to``,
+    ``length`` in metres, ``geometry``: the way's shape, EPSG:4326) of an osmnx
+    graph; parallel edges keep the shortest."""
     import osmnx as ox
 
     nodes, edges = ox.graph_to_gdfs(graph)
-    nodes = nodes.to_crs(crs)
+    nodes = nodes.to_crs(OSM_CRS)
     nodes = pd.DataFrame(
         {"x": nodes.geometry.x, "y": nodes.geometry.y},
         index=pd.Index(nodes.index.astype("int64"), name="id"),
     )
-    edges = edges.reset_index()
+    edges = edges.to_crs(OSM_CRS).reset_index()
     edges = (
         pd.DataFrame(
             {
                 "from": edges["u"].astype("int64"),
                 "to": edges["v"].astype("int64"),
                 "length": edges["length"].astype("float64"),
+                "geometry": edges.geometry.to_numpy(),
             }
         )
         .query("`from` != `to`")
@@ -119,17 +128,107 @@ def graph_tables(graph, crs: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     return nodes, edges
 
 
+def project(
+    nodes: pd.DataFrame, edges: pd.DataFrame, crs: str
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """``osm_tables``' nodes and edge shapes from EPSG:4326 into ``crs``."""
+    points = gpd.GeoSeries.from_xy(nodes["x"], nodes["y"], crs=OSM_CRS).to_crs(crs)
+    nodes = pd.DataFrame(
+        {"x": points.x.to_numpy(), "y": points.y.to_numpy()}, index=nodes.index
+    )
+    shapes = gpd.GeoSeries(edges["geometry"].to_numpy(), crs=OSM_CRS).to_crs(crs)
+    return nodes, edges.assign(geometry=shapes.to_numpy())
+
+
+def graph_tables(graph, crs: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """``osm_tables`` in ``crs``."""
+    return project(*osm_tables(graph), crs)
+
+
+def osm_cache_uris(
+    prefix: str, cve_code: str, area: shapely.Geometry, params: NetworkParams
+) -> tuple[str, str]:
+    """Nodes' and edges' parquet of the OSM download for ``area`` and the city's
+    filter, under ``prefix``: ``osm_<cve>_<hash>_{nodes,edges}.parquet``. Another
+    area, filter or ``retain_all`` is another file."""
+    digest = hashlib.sha256()
+    for part in (
+        shapely.to_wkb(area),
+        str(params.custom_filter).encode(),
+        str(params.retain_all).encode(),
+    ):
+        digest.update(part)
+    stem = f"{prefix.rstrip('/')}/osm_{cve_code}_{digest.hexdigest()[:10]}"
+    return f"{stem}_nodes.parquet", f"{stem}_edges.parquet"
+
+
+def read_osm_cache(uris: tuple[str, str]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """``osm_tables`` back from ``write_osm_cache``'s files."""
+    from reimagina_test_port.common import lake
+
+    nodes = lake.read_parquet(uris[0], ["id", "x", "y"]).set_index("id")
+    edges = lake.read_parquet(uris[1], ["from", "to", "length", "geometry"])
+    return nodes, edges.assign(geometry=shapely.from_wkb(edges["geometry"]))
+
+
+def write_osm_cache(
+    nodes: pd.DataFrame,
+    edges: pd.DataFrame,
+    uris: tuple[str, str],
+    workdir: Path,
+    *,
+    overwrite: bool,
+) -> None:
+    """``osm_tables``' nodes and edges (shapes as WKB) to ``uris``."""
+    from reimagina_test_port.common import lake
+
+    workdir.mkdir(parents=True, exist_ok=True)
+    tables = (
+        nodes.reset_index(),
+        edges.assign(geometry=shapely.to_wkb(edges["geometry"].to_numpy())),
+    )
+    for table, uri in zip(tables, uris, strict=True):
+        path = workdir / uri.rsplit("/", 1)[-1]
+        table.to_parquet(path, index=False)
+        lake.upload(path, uri, overwrite=overwrite)
+
+
 def osm_network(
     blocks: gpd.GeoSeries,
     crs: str,
     params: NetworkParams,
     boundary: gpd.GeoSeries | None = None,
+    *,
+    cve_code: str | None = None,
+    workdir: Path | None = None,
+    refresh: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Step 1: the city's network from OpenStreetMap."""
+    """Step 1: the city's network from OpenStreetMap.
+
+    With ``cve_code``, the download is cached under ``params.output_prefix``
+    (``osm_cache_uris``): read from there when it exists, else saved there (written
+    first in ``workdir``). ``refresh`` downloads again and replaces it.
+    """
+    from reimagina_test_port.common import lake
+
     area = study_area(blocks, crs, params.margin_m, boundary)
-    nodes, edges = graph_tables(osm_graph(area, params), crs)
+    cache = (
+        None
+        if cve_code is None
+        else osm_cache_uris(params.output_prefix, cve_code, area, params)
+    )
+    if cache is not None and not refresh and all(map(lake.exists, cache)):
+        logger.info("OSM: from %s", cache[1])
+        nodes, edges = read_osm_cache(cache)
+    else:
+        nodes, edges = osm_tables(osm_graph(area, params))
+        if cache is not None:
+            write_osm_cache(
+                nodes, edges, cache, workdir or Path("."), overwrite=refresh
+            )
+            logger.info("OSM: saved to %s", cache[1])
     logger.info("OSM: %s nodes / %s edges", f"{len(nodes):,}", f"{len(edges):,}")
-    return nodes, edges
+    return project(nodes, edges, crs)
 
 
 # ----------------------------------------------------------------------- step 2
@@ -182,7 +281,7 @@ def cut_zone(
 
 def node_lines(lines: gpd.GeoSeries, precision: float) -> pd.DataFrame:
     """Lines split where they cross: ``start`` and ``end`` (x, y rounded to
-    ``precision``) and ``length`` of each piece between crossings."""
+    ``precision``), ``length`` and ``geometry`` of each piece between crossings."""
     exploded = [g for g in lines.explode(index_parts=False) if g is not None]
     noded = shapely.union_all([g for g in exploded if not g.is_empty])
     pieces = [
@@ -200,6 +299,7 @@ def node_lines(lines: gpd.GeoSeries, precision: float) -> pd.DataFrame:
             "start": list(snap(np.array([c[0] for c in coords]).reshape(-1, 2))),
             "end": list(snap(np.array([c[-1] for c in coords]).reshape(-1, 2))),
             "length": [g.length for g in pieces],
+            "geometry": pieces,
         }
     )
 
@@ -227,7 +327,12 @@ def sew(
     )
     n = len(pieces)
     new_edges = pd.DataFrame(
-        {"from": ids[inverse[:n]], "to": ids[inverse[n:]], "length": pieces["length"]}
+        {
+            "from": ids[inverse[:n]],
+            "to": ids[inverse[n:]],
+            "length": pieces["length"],
+            "geometry": pieces["geometry"],
+        }
     )
     new_edges = new_edges[new_edges["from"] != new_edges["to"]]
     # One edge per pair of nodes, the shortest, and none the network already has.
@@ -422,6 +527,18 @@ def merge_streets(
 
 
 # ----------------------------------------------------------------------- output
+
+
+def shapes(nodes: pd.DataFrame, edges: pd.DataFrame) -> np.ndarray:
+    """Each edge's ``geometry``, or the straight line between its nodes without
+    one."""
+    lines = _segments(edges, nodes)
+    if "geometry" not in edges:
+        return lines
+    own = edges["geometry"].to_numpy()
+    present = ~pd.isna(own)
+    lines[present] = own[present]
+    return lines
 
 
 def save_h5(nodes: pd.DataFrame, edges: pd.DataFrame, path: Path) -> Path:

@@ -12,8 +12,8 @@
 #   the elements inside it get composites. Without it, all of them do.
 #
 # Leaves:
-#   source     the indicator pipeline: accessibility, population_access or
-#              built_form
+#   source     the indicator pipeline: accessibility, population_access,
+#              built_form, land_use or streets (blocks only)
 #   variable   its column (distance_m_public_space, density, ...)
 #   transform  optional, before normalising: {soft_threshold: distance, k: 5}
 #              in the variable's unit (closer is better, 0-1) or
