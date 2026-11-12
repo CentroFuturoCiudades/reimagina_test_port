@@ -25,7 +25,8 @@ Edges also carry their shape (``geometry``), for the streets built over the netw
 splits or adds as connectors have none (``shapes`` gives them the straight line).
 
 The OSM download is cached in the lake beside the H5s (``osm_cache_uris``), so a
-city's network is fetched from Overpass once.
+city's network is fetched from Overpass once. A copy saved before the edges carried
+their tags (``legacy_osm_cache_uris``) is read too, with those tags missing.
 """
 
 import hashlib
@@ -97,10 +98,23 @@ def osm_graph(area: shapely.Geometry, params: NetworkParams):
     )
 
 
+# OSM tags the edges keep, as text, for ``street_fit`` (ingestion/streets.py).
+OSM_TAGS = ("highway", "name", "lanes")
+
+
+def _first_tag(value: object) -> str | None:
+    """osmnx joins the ways it simplifies into one edge: their values, a list. The
+    first, as text; None when missing."""
+    if isinstance(value, (list, tuple, np.ndarray)):
+        value = value[0] if len(value) else None
+    return None if value is None or pd.isna(value) else str(value)
+
+
 def osm_tables(graph) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Nodes (``id`` index, ``x``, ``y`` in EPSG:4326) and edges (``from``, ``to``,
-    ``length`` in metres, ``geometry``: the way's shape, EPSG:4326) of an osmnx
-    graph; parallel edges keep the shortest."""
+    ``length`` in metres, ``highway``, ``name``, ``lanes`` (OSM's, as text, the first
+    of a list; None when the way has none), ``geometry``: the way's shape,
+    EPSG:4326) of an osmnx graph; parallel edges keep the shortest."""
     import osmnx as ox
 
     nodes, edges = ox.graph_to_gdfs(graph)
@@ -116,6 +130,14 @@ def osm_tables(graph) -> tuple[pd.DataFrame, pd.DataFrame]:
                 "from": edges["u"].astype("int64"),
                 "to": edges["v"].astype("int64"),
                 "length": edges["length"].astype("float64"),
+                **{
+                    tag: (
+                        edges[tag].map(_first_tag)
+                        if tag in edges
+                        else pd.Series(None, index=edges.index, dtype=object)
+                    )
+                    for tag in OSM_TAGS
+                },
                 "geometry": edges.geometry.to_numpy(),
             }
         )
@@ -151,23 +173,51 @@ def osm_cache_uris(
     """Nodes' and edges' parquet of the OSM download for ``area`` and the city's
     filter, under ``prefix``: ``osm_<cve>_<hash>_{nodes,edges}.parquet``. Another
     area, filter or ``retain_all`` is another file."""
+    # v2: edges carry OSM_TAGS
+    return _cache_uris(prefix, cve_code, area, params, b"v2")
+
+
+def legacy_osm_cache_uris(
+    prefix: str, cve_code: str, area: shapely.Geometry, params: NetworkParams
+) -> tuple[str, str]:
+    """``osm_cache_uris`` of the first version of the cache, whose edges have no
+    ``OSM_TAGS``: the same download (area, filter, ``retain_all``), named without
+    the version."""
+    return _cache_uris(prefix, cve_code, area, params, None)
+
+
+def _cache_uris(
+    prefix: str,
+    cve_code: str,
+    area: shapely.Geometry,
+    params: NetworkParams,
+    version: bytes | None,
+) -> tuple[str, str]:
     digest = hashlib.sha256()
     for part in (
         shapely.to_wkb(area),
         str(params.custom_filter).encode(),
         str(params.retain_all).encode(),
+        *(() if version is None else (version,)),
     ):
         digest.update(part)
     stem = f"{prefix.rstrip('/')}/osm_{cve_code}_{digest.hexdigest()[:10]}"
     return f"{stem}_nodes.parquet", f"{stem}_edges.parquet"
 
 
-def read_osm_cache(uris: tuple[str, str]) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """``osm_tables`` back from ``write_osm_cache``'s files."""
+def read_osm_cache(
+    uris: tuple[str, str], *, tags: bool = True
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """``osm_tables`` back from ``write_osm_cache``'s files. Without ``tags`` (the
+    legacy cache), ``OSM_TAGS`` are read as missing."""
     from reimagina_test_port.common import lake
 
     nodes = lake.read_parquet(uris[0], ["id", "x", "y"]).set_index("id")
-    edges = lake.read_parquet(uris[1], ["from", "to", "length", "geometry"])
+    columns = ["from", "to", "length", *(OSM_TAGS if tags else ()), "geometry"]
+    edges = lake.read_parquet(uris[1], columns)
+    for tag in () if tags else OSM_TAGS:
+        edges[tag] = pd.Series(None, index=edges.index, dtype=object)
+    edges = edges[["from", "to", "length", *OSM_TAGS, "geometry"]]
     return nodes, edges.assign(geometry=shapely.from_wkb(edges["geometry"]))
 
 
@@ -217,9 +267,23 @@ def osm_network(
         if cve_code is None
         else osm_cache_uris(params.output_prefix, cve_code, area, params)
     )
+    legacy = (
+        None
+        if cache is None
+        else legacy_osm_cache_uris(params.output_prefix, cve_code, area, params)
+    )
     if cache is not None and not refresh and all(map(lake.exists, cache)):
         logger.info("OSM: from %s", cache[1])
         nodes, edges = read_osm_cache(cache)
+    elif legacy is not None and not refresh and all(map(lake.exists, legacy)):
+        logger.warning(
+            "OSM: from %s, saved before the edges carried %s: they are missing. "
+            "Every street is residential with its default lanes; run with "
+            "refresh_osm to download them.",
+            legacy[1],
+            "/".join(OSM_TAGS),
+        )
+        nodes, edges = read_osm_cache(legacy, tags=False)
     else:
         nodes, edges = osm_tables(osm_graph(area, params))
         if cache is not None:
@@ -354,6 +418,11 @@ def sew(
     )
 
 
+def _tags(edge: pd.Series) -> dict:
+    """``edge``'s OSM tags: what the pieces it is split into keep."""
+    return {tag: edge[tag] for tag in OSM_TAGS if tag in edge.index}
+
+
 def _split(
     nodes: pd.DataFrame,
     edge: pd.Series,
@@ -368,12 +437,24 @@ def _split(
     for position, node, distance in sorted(at):
         point = line.interpolate(position)
         nodes.loc[next_id] = [point.x, point.y]
-        rows.append({"from": previous, "to": next_id, "length": position - previous_at})
+        rows.append(
+            {
+                "from": previous,
+                "to": next_id,
+                "length": position - previous_at,
+                **_tags(edge),
+            }
+        )
         rows.append({"from": next_id, "to": node, "length": max(distance, 0.1)})
         previous, previous_at = next_id, position
         next_id += 1
     rows.append(
-        {"from": previous, "to": edge["to"], "length": line.length - previous_at}
+        {
+            "from": previous,
+            "to": edge["to"],
+            "length": line.length - previous_at,
+            **_tags(edge),
+        }
     )
     return rows, next_id
 
@@ -470,8 +551,13 @@ def bridge_pieces(
             at = float(shapely.line_locate_point(segs[k], point))
             nodes.loc[next_id] = xy
             rows += [
-                {"from": edge["from"], "to": next_id, "length": at},
-                {"from": next_id, "to": edge["to"], "length": segs[k].length - at},
+                {"from": edge["from"], "to": next_id, "length": at, **_tags(edge)},
+                {
+                    "from": next_id,
+                    "to": edge["to"],
+                    "length": segs[k].length - at,
+                    **_tags(edge),
+                },
             ]
             ends.append(next_id)
             dropped.append(frame.index[k])

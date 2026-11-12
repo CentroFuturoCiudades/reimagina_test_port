@@ -148,8 +148,10 @@ never 0.
   land uses by area over the log of the number of uses present, as the notebook
   (one use is 0). Inputs: the source lots and built form's lots.
 - `reimagina_streets`: what the streets within 500 m of the block are like, as
-  shares (0-1) of their length. Streets are `right_of_way` elements (lines) with
-  their make-up as attributes (urban_fabric.md). `bike_lane_coverage` and
+  shares (0-1) of their length. Streets are `right_of_way` elements (polygons;
+  an older baseline's, lines) with their make-up as attributes (urban_fabric.md).
+  A polygon's length within 500 m is `street_fit.strip_length` of its part there
+  (see *Rights of way*), a line's its length. `bike_lane_coverage` and
   `protected_bike_lane_coverage`: streets whose bands (`bands.use`) have a
   `shared_lanes` or `protected_bike_lane`, or only a protected one; a lane is part
   of its street, so the notebook's 100 m tolerance between lanes and centrelines
@@ -459,8 +461,8 @@ one. A dry run builds the H5 without uploading it or changing the project. Then
 
 `reimagina_baseline_streets` (`ingestion/streets.py`) turns that network into the
 baseline's `right_of_way` elements (urban_fabric.md, *Right of way*): one per
-street, a pair of nodes whatever the direction of its edges, with the edge's
-shape (the network's `geometry`), keyed `<lower id>-<higher id>` (`source_record_ref`), id
+street, a pair of nodes whatever the direction of its edges, a polygon around
+the edge's shape (the network's `geometry`; see *Polygons* below), keyed `<lower id>-<higher id>` (`source_record_ref`), id
 `uuid5(NS, "<city>:right_of_way:<key>")`, no parent. The network is the ULI's
 pedestrian one, so footways and paths are streets too. Two optional sources of
 the city YAML fill its attributes; another city changes the files and columns:
@@ -487,6 +489,50 @@ Mexicali's block faces are `data/inegi/02_Frentes_INV2020_shp.zip` and its bike
 lanes `data/mexicali/ciclovia_exist.geojson`. `reimagina_baseline_write` writes
 them with the rest; it needs `right_of_way` in the API's `element_type` enum.
 
+**Fitting the streets (`sources.streets.params.refine`, off by default).** The
+network's edges keep OSM's `highway`, `name` and `lanes`. With `refine: true`, the
+vehicular streets (every class but `pedestrian`; an edge without `highway`, from
+merged streets, is `residential`) go through `ingestion/street_fit.py`, which
+measures each street against the cadastre's lots (`parcels`): one right of way per
+stretch from intersection to intersection (a dual carriageway is one, keyed by its
+lowest `<lo>-<hi>`), its axis centred between the lot fronts, and `bands.use` /
+`bands.share` the measured width's (sidewalk, lanes, median, lanes, sidewalk; the
+bike lane inserted on its side). Pedestrian streets are as above. Two matches
+scale with the width: faces count within `max(max_distance_m, width / 2 +
+front_tolerance_m)`, and a lane counts if `min_share` of the axis lies within
+`max(max_distance_m, width / 2)` of it, on its side. `params.fit` overrides
+`street_fit.DEFAULTS`. The attributes written are the same three; width, lanes and
+name are used and not written. `refine` lives in `reimagina_baseline_streets`, so it
+changes neither the network nor its H5. Turning it on changes the vehicular keys:
+the writer replaces those elements. Where there are no lots, a side takes its
+class's default width (`measured_sides < 2`).
+
+**Polygons.** Every `right_of_way` is written as a polygon, lot front to lot front
+(EPSG:4326), with the same three attributes; its width is its shape. A fitted
+street's is its axis ± `width_m / 2` (`street_fit.footprints`; the axis is
+already centred, and `width_m` may have been smoothed, so `width_left_m` /
+`width_right_m` aren't used); any other street's (pedestrian, `refine: false`) a
+strip of its class's default width (`2 × default_half_width_m`), cut where it
+overlaps a fitted one. Junctions belong to no street: each end of an axis is
+trimmed across it, as far along it as its strip overlaps the strips of the streets
+at the node there (`street_fit.cut_junctions`), and the polygon is the strip of
+the trimmed axis, one clean piece with flat ends (a dead end isn't trimmed; a
+street going straight on is trimmed next to nothing). A street ending halfway along
+a corridor stops at its edge, and the corridor goes on whole. One the trims leave
+less than 1 m of axis
+(wholly inside a junction) keeps its strip and overlaps the others; an axis that
+crosses itself is simplified first (`table.attrs["footprints"]` counts both). The
+axes and `width_m` stay in memory for the lighting and bike lane matches.
+
+A strip's length `L` and width `W` follow from its area `A` and perimeter `P`
+(`P ≈ 2L + 2W`, `A ≈ L·W`, curved too): `L = P/4 + √(P²/16 − A)`, `W = A / L`
+(`street_fit.strip_length`, `strip_width`; a band's metres are `W × share / 100`).
+The streets indicator weighs by `L`. On the Condesa `W` is within ±5 % of the
+fitted `width_m` on 89 % of the streets (99 % of those longer than wide): the
+formula gives a strip's longer side, so a stretch the trims leave shorter than
+wide (about one in ten) swaps its length and width. A map drawn from the base
+shows the junctions empty.
+
 ## Redesigns (overlay)
 
 A redesign of part of the city, such as Mexicali's master plan, is a folder of
@@ -511,7 +557,10 @@ and then `ingestion/overlay.py` replaces the zone:
 same zone (step 2 above), and its rights of way follow. Everything else in the
 city keeps its ids. A redesign goes into a baseline of its own project, written
 with `reimagina_baseline_write(..., overlay_uri, zone_uri)` and
-`reimagina_street_network_write` with the same two parameters.
+`reimagina_street_network_write` with the same two parameters. Fitting the
+streets (`refine`, above) still measures them against the cadastre's lots, not the
+redesign's: with `refine: true`, the zone's streets would be fitted to the lots
+that were there before.
 `scripts/new_project.py` does all of it for a case written in the script (Mexicali
 as it is, or with its master plan): project, roles, areas of interest, baseline,
 street network, elements and indicators.

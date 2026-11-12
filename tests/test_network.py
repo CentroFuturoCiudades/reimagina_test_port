@@ -2,6 +2,7 @@
 sewn into it, and the H5 the indicators read back."""
 
 import dataclasses
+import hashlib
 from pathlib import Path
 
 import geopandas as gpd
@@ -9,6 +10,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import pytest
+import shapely
 from lyra.sdk import LocalRunner
 from shapely.geometry import LineString, box
 
@@ -80,6 +82,9 @@ def osm_like_graph() -> nx.MultiDiGraph:
         (30, 30, 5.0),
     ]:
         graph.add_edge(u, v, length=length)
+    # OSM tags: a list where osmnx joined several ways.
+    graph.edges[10, 20, 0].update(highway="residential", name="Calle Uno", lanes="2")
+    graph.edges[20, 30, 0].update(highway=["primary", "secondary"], lanes=["4", "2"])
     return graph
 
 
@@ -89,11 +94,18 @@ def test_graph_tables():
     expected = gpd.GeoSeries.from_xy([-115.45], [32.62], crs=4326).to_crs(CRS)
     assert nodes.loc[10, "x"] == pytest.approx(expected.x[0])
     # The parallel edge keeps the shortest; the loop is dropped.
-    assert edges.drop(columns="geometry").to_dict("records") == [
+    # OSM's highway, name and lanes ride along as text: a list gives its first,
+    # a missing tag is null.
+    assert edges[["from", "to", "length"]].to_dict("records") == [
         {"from": 10, "to": 20, "length": 94.0},
         {"from": 20, "to": 10, "length": 94.0},
         {"from": 20, "to": 30, "length": 111.0},
     ]
+    assert edges["highway"].tolist()[0::2] == ["residential", "primary"]
+    assert edges["lanes"].tolist()[0::2] == ["2", "4"]
+    assert edges["name"].tolist()[0] == "Calle Uno"
+    assert edges[["highway", "name", "lanes"]].iloc[1].isna().all()
+    assert pd.isna(edges["name"].iloc[2])
     # Each edge keeps its shape, in the same CRS as the nodes.
     start = edges.loc[0, "geometry"].coords[0]
     assert start == pytest.approx((nodes.loc[10, "x"], nodes.loc[10, "y"]))
@@ -140,6 +152,60 @@ def test_osm_download_is_cached_in_the_lake(monkeypatch, tmp_path):
         workdir=tmp_path / "w",
     )
     assert len(calls) == 3
+    assert len(list((tmp_path / "lake").iterdir())) == 4
+
+
+def test_an_old_cache_is_another_file():
+    # The hash carries the tags' version: a cache written without them is another file.
+    params = dataclasses.replace(PARAMS, output_prefix="lake")
+    area = box(-115.451, 32.619, -115.448, 32.622)
+    (_, edges) = network.osm_cache_uris("lake", "02002", area, params)
+    digest = hashlib.sha256()
+    for part in (
+        shapely.to_wkb(area),
+        str(params.custom_filter).encode(),
+        str(params.retain_all).encode(),
+    ):
+        digest.update(part)
+    assert f"osm_02002_{digest.hexdigest()[:10]}_edges" not in edges
+    # ...and it is the one the legacy name points at.
+    (_, old) = network.legacy_osm_cache_uris("lake", "02002", area, params)
+    assert old == f"lake/osm_02002_{digest.hexdigest()[:10]}_edges.parquet"
+
+
+def test_an_old_cache_is_read_without_tags(monkeypatch, tmp_path, caplog):
+    # Saved before the edges had highway/name/lanes: read instead of downloading.
+    monkeypatch.setattr(
+        network,
+        "osm_graph",
+        lambda area, params: pytest.fail("downloaded despite the old cache"),
+    )
+    params = dataclasses.replace(PARAMS, output_prefix=str(tmp_path / "lake"))
+    blocks = gpd.GeoSeries([box(-115.451, 32.619, -115.448, 32.622)], crs=4326)
+    area = network.study_area(blocks, CRS, params.margin_m)
+    nodes, edges = network.osm_tables(osm_like_graph())
+    nodes_uri, edges_uri = network.legacy_osm_cache_uris(
+        params.output_prefix, "02002", area, params
+    )
+    (tmp_path / "lake").mkdir()
+    nodes.reset_index().to_parquet(nodes_uri, index=False)
+    edges[["from", "to", "length"]].assign(
+        geometry=shapely.to_wkb(edges["geometry"].to_numpy())
+    ).to_parquet(edges_uri, index=False)
+
+    with caplog.at_level("WARNING"):
+        got_nodes, got_edges = network.osm_network(
+            blocks, CRS, params, cve_code="02002", workdir=tmp_path / "w"
+        )
+    assert "highway/name/lanes" in caplog.text
+    assert len(got_nodes) == len(nodes) and len(got_edges) == len(edges)
+    assert got_edges[["highway", "name", "lanes"]].isna().all().all()
+    # Nothing new is saved; refresh_osm downloads and writes the tagged cache.
+    assert len(list((tmp_path / "lake").iterdir())) == 2
+    monkeypatch.setattr(network, "osm_graph", lambda area, params: osm_like_graph())
+    network.osm_network(
+        blocks, CRS, params, cve_code="02002", workdir=tmp_path / "w", refresh=True
+    )
     assert len(list((tmp_path / "lake").iterdir())) == 4
 
 
