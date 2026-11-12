@@ -483,7 +483,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's baseline elements from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights, the city's amenity layers (normalized into the amenities file) and the DENUE. Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE record is an amenity or an establishment by the SCIAN crosswalk; with the amenities file's, they go to the nearest lot within 50 m as a point at its center, and each lot's land use follows from what it holds.",
+      "description": "Build a city's baseline elements from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights, Meta's canopy height (each lot's tree_coverage), the city's amenity layers (normalized into the amenities file) and the DENUE. Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE record is an amenity or an establishment by the SCIAN crosswalk; with the amenities file's, they go to the nearest lot within 50 m as a point at its center, and each lot's land use follows from what it holds.",
       "inputs": {},
       "name": "reimagina_baseline",
       "outputs": {
@@ -755,6 +755,13 @@
             {
               "description": "housing.floor share",
               "name": "housing.floor_share",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
+            },
+            {
+              "description": "tree coverage",
+              "name": "tree_coverage",
               "nullable": true,
               "type": "number",
               "unit": "percent"
@@ -1097,6 +1104,13 @@
               "nullable": true,
               "type": "number",
               "unit": "percent"
+            },
+            {
+              "description": "tree coverage",
+              "name": "tree_coverage",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
             }
           ],
           "geometry": "geometry",
@@ -1142,6 +1156,13 @@
             {
               "description": "Share of its block faces with street lighting.",
               "name": "streetlights",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
+            },
+            {
+              "description": "Share of its area under tree canopy (Meta's canopy height); only a street drawn as a polygon has one.",
+              "name": "tree_coverage",
               "nullable": true,
               "type": "number",
               "unit": "percent"
@@ -1241,6 +1262,13 @@
             {
               "description": "Share of its block faces with street lighting.",
               "name": "streetlights",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
+            },
+            {
+              "description": "Share of its area under tree canopy (Meta's canopy height); only a street drawn as a polygon has one.",
+              "name": "tree_coverage",
               "nullable": true,
               "type": "number",
               "unit": "percent"
@@ -3186,11 +3214,15 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Walkability components per block from what its lots are (ULI 'Net residential density', 'Commercial land use proportion' and 'Land use mix'): homes per hectare of the lots that hold homes (homes from housing.floor_share and housing.unit_size_m2, as urban_fabric.md), the share of lot area in commerce or office, and the normalised entropy of land uses by area.",
+      "description": "Walkability components per block from what its lots are (ULI 'Net residential density', 'Commercial land use proportion' and 'Land use mix'): homes per hectare of the lots that hold homes (built form's num_housing_units, as density and population), the share of lot area in commerce or office, and the normalised entropy of land uses by area.",
       "inputs": {
         "blocks": {
           "arguments": {},
           "output": "reimagina_built_form_blocks"
+        },
+        "homes": {
+          "arguments": {},
+          "output": "reimagina_built_form_lots"
         },
         "lots": {
           "arguments": {},
@@ -3223,7 +3255,7 @@
               "unit": null
             },
             {
-              "description": "Homes per hectare of the lots that hold homes (viv/ha); a lot's homes are its built space x housing.floor_share / housing.unit_size_m2. Null without residential land.",
+              "description": "Homes per hectare of the lots that hold homes (viv/ha), with built form's num_housing_units. Null without residential land.",
               "name": "net_residential_density",
               "nullable": true,
               "type": "number",
@@ -4513,7 +4545,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Compute a scenario's accessibility and write it to Reimagina's element_state_indicator_value, under the same rules as reimagina_scenario_indicators. Only blocks are written: a lot's accessibility is its block's. Built-form values are not touched.",
+      "description": "Compute a scenario's accessibility and write it to Reimagina's element_state_indicator_value, under the same rules as reimagina_scenario_indicators. Only blocks are written: a lot's accessibility is its block's. A fork keeps the baseline's accessibility_<type> where its own differs by less than 0.001. Built-form values are not touched.",
       "inputs": {
         "blocks": {
           "arguments": {},

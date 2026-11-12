@@ -14,6 +14,9 @@ over its street network (``reimagina_street_network``, ``ingestion/network.py``)
   (its ``type_column`` in ``protected``) takes a band of its own,
   ``protected_bike_lane``, next to the sidewalk; any other is shared: the street's
   lanes, used by bikes too, so its ``lanes`` band is ``shared_lanes``.
+- ``sources.tree_canopy`` (optional): ``tree_coverage`` (0-100), the share of a
+  street's polygon (below) under canopy (``ingestion/canopy.py``). A polygon smaller
+  than a pixel, or off the raster, gets none.
 
 The traffic lanes are one band, ``lanes``: their total space, not lane by lane.
 ``bands.use`` and ``bands.share`` are written as JSON lists (Lyra tables have no
@@ -53,7 +56,7 @@ import shapely
 import shapely.ops
 
 from reimagina_test_port.common import lake
-from reimagina_test_port.ingestion import street_fit
+from reimagina_test_port.ingestion import canopy, street_fit
 from reimagina_test_port.ingestion.cadastral import stable_element_uuid
 from reimagina_test_port.ingestion.cities import (
     BikeLanes,
@@ -64,7 +67,12 @@ from reimagina_test_port.ingestion.cities import (
 
 logger = logging.getLogger(__name__)
 
-ATTRIBUTES = {"bands.use": "json", "bands.share": "json", "streetlights": "number"}
+ATTRIBUTES = {
+    "bands.use": "json",
+    "bands.share": "json",
+    "streetlights": "number",
+    "tree_coverage": "number",
+}
 PROFILES = {
     None: (["sidewalk", "lanes", "sidewalk"], [20, 60, 20]),
     "shared_lanes": (["sidewalk", "shared_lanes", "sidewalk"], [20, 60, 20]),
@@ -517,6 +525,12 @@ def build(
         roads,
         params,
         nodes,
+    )
+    # Over the polygons: the axes have no area. Same index as ``streets``.
+    frame["tree_coverage"] = (
+        canopy.tree_coverage(polygons, city.tree_canopy, workdir).to_numpy()
+        if city.tree_canopy is not None
+        else np.nan
     )
     table = gpd.GeoDataFrame(
         frame,

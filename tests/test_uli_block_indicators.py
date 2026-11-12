@@ -12,36 +12,18 @@ import pandas as pd
 import pytest
 from shapely.geometry import LineString, box
 
-from reimagina_test_port.indicators.land_use.calculation import (
-    homes,
-    land_use_by_block,
-)
+from reimagina_test_port.indicators.land_use.calculation import land_use_by_block
 from reimagina_test_port.indicators.streets.calculation import (
     coverage_by_block,
     intersections,
     lane_flags,
+    pieces,
 )
 from reimagina_test_port.indicators.streets.nodes import streets
 
 CRS = "EPSG:32611"
 SYNTHETIC = Path(__file__).parents[1] / "src/reimagina_test_port/data/synthetic"
 CONTEXT = SimpleNamespace(logger=logging.getLogger(__name__))
-
-
-def test_homes_follow_urban_fabric():
-    # urban_fabric.md's lot: 250 m² x 0.8 x 3 floors = 600 m² built, 60 % housing,
-    # 70 m² homes: 5 homes. Without a unit size, or with zero, none is known.
-    lots = pd.DataFrame(
-        {
-            "area": [250.0, 250, 250],
-            "cos": [0.8, 0.8, 0.8],
-            "num_levels": [3.0, 3, 3],
-            "housing.floor_share": [60.0, 60, 60],
-            "housing.unit_size_m2": [70.0, None, 0],
-        }
-    )
-    assert homes(lots).tolist()[0] == 5
-    assert homes(lots)[1:].isna().all()
 
 
 def test_land_use_by_block():
@@ -57,18 +39,16 @@ def test_land_use_by_block():
                 None,
             ],
             "area": [1_000.0, 1_000, 2_000, 1_000, 500, 0],
-            "cos": [0.5, 1, 0.5, 0.5, None, None],
-            "num_levels": [2.0, 4, 1, 2, None, None],
-            "housing.floor_share": [100.0, 100, 0, 50, None, None],
-            "housing.unit_size_m2": [100.0, 80, 80, None, None, None],
+            # Built form's homes: a house, a building of 50, a shop.
+            "num_housing_units": [1.0, 50, 0, None, None, None],
         }
     )
     result = land_use_by_block(lots, pd.Series(["a", "b", "c"])).set_index(
         pd.Index(["a", "b", "c"])
     )
-    # 10 + 50 homes on the 0.2 ha of the two lots with homes; the shop has none and
-    # the fourth lot's homes are unknown.
-    assert result.loc["a", "net_residential_density"] == pytest.approx(300)
+    # 1 + 50 homes on the 0.2 ha of the two lots with homes: the single-family house
+    # counts. The shop has none and the fourth lot's homes are unknown.
+    assert result.loc["a", "net_residential_density"] == pytest.approx(255)
     # 2,000 of 5,000 m² (the lot without land use counts as land).
     assert result.loc["a", "commercial_land_share"] == pytest.approx(0.4)
     # Three uses at 1/4, 1/4, 1/2.
@@ -156,3 +136,29 @@ def test_street_coverage():
     )
     # No street within 500 m.
     assert result.loc[1].isna().all()
+
+
+def test_streets_are_counted_in_pieces():
+    lines = np.array(
+        [LineString([(0, 0), (60, 0)]), None, LineString([(0, 0), (10, 0)])]
+    )
+    middle, piece, line = pieces(lines, 25)
+    # 60 m in three pieces of 20 m, 10 m in one; the missing line has none.
+    assert line.tolist() == [0, 0, 0, 2]
+    assert piece.tolist() == pytest.approx([20, 20, 20, 10])
+    assert [p.x for p in middle] == pytest.approx([10, 30, 50, 5])
+    # A piece counts in full for a block within 500 m of its midpoint: of a street
+    # running away from the block, the pieces up to 500 m (the last ends at 500 m).
+    streets = gpd.GeoDataFrame(
+        {"bike_lane": [True], "protected_bike_lane": [False], "streetlights": [100.0]},
+        geometry=[LineString([(50, 0), (1_050, 0)])],
+        crs=CRS,
+    )
+    short = gpd.GeoDataFrame(
+        {"bike_lane": [False], "protected_bike_lane": [False], "streetlights": [0.0]},
+        geometry=[LineString([(0, 5), (0, 505)])],
+        crs=CRS,
+    )
+    blocks = gpd.GeoDataFrame(geometry=[box(-50, -50, 50, 50)], crs=CRS)
+    result = coverage_by_block(blocks, pd.concat([streets, short]), CRS)
+    assert result.loc[0, "bike_lane_coverage"] == pytest.approx(500 / (500 + 500))

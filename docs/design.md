@@ -140,15 +140,13 @@ never 0.
 
 - `reimagina_land_use` (walkability index): `net_residential_density`, homes per
   hectare of the lots that hold homes (the notebook's *Habitacional*), a lot's
-  homes as urban_fabric.md's *A lot's homes*: built space (`area` × `cos` ×
-  `num_levels`) × `housing.floor_share` ÷ 100 ÷ `housing.unit_size_m2`, rounded;
-  `land_use` takes no part, and a lot missing one of them is left out. Built
-  form still counts homes the original way (from `land_use` and `housing.unit_size_m2`).
+  homes being built form's `num_housing_units`: one for a single-family house, its
+  built space over `housing.unit_size_m2` for multifamily and mixed use. They are
+  the same homes as `density` and `population`; a lot without them is left out.
   `commercial_land_share`, the share of the block's lot area in `commerce` or
   `office` (*Comercio y servicios*); `land_use_mix`, the entropy of the lots'
   land uses by area over the log of the number of uses present, as the notebook
-  (one use is 0). Inputs: the source lots only; the scenario reads
-  `housing.floor_share` and `housing.unit_size_m2` with the other lot attributes.
+  (one use is 0). Inputs: the source lots and built form's lots.
 - `reimagina_streets`: what the streets within 500 m of the block are like, as
   shares (0-1) of their length. Streets are `right_of_way` elements (polygons;
   an older baseline's, lines) with their make-up as attributes (urban_fabric.md).
@@ -161,6 +159,12 @@ never 0.
   each street's `streetlights` (share of its length lit, 0-100, from INEGI's
   block faces) weighted by its length, over the streets that have the value.
   The notebook measures streets inside its polygons; a block has none inside.
+  Lengths are counted in pieces of at most 25 m, cut once per street: a piece
+  counts in full for each block within 500 m of its midpoint. Only the pieces
+  across the 500 m edge are off, and the share moves by more than 0.02 only where
+  the block has a few hundred metres of street with a value around it (Mexicali:
+  5 of 16,342 blocks). Clipping each street to each block took about 70 s for
+  Mexicali; the pieces take about 9 s.
   `reimagina_scenario_rights_of_way` returns each street's two lane flags (Lyra
   has no list column) and `streetlights`. Until a baseline has `right_of_way`
   streets (`reimagina_baseline_streets`), these three are null.
@@ -234,6 +238,19 @@ baseline value and a baseline drops stale ones. Scenario rows that match the
 baseline again, or belong to an element no longer present, are removed. Rows
 whose stored value is unchanged are not rewritten and keep their `job_run_id`
 and `computed_at`, so writing the same scenario again changes nothing.
+
+The comparison reads the baseline's values of the group's keys once (a
+`MATERIALIZED` CTE) and joins them by hash. Joined directly, PostgreSQL may look
+each value up by `element_id` instead: on dev, 13 s against 0.5 s for population
+access or accessibility (about 300,000 values), and 53 s in a fork's job.
+
+`accessibility_<type>` is a percentile rank among all blocks, so a change
+anywhere moves every block it passes in the ranking by about 1/blocks
+(0.0001 after rounding). To keep a fork from storing those shifts for the whole
+city, a fork keeps the baseline's `accessibility_<type>` where its own differs by
+less than 0.001 (`ACCESSIBILITY_SCORE_TOLERANCE`); the value it shows is then off
+by less than that. The comparison is always against the baseline, so the error
+does not accumulate across writes. Other keys keep the exact comparison.
 
 For a fork, values that cannot have changed are not sent to the database at
 all. A lot the fork did not edit (no `element_state` row) and that has no stored

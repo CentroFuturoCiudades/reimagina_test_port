@@ -41,6 +41,7 @@ ATTRIBUTES = {
     ("lot", "area"): ("number", None, "m2"),
     ("lot", "housing.unit_size_m2"): ("number", None, "m2"),
     ("lot", "housing.floor_share"): ("number", None, "%"),
+    ("lot", "tree_coverage"): ("number", None, "%"),
     ("block", "lot.size_m2"): ("number", None, "m2"),
     ("block", "lot.frontage_m"): ("number", None, "m"),
     ("amenity", "category"): ("enum", AMENITY_CATEGORIES, None),
@@ -51,6 +52,7 @@ ATTRIBUTES = {
     ("right_of_way", "bands.use"): ("json", None, None),
     ("right_of_way", "bands.share"): ("json", None, "%"),
     ("right_of_way", "streetlights"): ("number", None, "%"),
+    ("right_of_way", "tree_coverage"): ("number", None, "%"),
 }
 
 # key -> (name, unit, value_type, job_code), on lots and blocks.

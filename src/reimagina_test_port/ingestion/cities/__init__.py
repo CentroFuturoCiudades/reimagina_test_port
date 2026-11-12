@@ -102,6 +102,16 @@ class BikeLanes:
 
 
 @dataclass(frozen=True)
+class TreeCanopy:
+    """The city's canopy height raster (``sources.tree_canopy``), with heights in
+    metres. ``scripts/canopy_raster.py`` cuts it from Meta's map. A pixel at least
+    ``min_height_m`` tall is canopy (ingestion/canopy.py)."""
+
+    uri: str
+    min_height_m: float = 2.0
+
+
+@dataclass(frozen=True)
 class CityPreset:
     name: str
     # Lot id city key: uuid5(NS, f"{key}:lot:{cadastral key}").
@@ -159,6 +169,8 @@ class CityPreset:
     # streetlights and bike lanes. None: not loaded.
     street_lighting: StreetLighting | None = None
     bike_lanes: BikeLanes | None = None
+    # tree_coverage of lots and rights of way. None: not loaded.
+    tree_canopy: TreeCanopy | None = None
 
     @property
     def cve_code(self) -> str:
@@ -318,6 +330,14 @@ def from_yaml(path: Path) -> CityPreset:
             msg = f"{path.name}: sources.bike_lanes: protected_width_m must be > 0"
             raise CityConfigError(msg)
         options.done()
+    canopy = None
+    if (entry := file("tree_canopy")) is not None:
+        canopy_source, options = entry
+        canopy = TreeCanopy(
+            canopy_source.uri,
+            min_height_m=float(options.optional("min_height_m", 2.0)),
+        )
+        options.done()
     if (lighting or bike_lanes) and network is None:
         msg = f"{path.name}: street_lighting and bike_lanes need sources.streets"
         raise CityConfigError(msg)
@@ -383,6 +403,7 @@ def from_yaml(path: Path) -> CityPreset:
         streets=network,
         street_lighting=lighting,
         bike_lanes=bike_lanes,
+        tree_canopy=canopy,
         lot_max_distance_m=float(
             points.optional("lot_max_distance_m", default("lot_max_distance_m"))
         ),

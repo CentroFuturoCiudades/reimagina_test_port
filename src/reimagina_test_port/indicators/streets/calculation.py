@@ -73,28 +73,27 @@ def coverage_by_block(
     # Reprojected polygons may come out slightly invalid.
     shapes = np.where(shapely.is_valid(shapes), shapes, shapely.make_valid(shapes))
     areas = shapely.buffer(blocks.geometry.to_crs(crs).to_numpy(), NEIGHBOURHOOD_M)
-    area, street = shapely.STRtree(shapes).query(areas, predicate="intersects")
-    length = strip_length(shapely.intersection(shapes[street], areas[area]))
+    block, street = shapely.STRtree(shapes).query(areas, predicate="intersects")
+    length = strip_length(shapely.intersection(shapes[street], areas[block]))
     lit = pd.to_numeric(streets["streetlights"]).to_numpy("float64")[street] / 100
-    frame = pd.DataFrame(
+
+    def per_block(weights: np.ndarray) -> np.ndarray:
+        return np.bincount(block, weights, minlength=len(blocks))
+
+    total = per_block(length)
+    result = pd.DataFrame(
         {
-            "street": length,
-            **{
-                key: length * streets[flag].fillna(False).to_numpy(bool)[street]
-                for key, flag in zip(
-                    LANE_KEYS, ["bike_lane", "protected_bike_lane"], strict=True
-                )
-            },
-            "lit": length * lit,
-            "measured": np.where(np.isnan(lit), 0.0, length),
+            key: per_block(length * streets[flag].fillna(False).to_numpy(bool)[street])
+            / np.where(total > 0, total, np.nan)
+            for key, flag in zip(
+                LANE_KEYS, ["bike_lane", "protected_bike_lane"], strict=True
+            )
         }
     )
-    sums = frame.groupby(area).sum().reindex(range(len(blocks)))
-    total = sums["street"].where(sums["street"] > 0)
-    result = pd.DataFrame({key: sums[key] / total for key in LANE_KEYS})
-    result["street_lighting_coverage"] = sums["lit"] / sums["measured"].where(
-        sums["measured"] > 0
-    )
+    measured = per_block(np.where(np.isnan(lit), 0.0, length))
+    result["street_lighting_coverage"] = per_block(
+        np.where(np.isnan(lit), 0.0, length * lit)
+    ) / np.where(measured > 0, measured, np.nan)
     return result
 
 

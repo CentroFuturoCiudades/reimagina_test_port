@@ -94,6 +94,13 @@ RIGHT_OF_WAY_DECLARATION = TableOutput(
             Unit.PERCENT,
             "Share of its block faces with street lighting.",
         ),
+        column(
+            "tree_coverage",
+            "number",
+            Unit.PERCENT,
+            "Share of its area under tree canopy (Meta's canopy height); only a "
+            "street drawn as a polygon has one.",
+        ),
     ],
     geometry="geometry",
 )
@@ -132,6 +139,7 @@ def baseline_declaration(*, blocks: bool) -> TableOutput:
             "housing.people_per_household": Unit.COUNT,
             "occupancy_rate": Unit.RATIO,
             "housing.floor_share": Unit.PERCENT,
+            "tree_coverage": Unit.PERCENT,
         }
         attributes = [
             column(
@@ -156,6 +164,7 @@ BASELINE_LOT_ATTRIBUTES = [
     "occupancy_rate",
     "commerce_type",
     "housing.floor_share",
+    "tree_coverage",
 ]
 
 
@@ -164,7 +173,8 @@ BASELINE_LOT_ATTRIBUTES = [
     description=(
         "Build a city's baseline elements from the CFC data lake with "
         "exe_reimagina's rules: INEGI blocks and census, cadastral lots, "
-        "normativa, Open Buildings heights, the city's amenity layers (normalized "
+        "normativa, Open Buildings heights, Meta's canopy height (each lot's "
+        "tree_coverage), the city's amenity layers (normalized "
         "into the amenities file) and the DENUE. "
         "Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE "
         "record is an amenity or an establishment by the SCIAN crosswalk; with "
@@ -323,6 +333,7 @@ BASELINE_ATTRIBUTES = {
         "bands.use": "json",
         "bands.share": "json",
         "streetlights": "number",
+        "tree_coverage": "number",
     },
 }
 # Element type -> column of the write summary with its elements in the scenario.

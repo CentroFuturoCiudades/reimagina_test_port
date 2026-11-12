@@ -33,7 +33,7 @@ from reimagina_test_port.indicators.population_access import (
 from reimagina_test_port.indicators.streets import calculation as streets_calculation
 from reimagina_test_port.ingestion import baseline_writer, catalogs
 from reimagina_test_port.ingestion import nodes as ingestion_nodes
-from reimagina_test_port.scenario import contract
+from reimagina_test_port.scenario import contract, writer
 from reimagina_test_port.scenario import nodes as scenario_nodes
 from reimagina_test_port.scenario import source as scenario
 
@@ -632,6 +632,58 @@ def test_population_access_without_coverage_uses_the_default(dsn, caplog):
     assert access[0] == 93
 
 
+def test_accessibility_tolerance_keeps_the_baseline_value(dsn):
+    write(BASELINE)
+    baseline = stored(dsn, BASELINE)
+    key = next(
+        k for e, k in baseline if e == BLOCK and k in accessibility_nodes.SCORE_KEYS
+    )
+    value = baseline[(BLOCK, key)][0]
+
+    def write_score(delta: float, tolerance: float | None = 0.001) -> tuple[int, int]:
+        table = pd.DataFrame({"id": [BLOCK], key: [value + delta]})
+        return writer.write_indicators(
+            FORK,
+            writer.long_values(table, "block", {key: "number"}),
+            {key: "number"},
+            tolerances=None if tolerance is None else {key: tolerance},
+        )
+
+    # A shift below the tolerance is not stored: the fork shows the baseline's.
+    assert write_score(-0.0009) == (0, 0)
+    assert (BLOCK, key) not in stored(dsn, FORK)
+    # At the tolerance it is.
+    assert write_score(0.001) == (1, 0)
+    assert stored(dsn, FORK)[(BLOCK, key)][0] == pytest.approx(value + 0.001)
+    # Back within the tolerance: the stored value is cleared.
+    assert write_score(0.0005) == (0, 1)
+    assert (BLOCK, key) not in stored(dsn, FORK)
+    # Without a tolerance any difference is stored.
+    assert write_score(0.0001, tolerance=None) == (1, 0)
+
+
+def test_write_accessibility_uses_the_tolerance():
+    assert set(scenario_nodes.ACCESSIBILITY_WRITE_TOLERANCES) == set(
+        accessibility_nodes.SCORE_KEYS
+    )
+    assert set(scenario_nodes.ACCESSIBILITY_WRITE_TOLERANCES.values()) == {0.001}
+
+
+@pytest.mark.parametrize(
+    ("keys", "tolerances"),
+    [
+        ({"farthest_amenity": "text"}, {"farthest_amenity": 0.001}),
+        ({"minutes": "number"}, {"density": 0.001}),
+        ({"minutes": "number"}, {"minutes": -1.0}),
+        ({"minutes": "number"}, {"minutes": float("nan")}),
+    ],
+)
+def test_write_rejects_invalid_tolerances(keys, tolerances):
+    values = pd.DataFrame(columns=["id", "element_type", "parent_id", "key"])
+    with pytest.raises(ValueError, match="Tolerances"):
+        writer.write_indicators(str(uuid4()), values, keys, tolerances=tolerances)
+
+
 def test_write_clears_values_back_to_baseline(dsn):
     write(BASELINE)
     write(FORK)
@@ -793,6 +845,7 @@ def new_tables(count: int = 4):
             "occupancy_rate": [0.9, None, None, None][:count],
             "housing.floor_share": [100.0, 100.0, 80.0, None][:count],
             "commerce_type": [None, "shop", None, None][:count],
+            "tree_coverage": [12.5, None, None, None][:count],
         },
         geometry=[lot_box(i, 0.00002) for i in range(count)],
         crs=4326,
@@ -909,20 +962,20 @@ def test_write_new_baseline(new_baseline, dsn):
     first = write_new_baseline()
     # The blocks already exist: reused, not created. 23 lot and block values, 4 of
     # the amenity (no name) and 4 of the establishment (no workers). The catalogs
-    # get the 10 attributes they lacked (housing.floor_share, the block's targets,
-    # 4 of the amenity and 3 of the establishment), block.density and the
+    # get the 11 attributes they lacked (housing.floor_share, tree_coverage, the
+    # block's targets, 4 of the amenity and 3 of the establishment), block.density and the
     # composites' keys (the scenario writer registers those too); the dry run
     # rolled its rows back.
     assert first == {
         "elements": 8,
         "elements_created": 6,
-        "attribute_values": 31,
+        "attribute_values": 32,  # with the first lot's tree_coverage
         "elements_removed": 0,
-        "attributes_added": 10,
+        "attributes_added": 11,
         "indicators_added": 1 + len(composite_catalog.catalog_rows()),
         "by_type": {"block": 2, "lot": 4, "amenity": 1, "establishment": 1},
     }
-    assert counts(dsn, NEW_BASELINE) == (8, 31)
+    assert counts(dsn, NEW_BASELINE) == (8, 32)
     with psycopg.connect(dsn) as conn:
         # Added rows take the plugin's types and units; existing ones stay.
         rows = dict(
@@ -1081,8 +1134,10 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch, offline_network):
             "bands.use": ['["sidewalk", "protected_bike_lane", "lanes", "sidewalk"]'],
             "bands.share": ["[20, 10, 50, 20]"],
             "streetlights": [50.0],
+            "tree_coverage": [30.0],
         },
-        geometry=[LineString([(-115.5, 32.6), (-115.49, 32.6)])],
+        # A right of way drawn as a polygon.
+        geometry=[LineString([(-115.5, 32.6), (-115.49, 32.6)]).buffer(0.0001)],
         crs=4326,
     )
     monkeypatch.setattr(streets, "build", lambda *_: street)
@@ -1099,22 +1154,35 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch, offline_network):
     assert (row["elements"], row["elements_created"], row["dry_run"]) == (9, 7, False)
     columns = ("blocks", "lots", "amenities", "establishments", "rights_of_way")
     assert [row[c] for c in columns] == [2, 4, 1, 1, 1]
-    # A street's bands are stored as JSON lists; its streetlights as a number.
-    with psycopg.connect(dsn) as conn:
-        values = dict(
-            conn.execute(
-                "SELECT ac.key, coalesce(v.value_json::text, v.value_num::text) "
-                "FROM reimagina_urbano.element_state_attribute_value v "
-                "JOIN reimagina_urbano.attribute_catalog ac ON ac.id = v.attribute_id "
-                "WHERE v.element_id = %s::uuid",
-                (street["id"].iloc[0],),
-            ).fetchall()
-        )
-    assert values == {
+
+    # A street's bands are stored as JSON lists; its streetlights and
+    # tree_coverage as numbers. A lot's tree_coverage too.
+    def stored(element_id: str) -> dict:
+        with psycopg.connect(dsn) as conn:
+            return dict(
+                conn.execute(
+                    "SELECT ac.key, coalesce(v.value_json::text, v.value_num::text) "
+                    "FROM reimagina_urbano.element_state_attribute_value v "
+                    "JOIN reimagina_urbano.attribute_catalog ac "
+                    "ON ac.id = v.attribute_id WHERE v.element_id = %s::uuid",
+                    (element_id,),
+                ).fetchall()
+            )
+
+    assert stored(street["id"].iloc[0]) == {
         "bands.use": '["sidewalk", "protected_bike_lane", "lanes", "sidewalk"]',
         "bands.share": "[20, 10, 50, 20]",
         "streetlights": "50",
+        "tree_coverage": "30",
     }
+    assert stored(tables["lot"]["id"].iloc[0])["tree_coverage"] == "12.5"
+    with psycopg.connect(dsn) as conn:
+        catalog = conn.execute(
+            "SELECT element_type::text, value_type::text, unit "
+            "FROM reimagina_urbano.attribute_catalog WHERE key = 'tree_coverage' "
+            "ORDER BY 1"
+        ).fetchall()
+    assert catalog == [("lot", "number", "%"), ("right_of_way", "number", "%")]
 
 
 # ------------------------------------------------------------------ street network
