@@ -17,6 +17,7 @@ from reimagina_test_port.indicators.streets.calculation import (
     coverage_by_block,
     intersections,
     lane_flags,
+    pieces,
 )
 from reimagina_test_port.indicators.streets.nodes import streets
 
@@ -135,3 +136,29 @@ def test_street_coverage():
     )
     # No street within 500 m.
     assert result.loc[1].isna().all()
+
+
+def test_streets_are_counted_in_pieces():
+    lines = np.array(
+        [LineString([(0, 0), (60, 0)]), None, LineString([(0, 0), (10, 0)])]
+    )
+    middle, piece, line = pieces(lines, 25)
+    # 60 m in three pieces of 20 m, 10 m in one; the missing line has none.
+    assert line.tolist() == [0, 0, 0, 2]
+    assert piece.tolist() == pytest.approx([20, 20, 20, 10])
+    assert [p.x for p in middle] == pytest.approx([10, 30, 50, 5])
+    # A piece counts in full for a block within 500 m of its midpoint: of a street
+    # running away from the block, the pieces up to 500 m (the last ends at 500 m).
+    streets = gpd.GeoDataFrame(
+        {"bike_lane": [True], "protected_bike_lane": [False], "streetlights": [100.0]},
+        geometry=[LineString([(50, 0), (1_050, 0)])],
+        crs=CRS,
+    )
+    short = gpd.GeoDataFrame(
+        {"bike_lane": [False], "protected_bike_lane": [False], "streetlights": [0.0]},
+        geometry=[LineString([(0, 5), (0, 505)])],
+        crs=CRS,
+    )
+    blocks = gpd.GeoDataFrame(geometry=[box(-50, -50, 50, 50)], crs=CRS)
+    result = coverage_by_block(blocks, pd.concat([streets, short]), CRS)
+    assert result.loc[0, "bike_lane_coverage"] == pytest.approx(500 / (500 + 500))
