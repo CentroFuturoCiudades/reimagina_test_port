@@ -224,3 +224,5 @@ __marimo__/
 cache/
 # Rasters prepared locally (scripts/canopy_raster.py)
 src/reimagina_test_port/data/**/*.tif
+
+/tests
