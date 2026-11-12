@@ -362,7 +362,8 @@ def dual_pairs(
     cos_max = math.cos(math.radians(p["max_parallel_deg"]))
     cos_fork = math.cos(math.radians(p["max_fork_deg"]))
     if "name" in roads:
-        names = roads["name"].where(roads["name"].notna(), None).tolist()
+        # object first: on a string column `where(..., None)` leaves NaN, which is truthy.
+        names = roads["name"].astype(object).where(roads["name"].notna(), None).tolist()
     else:
         names = [None] * len(roads)
     ends = list(zip(roads["from_node"], roads["to_node"], strict=True))
