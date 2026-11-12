@@ -470,12 +470,15 @@ def test_pois_fall_back_to_baseline(dsn):
         (CLINIC, "health_services"),
         (PHARMACY, "health_services"),
     ]
+    # Each row carries its element's scian_code.
+    assert baseline["scian_code"].tolist() == ["621112", "621112", "464111"]
     assert baseline.crs == "EPSG:4326"
     # Fork: SHOP gains a park, the clinic is hidden by all-NULL rows and the
     # pharmacy is deleted. "park" (no outputs) and inactive types are ignored.
     fork = scenario.read_pois(FORK).set_index("id")
     assert fork["poi_type"].to_dict() == {PARK: "public_space"}
     assert fork["capacity"].isna().all()
+    assert fork["scian_code"].isna().all()
 
 
 def test_road_network_uri(dsn, network_uri):
@@ -628,7 +631,7 @@ def test_population_access_without_coverage_uses_the_default(dsn, caplog):
     assert access[0] == 93
 
 
-def test_write_poi_diversity(dsn, monkeypatch):
+def test_write_diversity(dsn, monkeypatch):
     # A set over the seeded scian_codes: the clinic's, the pharmacy's and one absent.
     subcategories = {"clinic": ("621112",), "pharmacy": ("464111",), "other": ("0",)}
     monkeypatch.setitem(
