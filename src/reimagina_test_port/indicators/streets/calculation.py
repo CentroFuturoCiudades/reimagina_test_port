@@ -17,6 +17,12 @@ The notebook measures the streets inside each polygon; a block has none inside
 (they run around it), so a block measures the streets within ``NEIGHBOURHOOD_M`` of
 it. All are 0-1, null without streets (with a value) around the block.
 
+Lengths are counted in pieces: each street is cut once into pieces of at most
+``PIECE_M``, and a piece counts in full for every block within ``NEIGHBOURHOOD_M`` of
+its midpoint. Only the pieces across that edge are off, by half a piece at most;
+clipping every street to every block's neighbourhood instead took about 70 s for
+Mexicali, against 9 s.
+
 - ``intersection_density`` (ULI "Street connectivity", over the road network with
   pandana): intersections (nodes joining three or more streets) within
   ``CONNECTIVITY_M`` along the network of the node nearest the block's
@@ -38,6 +44,7 @@ if TYPE_CHECKING:
     import pandana as pdna
 
 NEIGHBOURHOOD_M = 500.0
+PIECE_M = 25.0
 BIKE_BANDS = ("shared_lanes", "protected_bike_lane")
 LANE_KEYS = ["bike_lane_coverage", "protected_bike_lane_coverage"]
 COVERAGE_KEYS = [*LANE_KEYS, "street_lighting_coverage"]
@@ -61,34 +68,47 @@ def lane_flags(bands_use: pd.Series) -> pd.DataFrame:
     ).astype(bool)
 
 
+def pieces(lines: np.ndarray, size: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """``lines`` cut into equal pieces of at most ``size``: each piece's midpoint,
+    length and line (position in ``lines``). Missing or empty lines have none."""
+    owner = np.flatnonzero(~(shapely.is_missing(lines) | shapely.is_empty(lines)))
+    length = shapely.length(lines[owner])
+    count = np.maximum(1, np.ceil(length / size)).astype(np.int64)
+    line = np.repeat(owner, count)
+    piece = np.repeat(length / count, count)
+    step = np.arange(count.sum()) - np.repeat(np.cumsum(count) - count, count)
+    middle = shapely.line_interpolate_point(lines[line], (step + 0.5) * piece)
+    return middle, piece, line
+
+
 def coverage_by_block(
     blocks: gpd.GeoDataFrame, streets: gpd.GeoDataFrame, crs: str
 ) -> pd.DataFrame:
     """``COVERAGE_KEYS`` per block, in order; lengths in ``crs``."""
-    lines = streets.geometry.to_crs(crs).to_numpy()
-    areas = shapely.buffer(blocks.geometry.to_crs(crs).to_numpy(), NEIGHBOURHOOD_M)
-    area, street = shapely.STRtree(lines).query(areas, predicate="intersects")
-    length = shapely.length(shapely.intersection(lines[street], areas[area]))
+    middle, piece, line = pieces(streets.geometry.to_crs(crs).to_numpy(), PIECE_M)
+    near, block = shapely.STRtree(blocks.geometry.to_crs(crs).to_numpy()).query(
+        middle, predicate="dwithin", distance=NEIGHBOURHOOD_M
+    )
+    street, length = line[near], piece[near]
     lit = pd.to_numeric(streets["streetlights"]).to_numpy("float64")[street] / 100
-    frame = pd.DataFrame(
+
+    def per_block(weights: np.ndarray) -> np.ndarray:
+        return np.bincount(block, weights, minlength=len(blocks))
+
+    total = per_block(length)
+    result = pd.DataFrame(
         {
-            "street": length,
-            **{
-                key: length * streets[flag].fillna(False).to_numpy(bool)[street]
-                for key, flag in zip(
-                    LANE_KEYS, ["bike_lane", "protected_bike_lane"], strict=True
-                )
-            },
-            "lit": length * lit,
-            "measured": np.where(np.isnan(lit), 0.0, length),
+            key: per_block(length * streets[flag].fillna(False).to_numpy(bool)[street])
+            / np.where(total > 0, total, np.nan)
+            for key, flag in zip(
+                LANE_KEYS, ["bike_lane", "protected_bike_lane"], strict=True
+            )
         }
     )
-    sums = frame.groupby(area).sum().reindex(range(len(blocks)))
-    total = sums["street"].where(sums["street"] > 0)
-    result = pd.DataFrame({key: sums[key] / total for key in LANE_KEYS})
-    result["street_lighting_coverage"] = sums["lit"] / sums["measured"].where(
-        sums["measured"] > 0
-    )
+    measured = per_block(np.where(np.isnan(lit), 0.0, length))
+    result["street_lighting_coverage"] = per_block(
+        np.where(np.isnan(lit), 0.0, length * lit)
+    ) / np.where(measured > 0, measured, np.nan)
     return result
 
 

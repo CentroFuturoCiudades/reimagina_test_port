@@ -157,6 +157,12 @@ never 0.
   each street's `streetlights` (share of its length lit, 0-100, from INEGI's
   block faces) weighted by its length, over the streets that have the value.
   The notebook measures streets inside its polygons; a block has none inside.
+  Lengths are counted in pieces of at most 25 m, cut once per street: a piece
+  counts in full for each block within 500 m of its midpoint. Only the pieces
+  across the 500 m edge are off, and the share moves by more than 0.02 only where
+  the block has a few hundred metres of street with a value around it (Mexicali:
+  5 of 16,342 blocks). Clipping each street to each block took about 70 s for
+  Mexicali; the pieces take about 9 s.
   `reimagina_scenario_rights_of_way` returns each street's two lane flags (Lyra
   has no list column) and `streetlights`. Until a baseline has `right_of_way`
   streets (`reimagina_baseline_streets`), these three are null.
