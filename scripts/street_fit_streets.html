@@ -91,6 +91,7 @@ const RGB = [[214, 211, 205], [63, 63, 70], [101, 163, 13], [224, 138, 44], [47,
 const hex = c => "#" + c.map(v => v.toString(16).padStart(2, "0")).join("");
 
 const rowShapes = shapes(R.poly), partShapes = shapes(P.poly), junctionShapes = shapes(J.poly);
+const INSIDE = new Set(R.inside), insideShapes = rowShapes.filter(d => INSIDE.has(d.i));
 const labShapes = shapes(LB.poly), lotShapes = D.lots.flatMap(rs => rs.map(r => ({ polygon: dec(r) })));
 const axes = R.axis.map((q, i) => ({ path: dec(q), i }));
 const marks = D.marks.map(q => ({ path: dec(q) }));
@@ -132,7 +133,8 @@ function getTooltip({ layer, index, object }) {
   if (!layer || index < 0) return null;
   if (layer.id === "rights" || layer.id === "axes") { const i = object.i;
     return { text: `${R.name[i] || "Sin nombre"} · ${fmt(R.w[i])} m${labW(i) != null ? ` (lab ${fmt(labW(i))} m)` : ""}` }; }
-  if (layer.id === "junctions") return { text: `Cruce de ${J.streets[object.i]} derechos de vía` };
+  if (layer.id === "junctions") return { text: `Cruce de ${J.streets[object.i]} extremos recortados` };
+  if (layer.id === "inside") return { text: `Dentro del cruce: ${R.name[object.i] || "Sin nombre"} · ${R.cls[object.i]} · ${fmt(R.len[object.i])} m de eje` };
   if (layer.id === "lab") return { text: `Lab: ${fmt(LB.w[object.i])} m · ${LB.cw[object.i]} calzada(s)` };
   return null;
 }
@@ -146,6 +148,10 @@ function layers() {
     lineWidthUnits: "pixels", getLineWidth: 0.5 }));
   if (st.view === "street") {
     out.push(
+      new deck.PolygonLayer({ id: "inside", data: insideShapes, getPolygon: d => d.polygon, pickable: true, autoHighlight: true,
+        highlightColor: [250, 204, 21, 70], filled: true, stroked: true, getFillColor: [124, 58, 237, on("l-sat") ? 70 : 110],
+        getLineColor: [196, 181, 253, 230], lineWidthUnits: "pixels", getLineWidth: 1.2, getDashArray: [4, 3],
+        extensions: [new deck.PathStyleExtension({ dash: true })] }),
       new deck.PolygonLayer({ id: "junctions", data: junctionShapes, getPolygon: d => d.polygon, pickable: true, autoHighlight: true,
         highlightColor: [250, 204, 21, 70], stroked: false, getFillColor: [63, 63, 70, on("l-sat") ? 110 : 225] }),
       new deck.PolygonLayer({ id: "parts", data: partShapes, getPolygon: d => d.polygon, filled: true, stroked: true,
@@ -175,7 +181,7 @@ function draw() { overlay.setProps({ layers: layers(), onClick: info => { if (in
 // ------------------------------------------------------------------ panel
 function legend() {
   const items = st.view === "street"
-    ? [...KIND.map((_, k) => [KIND_ES[k], hex(RGB[k])]), ["Cruce", hex([63, 63, 70]) + "; outline:2px solid #facc15"],["Contorno del lab", "transparent; border:2px solid #8a63c9"]]
+    ? [...KIND.map((_, k) => [KIND_ES[k], hex(RGB[k])]), ["Cruce", hex([63, 63, 70]) + "; outline:2px solid #facc15"], ["Tramo dentro del cruce", "#7c3aed; outline:2px dashed #c4b5fd"],["Contorno del lab", "transparent; border:2px solid #8a63c9"]]
     : MODES[st.mode].legend;
   $("legend").innerHTML = items.map(([t, c]) => `<div><span class="sw" style="background:${c}"></span>${t}</div>`).join("");
 }

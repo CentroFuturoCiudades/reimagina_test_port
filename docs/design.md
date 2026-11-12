@@ -496,22 +496,25 @@ street's is its axis ± `width_m / 2` (`street_fit.footprints`; the axis is
 already centred, and `width_m` may have been smoothed, so `width_left_m` /
 `width_right_m` aren't used); any other street's (pedestrian, `refine: false`) a
 strip of its class's default width (`2 × default_half_width_m`), cut where it
-overlaps a fitted one. Junctions belong to no street: each axis is carried into
-its junctions by the half width of the widest street there, the junction is where
-the strips of streets sharing a node overlap, and it's cut out of each; a street
-keeps the largest piece, valid and simplified to 10 cm (a dead end stops at its
-axis's end). One left with less than a quarter of its strip (wholly inside a
-junction, or a sliver) keeps its strip and overlaps the junction; an axis that
+overlaps a fitted one. Junctions belong to no street: each end of an axis is
+trimmed across it, as far along it as its strip overlaps the strips of the streets
+at the node there (`street_fit.cut_junctions`), and the polygon is the strip of
+the trimmed axis, one clean piece with flat ends (a dead end isn't trimmed; a
+street going straight on is trimmed next to nothing). A street ending halfway along
+a corridor stops at its edge, and the corridor goes on whole. One the trims leave
+less than 1 m of axis
+(wholly inside a junction) keeps its strip and overlaps the others; an axis that
 crosses itself is simplified first (`table.attrs["footprints"]` counts both). The
 axes and `width_m` stay in memory for the lighting and bike lane matches.
 
 A strip's length `L` and width `W` follow from its area `A` and perimeter `P`
 (`P ≈ 2L + 2W`, `A ≈ L·W`, curved too): `L = P/4 + √(P²/16 − A)`, `W = A / L`
 (`street_fit.strip_length`, `strip_width`; a band's metres are `W × share / 100`).
-The streets indicator weighs by `L`. On the Condesa test areas `W` is within ±5 %
-of the fitted `width_m` on only a quarter to a third of the straight stretches
-(junction cuts at an angle and short stretches): read it as an estimate. A map
-drawn from the base shows the junctions empty.
+The streets indicator weighs by `L`. On the Condesa `W` is within ±5 % of the
+fitted `width_m` on 89 % of the streets (99 % of those longer than wide): the
+formula gives a strip's longer side, so a stretch the trims leave shorter than
+wide (about one in ten) swaps its length and width. A map drawn from the base
+shows the junctions empty.
 
 ## Baseline writer
 

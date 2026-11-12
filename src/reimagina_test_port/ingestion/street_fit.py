@@ -1270,85 +1270,135 @@ def largest(g: shapely.Geometry, tolerance: float = 0.1) -> Polygon:
     return simple if simple.is_valid and not simple.is_empty else best
 
 
+def trim_of(
+    axis: LineString,
+    width: float,
+    strip: shapely.Geometry,
+    at_start: bool,
+    others: list[tuple[shapely.Geometry, float]],
+) -> float:
+    """How far from its end (``at_start``: its first point) ``axis`` is trimmed: the
+    farthest point, along it, of where its ``strip`` overlaps the ``others`` (strip,
+    width) meeting at that end. Only the pieces of overlap reaching within the wider of the
+    two widths of the end count, not one at the axis' other end."""
+    end = Point(axis.coords[0] if at_start else axis.coords[-1])
+    far = 0.0
+    for other, other_width in others:
+        zone = end.buffer(max(width, other_width))
+        overlap = areas_of(strip.intersection(other))
+        for part in shapely.get_parts(overlap):
+            if part.area <= 1.0 or not part.intersects(zone):
+                continue
+            along = [
+                axis.project(Point(xy))
+                for g in shapely.get_parts(part)
+                for xy in g.exterior.coords
+            ]
+            far = max(far, max(along) if at_start else axis.length - min(along))
+    return far
+
+
 def cut_junctions(
     axes: list[LineString],
     widths: list[float],
     nodes: list[set],
-    reach: list[float],
-    min_kept_share: float = 0.25,
+    ends: list[tuple],
+    min_kept: float = 1.0,
 ) -> dict:
-    """Rights of way as polygons, lot front to lot front, the junctions cut out.
+    """Rights of way as polygons, lot front to lot front, the junctions left out.
 
-    Each axis is carried ``reach`` metres into its junctions and made a strip of its
-    width (``ribbon``); a junction is where strips of rights of way sharing a node
-    overlap, and no right of way owns it. A right of way keeps the largest piece of
-    its strip, not carried on (so a dead end stops where its axis does), outside the
-    junctions; one the cut leaves less than ``min_kept_share`` of it (wholly inside
-    a junction, or a sliver: ``inside``) keeps its strip and overlaps them.
+    Each axis is made a strip of its width (``ribbon``). At each end, the strips of the
+    rights of way sharing the node there (``ends``: the nodes at its start and its end;
+    ``nodes``: all of its nodes) overlap its own: the axis is trimmed to the farthest
+    point of that overlap along it (``trim_of``, the widest crossing street's), and
+    the polygon is the strip of the trimmed axis, a clean one with flat ends across
+    the axis. A dead end isn't trimmed. A right of way the trims leave less than
+    ``min_kept`` metres of axis (wholly inside a junction: ``inside``) keeps its whole
+    strip and overlaps the others.
 
     Returns ``shapes`` (one Polygon per axis), ``inside`` and ``simplified`` (row
-    positions) and ``junctions`` (their union)."""
+    positions) and ``trims`` (each axis' start and end trim, in metres)."""
     strips, simplified = [], set()
-    for k, (axis, width, by) in enumerate(zip(axes, widths, reach, strict=True)):
-        shape, was_simplified = ribbon(extend(axis, by) if by else axis, width)
+    for k, (axis, width) in enumerate(zip(axes, widths, strict=True)):
+        shape, was_simplified = ribbon(axis, width)
         strips.append(shape)
         if was_simplified:
             simplified.add(k)
-    pieces = []
-    tree = shapely.STRtree(strips)
-    for i, j in zip(*tree.query(strips, predicate="intersects"), strict=True):
-        if j <= i or not nodes[i] & nodes[j]:
-            continue
-        overlap = areas_of(strips[i].intersection(strips[j]))
-        if overlap.area > 1.0:
-            pieces.append(overlap)
-    junctions = shapely.union_all(pieces) if pieces else Polygon()
-    shapes, inside = [], set()
-    for k in range(len(strips)):
-        plain = largest(ribbon(axes[k], widths[k])[0])
-        cut = largest(plain.difference(junctions)) if pieces else plain
-        if cut.area < min_kept_share * plain.area:
+    by_node: dict = defaultdict(list)
+    for k, ns in enumerate(nodes):
+        for n in ns:
+            by_node[n].append(k)
+
+    shapes, inside, trims = [], set(), []
+    for k, (axis, width) in enumerate(zip(axes, widths, strict=True)):
+        cuts = []
+        for at_start, node in ((True, ends[k][0]), (False, ends[k][1])):
+            others = [(strips[j], widths[j]) for j in by_node.get(node, []) if j != k]
+            cuts.append(
+                trim_of(axis, width, strips[k], at_start, others) if others else 0.0
+            )
+        trims.append(tuple(cuts))
+        if axis.length - sum(cuts) < min_kept:
             inside.add(k)
-            cut = plain
-        shapes.append(cut)
+            shapes.append(largest(strips[k]))
+            continue
+        line = substring(axis, cuts[0], axis.length - cuts[1]) if any(cuts) else axis
+        shapes.append(largest(ribbon(line, width)[0]))
     return {
         "shapes": shapes,
         "inside": sorted(inside),
         "simplified": sorted(simplified),
-        "junctions": junctions,
+        "trims": trims,
     }
+
+
+def end_nodes(axes: list[LineString], nodes: list[set], node_xy: dict) -> list[tuple]:
+    """Per axis, the node of ``nodes`` nearest its first point and its last."""
+    out = []
+    for axis, ns in zip(axes, nodes, strict=True):
+        known = [n for n in ns if n in node_xy]
+        ends = []
+        for xy in (axis.coords[0], axis.coords[-1]):
+            ends.append(
+                min(known, key=lambda n: math.dist(node_xy[n], xy), default=None)
+            )
+        out.append(tuple(ends))
+    return out
 
 
 def footprints(
     fitted: gpd.GeoDataFrame, roads: gpd.GeoDataFrame, params: dict | None = None
 ) -> gpd.GeoSeries:
     """``fit``'s rights of way (its output, from ``roads``) as polygons, indexed as
-    ``fitted``: each axis ± ``width_m / 2`` (the axis is centred between the lot
-    fronts, and ``smooth_widths`` may change ``width_m`` without its sides), carried
-    into its junctions by the half width of the widest street there, as ``fit`` does,
-    with the junctions cut out (``cut_junctions``). ``attrs`` holds the positions of
-    those ``inside`` a junction and of the ``simplified`` axes, and the
-    ``junctions``."""
-    p = params_of(params or {})
+    ``fitted``: each axis trimmed across at its ends where the streets of the node
+    there cross it, ± ``width_m / 2`` (the axis is centred between the lot fronts, and
+    ``smooth_widths`` may change ``width_m`` without its sides); see ``cut_junctions``.
+    ``attrs`` holds the positions of those ``inside`` a junction and of the
+    ``simplified`` axes, and the ``trims``."""
     if fitted.empty:
         return gpd.GeoSeries([], index=fitted.index, crs=fitted.crs)
-    widest = widest_at_nodes(roads, p)
     nodes_of = {
         key: {a, b}
         for key, a, b in zip(
             roads["road_key"], roads["from_node"], roads["to_node"], strict=True
         )
     }
+    node_xy: dict = {}
+    for a, b, g in zip(
+        roads["from_node"], roads["to_node"], roads.geometry, strict=True
+    ):
+        node_xy.setdefault(a, g.coords[0])
+        node_xy.setdefault(b, g.coords[-1])
     nodes = [
         set().union(*(nodes_of.get(k, set()) for k in keys))
         for keys in fitted["road_keys"]
     ]
-    reach = [max((widest[n] for n in ns), default=0.0) for ns in nodes]
+    axes = list(fitted.geometry)
     out = cut_junctions(
-        list(fitted.geometry),
+        axes,
         fitted["width_m"].astype(float).tolist(),
         nodes,
-        reach,
+        end_nodes(axes, nodes, node_xy),
     )
     shapes = gpd.GeoSeries(out.pop("shapes"), index=fitted.index, crs=fitted.crs)
     shapes.attrs.update(out)

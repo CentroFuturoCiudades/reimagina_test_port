@@ -4,8 +4,11 @@ Continúa `docs/right_of_way_polygon_plan.md` (el plan original) y `docs/right_o
 hallazgos tras implementarlo). Este documento revisa esos hallazgos con mediciones nuevas, propone cambiar la
 forma en que `footprints` recorta los cruces y deja el plan para hacerlo.
 
-Nada de lo que se propone aquí está aplicado en el repo. Las mediciones salen de un prototipo fuera del repo
-(ver [Cómo se midió](#cómo-se-midió)).
+Las mediciones de este documento salen de un prototipo fuera del repo (ver [Cómo se midió](#cómo-se-midió)).
+
+> **Estado (2026-11-12).** Aplicadas las fases 0, 1, 4 y 5. `scripts/street_fit_measure.py` es la medición. En la
+> fase 4, `test_footprints_do_not_overlap[test_area]` quedó en `xfail` hasta la fase 2. Pendientes: fases 2, 3 y 6
+> y las decisiones A, B y C.
 
 ## En resumen
 

@@ -10,10 +10,11 @@ separate files (``--roads`` as ``streets.osm_roads`` writes them). Footways (``r
 dropped, as in an OSM ``drive`` network. ``--lab`` is a folder with the lab's ``right_of_way.parquet``: each
 right of way is paired with the lab's one under its midpoint and the page compares their widths and sections.
 
-The rights of way are ``street_fit.footprints``' polygons, as ``streets.build`` writes them, and their width is
-read from the shape (``strip_width``), as one reading the base would: what is drawn is what is stored. The bands
-(and lanes) are strips across the axis carried into its junctions, ``share`` of that width each, cut to the polygon.
-Junctions are ``footprints``' own.
+The rights of way are ``street_fit.footprints``' polygons, as ``streets.build`` writes them. The bands (and
+lanes) are strips across the axis carried into its junctions, ``share`` of ``width_m`` each, cut to the polygon
+(not of the width read from the shape, ``strip_width``, which swaps length and width in strips shorter than wide).
+A junction is the space between the trimmed ends meeting at a node; the rights of way left ``inside`` a junction
+are drawn apart, under the rest, without bands.
 
 It also prints (and the page shows) how good the fit is, without the lab: how much of the rights of way lies on
 lots, how much of the street space by the network they leave out, and how plausible their bands are.
@@ -33,13 +34,15 @@ import numpy as np
 import pandas as pd
 import shapely
 from shapely.geometry import Polygon
+from shapely.ops import substring
 
 from reimagina_test_port.ingestion.street_fit import (
     DEFAULTS,
+    end_nodes,
     extend,
     fit,
     footprints,
-    strip_width,
+    ribbon,
 )
 
 DATA = Path(__file__).parents[1] / "tests/data"
@@ -93,31 +96,53 @@ def areas_only(g):
 
 
 def streets(port: gpd.GeoDataFrame, roads: gpd.GeoDataFrame) -> dict:
-    """Rights of way, bands and lanes, junctions and lane marks, as polygons and lines."""
+    """Rights of way, bands and lanes, junctions and lane marks, as polygons and lines.
+
+    A junction is the space between the trimmed ends meeting at a node: what each end
+    lost to the trim (its strip from the node to the cut), joined by node, less the
+    footprints (a street ending halfway along a corridor leaves its mouth inside it).
+    The rights of way ``inside`` a junction get no bands: they are drawn apart, under
+    the rest."""
     half = DEFAULTS["default_half_width_m"]
     widest_at: dict = defaultdict(float)
     nodes_of_road = {}
-    for key, a, b, kind in zip(
+    node_xy: dict = {}
+    for key, a, b, kind, g in zip(
         roads["road_key"],
         roads["from_node"],
         roads["to_node"],
         roads["road_type"],
+        roads.geometry,
         strict=True,
     ):
         nodes_of_road[key] = (a, b)
+        node_xy.setdefault(a, g.coords[0])
+        node_xy.setdefault(b, g.coords[-1])
         for n in (a, b):
             widest_at[n] = max(widest_at[n], half.get(kind, 4))
 
     shapes = footprints(port, roads)
-    width = strip_width(shapes.to_numpy())
+    inside = set(shapes.attrs["inside"])
+    node_sets = [
+        {n for k in keys for n in nodes_of_road[k]} for keys in port["road_keys"]
+    ]
+    trims = shapes.attrs["trims"]
+    ends = end_nodes(list(port.geometry), node_sets, node_xy)
     rows, parts = [], []
+    lost: dict = defaultdict(list)  # node -> what the ends there lost to the trim
     for i, r in port.iterrows():
-        nodes = {n for k in r.road_keys for n in nodes_of_road[k]}
-        reach = max((widest_at[n] for n in nodes), default=0)
-        line = extend(r.geometry, reach) if reach else r.geometry
+        nodes = node_sets[i]
         shape = shapes.iloc[i]
         rows.append({"nodes": nodes, "shape": shape})
-        w_total = float(width[i])
+        if i in inside:
+            continue
+        axis, w_total = r.geometry, float(r.width_m)
+        for (t, node), at_start in zip(zip(trims[i], ends[i]), (True, False)):
+            if t > 0.05 and node is not None:
+                cut = (0, t) if at_start else (axis.length - t, axis.length)
+                lost[node].append(ribbon(substring(axis, *cut), w_total)[0])
+        reach = max((widest_at[n] for n in nodes), default=0)
+        line = extend(axis, reach) if reach else axis
         top = w_total / 2
         per_cw = max(1, int(r.lanes) // int(r.carriageways))
         for b, (use, share) in enumerate(
@@ -138,16 +163,18 @@ def streets(port: gpd.GeoDataFrame, roads: gpd.GeoDataFrame) -> dict:
                     }
                 )
             top -= w
-    whole = shapes.attrs["junctions"]
+    kept = shapely.union_all(
+        [g for k, g in enumerate(shapes.to_numpy()) if k not in inside]
+    )
     junctions = []
-    for g in shapely.get_parts(whole):
+    for node, pieces in lost.items():
+        g = areas_only(shapely.union_all(pieces).difference(kept))
         if g.area <= 1.0:
             continue
-        near = shapes.sindex.query(g, predicate="intersects")
-        junctions.append({"shape": g, "streets": len(near)})
+        junctions.append({"shape": g, "streets": len(pieces), "node": node})
+    whole = shapely.union_all([j["shape"] for j in junctions])
     extended = list(shapes)
     parts = [p for p in parts if p["shape"].area > 0.5]
-    inside = set(shapes.attrs["inside"])
 
     # Lines between neighbouring lanes of one band (the lab's dashed ones).
     lanes_by = defaultdict(list)

@@ -364,22 +364,24 @@ def footprints(
     fitted: gpd.GeoDataFrame | None,
     roads: gpd.GeoDataFrame | None,
     params: dict,
+    nodes: pd.DataFrame | None = None,
 ) -> tuple[gpd.GeoSeries, dict]:
     """Every street (``streets``: the fitted axes first, then the network's lines) as
     a polygon, and how many were left ``inside`` a junction or ``simplified``.
 
     The fitted ones: ``street_fit.footprints``. The rest: a strip of their class's
-    default width, the junctions among them cut out, then cut where they overlap a
-    fitted one or its junctions (a strip left with nothing keeps its own)."""
+    default width, trimmed at their ends as those are (``street_fit.cut_junctions``;
+    ``nodes`` places the nodes), then cut where they overlap a fitted one (a strip
+    left with nothing keeps its own)."""
     p = street_fit.params_of(params)
     n = 0 if fitted is None else len(fitted)
     shapes: list = []
-    junctions = shapely.Polygon()
+    taken = shapely.Polygon()
     inside, simplified = 0, 0
     if n:
         own = street_fit.footprints(fitted, roads, params)
         shapes += list(own)
-        junctions = shapely.union_all([*own.to_numpy(), own.attrs["junctions"]])
+        taken = shapely.union_all(own.to_numpy())
         inside += len(own.attrs["inside"])
         simplified += len(own.attrs["simplified"])
     rest = streets.iloc[n:]
@@ -388,14 +390,23 @@ def footprints(
             2 * street_fit.half_width(kind if isinstance(kind, str) else "", p)
             for kind in classes.reindex(rest.index)
         ]
-        nodes = [set(key.split("-")) for key in rest.index]
-        out = street_fit.cut_junctions(list(rest), widths, nodes, [0.0] * len(rest))
+        members = [set(key.split("-")) for key in rest.index]
+        if nodes is not None:
+            xy = {
+                str(i): (x, y)
+                for i, x, y in zip(nodes["id"], nodes["x"], nodes["y"], strict=True)
+            }
+        else:
+            xy = {}
+        axes = list(rest)
+        ends = street_fit.end_nodes(axes, members, xy)
+        out = street_fit.cut_junctions(axes, widths, members, ends)
         inside += len(out["inside"])
         simplified += len(out["simplified"])
         for shape in out["shapes"]:
             cut = (
-                street_fit.largest(shape.difference(junctions))
-                if not junctions.is_empty
+                street_fit.largest(shape.difference(taken))
+                if not taken.is_empty
                 else shape
             )
             shapes.append(cut if not cut.is_empty else shape)
@@ -505,6 +516,7 @@ def build(
         None if fitted is None else fitted.reset_index(),
         roads,
         params,
+        nodes,
     )
     table = gpd.GeoDataFrame(
         frame,
