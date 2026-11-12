@@ -84,7 +84,7 @@ sources:
       # reimagina_baseline_streets: fit the vehicular streets to the cadastre's lots
       # (ingestion/street_fit.py; `fit` overrides its DEFAULTS). Off until validated
       # on the whole city; turning it on changes the vehicular right_of_way keys.
-      refine: true
+      refine: false
   # right_of_way elements over that network (ingestion/streets.py):
   # streetlights from INEGI's 2020 housing inventory block faces (national, one file
   # per state): a street takes the faces within max_distance_m; ALUMPUB 1 lit, 3 not.

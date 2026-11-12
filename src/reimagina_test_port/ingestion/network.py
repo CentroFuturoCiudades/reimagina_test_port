@@ -25,7 +25,8 @@ Edges also carry their shape (``geometry``), for the streets built over the netw
 splits or adds as connectors have none (``shapes`` gives them the straight line).
 
 The OSM download is cached in the lake beside the H5s (``osm_cache_uris``), so a
-city's network is fetched from Overpass once.
+city's network is fetched from Overpass once. A copy saved before the edges carried
+their tags (``legacy_osm_cache_uris``) is read too, with those tags missing.
 """
 
 import hashlib
@@ -172,24 +173,50 @@ def osm_cache_uris(
     """Nodes' and edges' parquet of the OSM download for ``area`` and the city's
     filter, under ``prefix``: ``osm_<cve>_<hash>_{nodes,edges}.parquet``. Another
     area, filter or ``retain_all`` is another file."""
+    return _cache_uris(prefix, cve_code, area, params, b"v2")  # v2: edges carry OSM_TAGS
+
+
+def legacy_osm_cache_uris(
+    prefix: str, cve_code: str, area: shapely.Geometry, params: NetworkParams
+) -> tuple[str, str]:
+    """``osm_cache_uris`` of the first version of the cache, whose edges have no
+    ``OSM_TAGS``: the same download (area, filter, ``retain_all``), named without
+    the version."""
+    return _cache_uris(prefix, cve_code, area, params, None)
+
+
+def _cache_uris(
+    prefix: str,
+    cve_code: str,
+    area: shapely.Geometry,
+    params: NetworkParams,
+    version: bytes | None,
+) -> tuple[str, str]:
     digest = hashlib.sha256()
     for part in (
         shapely.to_wkb(area),
         str(params.custom_filter).encode(),
         str(params.retain_all).encode(),
-        b"v2",  # v2: edges carry OSM_TAGS
+        *(() if version is None else (version,)),
     ):
         digest.update(part)
     stem = f"{prefix.rstrip('/')}/osm_{cve_code}_{digest.hexdigest()[:10]}"
     return f"{stem}_nodes.parquet", f"{stem}_edges.parquet"
 
 
-def read_osm_cache(uris: tuple[str, str]) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """``osm_tables`` back from ``write_osm_cache``'s files."""
+def read_osm_cache(
+    uris: tuple[str, str], *, tags: bool = True
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """``osm_tables`` back from ``write_osm_cache``'s files. Without ``tags`` (the
+    legacy cache), ``OSM_TAGS`` are read as missing."""
     from reimagina_test_port.common import lake
 
     nodes = lake.read_parquet(uris[0], ["id", "x", "y"]).set_index("id")
-    edges = lake.read_parquet(uris[1], ["from", "to", "length", *OSM_TAGS, "geometry"])
+    columns = ["from", "to", "length", *(OSM_TAGS if tags else ()), "geometry"]
+    edges = lake.read_parquet(uris[1], columns)
+    for tag in () if tags else OSM_TAGS:
+        edges[tag] = pd.Series(None, index=edges.index, dtype=object)
+    edges = edges[["from", "to", "length", *OSM_TAGS, "geometry"]]
     return nodes, edges.assign(geometry=shapely.from_wkb(edges["geometry"]))
 
 
@@ -239,9 +266,23 @@ def osm_network(
         if cve_code is None
         else osm_cache_uris(params.output_prefix, cve_code, area, params)
     )
+    legacy = (
+        None
+        if cache is None
+        else legacy_osm_cache_uris(params.output_prefix, cve_code, area, params)
+    )
     if cache is not None and not refresh and all(map(lake.exists, cache)):
         logger.info("OSM: from %s", cache[1])
         nodes, edges = read_osm_cache(cache)
+    elif legacy is not None and not refresh and all(map(lake.exists, legacy)):
+        logger.warning(
+            "OSM: from %s, saved before the edges carried %s: they are missing. "
+            "Every street is residential with its default lanes; run with "
+            "refresh_osm to download them.",
+            legacy[1],
+            "/".join(OSM_TAGS),
+        )
+        nodes, edges = read_osm_cache(legacy, tags=False)
     else:
         nodes, edges = osm_tables(osm_graph(area, params))
         if cache is not None:

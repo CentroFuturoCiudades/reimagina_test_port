@@ -155,7 +155,7 @@ def test_osm_download_is_cached_in_the_lake(monkeypatch, tmp_path):
     assert len(list((tmp_path / "lake").iterdir())) == 4
 
 
-def test_an_old_cache_is_not_read():
+def test_an_old_cache_is_another_file():
     # The hash carries the tags' version: a cache written without them is another file.
     params = dataclasses.replace(PARAMS, output_prefix="lake")
     area = box(-115.451, 32.619, -115.448, 32.622)
@@ -168,6 +168,45 @@ def test_an_old_cache_is_not_read():
     ):
         digest.update(part)
     assert f"osm_02002_{digest.hexdigest()[:10]}_edges" not in edges
+    # ...and it is the one the legacy name points at.
+    (_, old) = network.legacy_osm_cache_uris("lake", "02002", area, params)
+    assert old == f"lake/osm_02002_{digest.hexdigest()[:10]}_edges.parquet"
+
+
+def test_an_old_cache_is_read_without_tags(monkeypatch, tmp_path, caplog):
+    # Saved before the edges had highway/name/lanes: read instead of downloading.
+    monkeypatch.setattr(
+        network,
+        "osm_graph",
+        lambda area, params: pytest.fail("downloaded despite the old cache"),
+    )
+    params = dataclasses.replace(PARAMS, output_prefix=str(tmp_path / "lake"))
+    blocks = gpd.GeoSeries([box(-115.451, 32.619, -115.448, 32.622)], crs=4326)
+    area = network.study_area(blocks, CRS, params.margin_m)
+    nodes, edges = network.osm_tables(osm_like_graph())
+    nodes_uri, edges_uri = network.legacy_osm_cache_uris(
+        params.output_prefix, "02002", area, params
+    )
+    (tmp_path / "lake").mkdir()
+    nodes.reset_index().to_parquet(nodes_uri, index=False)
+    edges[["from", "to", "length"]].assign(
+        geometry=shapely.to_wkb(edges["geometry"].to_numpy())
+    ).to_parquet(edges_uri, index=False)
+
+    with caplog.at_level("WARNING"):
+        got_nodes, got_edges = network.osm_network(
+            blocks, CRS, params, cve_code="02002", workdir=tmp_path / "w"
+        )
+    assert "highway/name/lanes" in caplog.text
+    assert len(got_nodes) == len(nodes) and len(got_edges) == len(edges)
+    assert got_edges[["highway", "name", "lanes"]].isna().all().all()
+    # Nothing new is saved; refresh_osm downloads and writes the tagged cache.
+    assert len(list((tmp_path / "lake").iterdir())) == 2
+    monkeypatch.setattr(network, "osm_graph", lambda area, params: osm_like_graph())
+    network.osm_network(
+        blocks, CRS, params, cve_code="02002", workdir=tmp_path / "w", refresh=True
+    )
+    assert len(list((tmp_path / "lake").iterdir())) == 4
 
 
 def test_without_cve_code_nothing_is_cached(monkeypatch, tmp_path):
