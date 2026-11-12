@@ -82,7 +82,7 @@ INDICATORS = {
         for key in ACCESS_KEYS
     },
     **{
-        key: (f"Diversidad de {key[10:]} a 500 m", None, "number", "poi_diversity")
+        key: (f"Diversidad de {key[10:]} a 500 m", None, "number", "diversity")
         for key in DIVERSITY_KEYS
     },
 }
