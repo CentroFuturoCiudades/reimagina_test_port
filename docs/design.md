@@ -533,6 +533,38 @@ formula gives a strip's longer side, so a stretch the trims leave shorter than
 wide (about one in ten) swaps its length and width. A map drawn from the base
 shows the junctions empty.
 
+## Redesigns (overlay)
+
+A redesign of part of the city, such as Mexicali's master plan, is a folder of
+Reimagina elements (`overlay_uri`): `blocks`, `lots`, `amenities`,
+`establishments` and `road_segments` GeoParquet files in EPSG:4326, each with
+`id`, `parent_id` and its attributes as columns. With `overlay_uri` and
+`zone_uri` (a polygon file; Mexicali's plan is Condesa's zone,
+`zonas_de_interes/condesa.fgb`), `reimagina_baseline` builds the city as always
+and then `ingestion/overlay.py` replaces the zone:
+
+- the city's blocks and lots whose representative point is in the zone go, with
+  the lots of a block that went, and the amenities and establishments in the
+  zone or in a lot that went;
+- the redesign's elements are added as they are: their ids, the baseline's
+  columns (others left out, missing ones empty), `source_record_ref`
+  `overlay:<id>`, and an establishment's `scian_sector` from its `scian_code`.
+  Every lot must be in one of the redesign's blocks and every point in one of its
+  lots, and no id may repeat one the city keeps.
+
+`reimagina_street_network` takes the folder's `road_segments` as `streets_uri`
+(unless one is given), so the redesign's streets replace the network inside the
+same zone (step 2 above), and its rights of way follow. Everything else in the
+city keeps its ids. A redesign goes into a baseline of its own project, written
+with `reimagina_baseline_write(..., overlay_uri, zone_uri)` and
+`reimagina_street_network_write` with the same two parameters. Fitting the
+streets (`refine`, above) still measures them against the cadastre's lots, not the
+redesign's: with `refine: true`, the zone's streets would be fitted to the lots
+that were there before.
+`scripts/new_project.py` does all of it for a case written in the script (Mexicali
+as it is, or with its master plan): project, roles, areas of interest, baseline,
+street network, elements and indicators.
+
 ## Baseline writer
 
 `reimagina_baseline_write(city, project_id, scenario_id)` fills an existing
