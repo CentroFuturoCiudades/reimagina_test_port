@@ -16,12 +16,14 @@ from collections.abc import Callable
 from pathlib import Path
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 import shapely
 
 from reimagina_test_port.common import lake
 from reimagina_test_port.ingestion import (
     cadastral,
+    canopy,
     footprints,
     points,
     prep,
@@ -39,7 +41,8 @@ logger = logging.getLogger(__name__)
 
 Progress = Callable[[str, int, int], None]
 STAGES = (
-    "download", "blocks", "lots", "footprints", "raw_amenities", "points", "elements",
+    "download", "blocks", "lots", "footprints", "canopy", "raw_amenities", "points",
+    "elements",
 )  # fmt: skip
 LOT_ATTRIBUTES = [
     "land_use",
@@ -158,8 +161,9 @@ def lot_table(
     contents: pd.DataFrame,
     city: CityPreset,
 ) -> gpd.GeoDataFrame:
-    """One row per lot, with cadastral ids, land use from ``contents`` and its
-    ``housing.floor_share`` (the city's by land use), EPSG:4326."""
+    """One row per lot, with cadastral ids, land use from ``contents``, its
+    ``housing.floor_share`` (the city's by land use) and ``tree_coverage`` (when
+    ``lots`` has it), EPSG:4326."""
     missing = sorted(set(lots["cvegeo"].dropna()) - set(blocks["cvegeo"]))
     if missing:
         msg = f"{len(missing)} lot cvegeo without a block, e.g. {missing[:5]}"
@@ -204,6 +208,9 @@ def lot_table(
     for key in LOT_ATTRIBUTES:
         frame[key] = [row.get(key) for row in rows]
     frame["housing.floor_share"] = frame["land_use"].map(city.floor_share_by_land_use)
+    frame["tree_coverage"] = (
+        lots["tree_coverage"].to_numpy() if "tree_coverage" in lots else np.nan
+    )
     # num_levels is an integer in attribute_catalog: whole floors, rounded as the
     # API's integer decoding does.
     frame["num_levels"] = [
@@ -306,12 +313,18 @@ def build(
         lots, stats, average_level_height=params.average_level_height
     )
 
-    progress("raw_amenities", 4, len(STAGES))
+    progress("canopy", 4, len(STAGES))
+    if city.tree_canopy is not None:
+        lots["tree_coverage"] = canopy.tree_coverage(
+            lots.geometry, city.tree_canopy, workdir
+        )
+
+    progress("raw_amenities", 5, len(STAGES))
     amenities_file, file_report = raw_amenities.build(
         city.amenities_normalizer, city.amenities_uri, workdir / "amenities"
     )
 
-    progress("points", 5, len(STAGES))
+    progress("points", 6, len(STAGES))
     shapes = lot_shapes(lots, city)
     denue, denue_report = points.read_denue(
         denue_path, city.denue_municipio, city.denue_encoding
@@ -323,7 +336,7 @@ def build(
         denue, shapes, city
     )
 
-    progress("elements", 6, len(STAGES))
+    progress("elements", 7, len(STAGES))
     contents = lot_contents(shapes, amenities, establishments)
     lot_rows = lot_table(lots, blocks, contents, city)
     return {

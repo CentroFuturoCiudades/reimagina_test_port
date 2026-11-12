@@ -102,6 +102,14 @@ sources:
       type_column: TIPO
       protected: [SEGREGADO INDEPENDIENTE, EXCLUSIVO DE TRAZO INDEPENDIENTE]
       max_distance_m: 15
+  # tree_coverage of lots and rights of way (ingestion/canopy.py): Meta & WRI's
+  # 1 m canopy height map (alsgedi_global_v6_float/chm), cut to Mexicali once by
+  # scripts/canopy_raster.py and uploaded here. A pixel at least min_height_m tall
+  # is canopy.
+  tree_canopy:
+    uri: az://sandbox/projects/EXE/cleaned/canopy_height/meta_canopy_height_02002.tif
+    params:
+      min_height_m: 2
 
 params:
   lots:   # exe_reimagina cities/mexicali.toml values
