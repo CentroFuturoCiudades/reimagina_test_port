@@ -250,6 +250,15 @@ less than 0.001 (`ACCESSIBILITY_SCORE_TOLERANCE`); the value it shows is then of
 by less than that. The comparison is always against the baseline, so the error
 does not accumulate across writes. Other keys keep the exact comparison.
 
+After a write that changed rows, the writer runs `ANALYZE` on
+`element_state_indicator_value` (best effort, 5 s lock timeout; a failure only
+logs a warning, since the values are already committed). The API reads a fork as
+its own rows, else the baseline's (`NOT EXISTS`); while the table's statistics do
+not know a new fork, the planner takes it for about one row and picks a nested
+loop that compares every baseline row with every fork row. On dev the map of a
+17k-row fork took 246 s that way and 0.6 s once analyzed. Autoanalyze would only
+catch up after about 10% of the table changes.
+
 For a fork, values that cannot have changed are not sent to the database at
 all. A lot the fork did not edit (no `element_state` row) and that has no stored
 fork value has its baseline value, which is what it computes. Blocks are always
