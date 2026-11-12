@@ -237,6 +237,11 @@ baseline again, or belong to an element no longer present, are removed. Rows
 whose stored value is unchanged are not rewritten and keep their `job_run_id`
 and `computed_at`, so writing the same scenario again changes nothing.
 
+The comparison reads the baseline's values of the group's keys once (a
+`MATERIALIZED` CTE) and joins them by hash. Joined directly, PostgreSQL may look
+each value up by `element_id` instead: on dev, 13 s against 0.5 s for population
+access or accessibility (about 300,000 values), and 53 s in a fork's job.
+
 `accessibility_<type>` is a percentile rank among all blocks, so a change
 anywhere moves every block it passes in the ranking by about 1/blocks
 (0.0001 after rounding). To keep a fork from storing those shifts for the whole

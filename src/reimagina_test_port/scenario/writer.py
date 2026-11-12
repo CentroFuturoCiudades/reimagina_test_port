@@ -89,9 +89,18 @@ _WITHIN_TOLERANCE = sql.SQL(
 # - remove: stored rows equal to the baseline again (or empty in a baseline
 #   scenario), or of an element no longer present;
 # - write: values that differ from the baseline and are new or changed.
+# The baseline's values of these keys are read once (MATERIALIZED) and hashed:
+# joined directly, the planner may look each payload row up by element_id instead,
+# 13 s against 0.4 s for a group of 300,000 values.
 _CHANGES_QUERY = sql.SQL(
     """
     CREATE TEMP TABLE indicator_change ON COMMIT DROP AS
+    WITH baseline AS MATERIALIZED (
+        SELECT element_id, indicator_id, value_num, value_text
+        FROM {element_state_indicator_value}
+        WHERE scenario_id = %(baseline)s::uuid
+          AND indicator_id = ANY(%(indicator_ids)s)
+    )
     SELECT
         coalesce(p.element_id, s.element_id) AS element_id,
         coalesce(p.indicator_id, s.indicator_id) AS indicator_id,
@@ -99,10 +108,8 @@ _CHANGES_QUERY = sql.SQL(
         p.value_text,
         p.element_id IS NULL OR {same_as_baseline} AS remove
     FROM indicator_payload p
-    LEFT JOIN {element_state_indicator_value} b
-      ON b.scenario_id = %(baseline)s::uuid
-     AND b.indicator_id = ANY(%(indicator_ids)s)
-     AND b.element_id = p.element_id
+    LEFT JOIN baseline b
+      ON b.element_id = p.element_id
      AND b.indicator_id = p.indicator_id
     FULL JOIN (
         SELECT element_id, indicator_id, value_num, value_text
