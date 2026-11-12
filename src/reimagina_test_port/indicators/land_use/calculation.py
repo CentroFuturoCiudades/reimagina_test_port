@@ -3,10 +3,10 @@
 IMIP's land use polygons:
 
 - ``net_residential_density``: homes per hectare of residential land, the lots that
-  hold homes. A lot's homes follow urban_fabric.md (*A lot's homes*): built space
-  (``area`` × ``cos`` × ``num_levels``) × ``housing.floor_share`` ÷ 100 ÷
-  ``housing.unit_size_m2``, rounded; ``land_use`` takes no part. A lot missing any
-  of them is left out. Null without residential land.
+  hold homes. A lot's homes are built form's ``num_housing_units`` (one for a
+  single-family house, its built space over ``housing.unit_size_m2`` for
+  multifamily and mixed use), the same homes as ``density`` and ``population``. A
+  lot without them is left out. Null without residential land.
 - ``commercial_land_share``: share (0-1) of the block's lot area that is
   ``commerce`` or ``office`` (the notebook's *Comercio y servicios*).
 - ``land_use_mix``: entropy of the lots' land uses by area, divided by the log of
@@ -26,27 +26,17 @@ def _number(lots: pd.DataFrame, key: str) -> pd.Series:
     return pd.to_numeric(lots[key], errors="coerce").astype("float64")
 
 
-def homes(lots: pd.DataFrame) -> pd.Series:
-    """Each lot's homes (urban_fabric.md); missing without every input or with a
-    unit size that is not positive."""
-    built = _number(lots, "area") * _number(lots, "cos") * _number(lots, "num_levels")
-    size = _number(lots, "housing.unit_size_m2")
-    housing = built * _number(lots, "housing.floor_share") / 100
-    # numpy rounds half to even, as Python's round.
-    return np.round(housing / size.where(size > 0))
-
-
 def land_use_by_block(lots: pd.DataFrame, block_ids: pd.Series) -> pd.DataFrame:
     """``KEYS`` per id of ``block_ids``, in order, from ``lots``' ``parent_id``,
-    ``land_use``, ``area`` (m²), ``cos``, ``num_levels``, ``housing.floor_share`` and
-    ``housing.unit_size_m2``. Lots without area are left out."""
+    ``land_use``, ``area`` (m²) and ``num_housing_units`` (built form's). Lots
+    without area are left out."""
     area = _number(lots, "area")
     frame = pd.DataFrame(
         {
             "block": lots["parent_id"],
             "land_use": lots["land_use"],
             "area": area.where(area > 0),
-            "homes": homes(lots),
+            "homes": _number(lots, "num_housing_units"),
         }
     ).dropna(subset=["block", "area"])
     land = frame.groupby("block")["area"].sum()

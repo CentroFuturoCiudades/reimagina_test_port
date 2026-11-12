@@ -3186,11 +3186,15 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Walkability components per block from what its lots are (ULI 'Net residential density', 'Commercial land use proportion' and 'Land use mix'): homes per hectare of the lots that hold homes (homes from housing.floor_share and housing.unit_size_m2, as urban_fabric.md), the share of lot area in commerce or office, and the normalised entropy of land uses by area.",
+      "description": "Walkability components per block from what its lots are (ULI 'Net residential density', 'Commercial land use proportion' and 'Land use mix'): homes per hectare of the lots that hold homes (built form's num_housing_units, as density and population), the share of lot area in commerce or office, and the normalised entropy of land uses by area.",
       "inputs": {
         "blocks": {
           "arguments": {},
           "output": "reimagina_built_form_blocks"
+        },
+        "homes": {
+          "arguments": {},
+          "output": "reimagina_built_form_lots"
         },
         "lots": {
           "arguments": {},
@@ -3223,7 +3227,7 @@
               "unit": null
             },
             {
-              "description": "Homes per hectare of the lots that hold homes (viv/ha); a lot's homes are its built space x housing.floor_share / housing.unit_size_m2. Null without residential land.",
+              "description": "Homes per hectare of the lots that hold homes (viv/ha), with built form's num_housing_units. Null without residential land.",
               "name": "net_residential_density",
               "nullable": true,
               "type": "number",

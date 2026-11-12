@@ -1,5 +1,5 @@
 """Lyra metric reimagina_land_use: net residential density, commercial land share and
-land use mix per block, from its lots' attributes."""
+land use mix per block, from its lots' attributes and built form's homes."""
 
 import geopandas as gpd
 from lyra.sdk import Dependency, RunContext, TableOutput, Unit, metric
@@ -20,13 +20,13 @@ OUTPUT = "reimagina_land_use_blocks"
     description=(
         "Walkability components per block from what its lots are (ULI 'Net "
         "residential density', 'Commercial land use proportion' and 'Land use "
-        "mix'): homes per hectare of the lots that hold homes (homes from "
-        "housing.floor_share and housing.unit_size_m2, as urban_fabric.md), the "
-        "share of lot area in commerce or office, and the normalised entropy of "
-        "land uses by area."
+        "mix'): homes per hectare of the lots that hold homes (built form's "
+        "num_housing_units, as density and population), the share of lot area in "
+        "commerce or office, and the normalised entropy of land uses by area."
     ),
     inputs={
         "lots": Dependency("reimagina_scenario_lots"),
+        "homes": Dependency("reimagina_built_form_lots"),
         "blocks": Dependency("reimagina_built_form_blocks"),
     },
     outputs={
@@ -38,9 +38,8 @@ OUTPUT = "reimagina_land_use_blocks"
                     "net_residential_density",
                     "number",
                     None,
-                    "Homes per hectare of the lots that hold homes (viv/ha); a lot's "
-                    "homes are its built space x housing.floor_share / "
-                    "housing.unit_size_m2. Null without residential land.",
+                    "Homes per hectare of the lots that hold homes (viv/ha), with "
+                    "built form's num_housing_units. Null without residential land.",
                 ),
                 column(
                     "commercial_land_share",
@@ -63,11 +62,15 @@ OUTPUT = "reimagina_land_use_blocks"
 def land_use(
     parameters: ScenarioParameters,
     lots: gpd.GeoDataFrame,
+    homes: gpd.GeoDataFrame,
     blocks: gpd.GeoDataFrame,
     context: RunContext,
 ) -> gpd.GeoDataFrame:
+    units = homes.set_index("id")["num_housing_units"]
     with timed("land use", context.logger):
-        values = land_use_by_block(lots, blocks["id"])
+        values = land_use_by_block(
+            lots.assign(num_housing_units=lots["id"].map(units)), blocks["id"]
+        )
     result = blocks[IDENTITY + ["geometry"]].copy()
     for key in KEYS:
         result[key] = values[key].to_numpy()

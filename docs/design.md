@@ -140,15 +140,13 @@ never 0.
 
 - `reimagina_land_use` (walkability index): `net_residential_density`, homes per
   hectare of the lots that hold homes (the notebook's *Habitacional*), a lot's
-  homes as urban_fabric.md's *A lot's homes*: built space (`area` × `cos` ×
-  `num_levels`) × `housing.floor_share` ÷ 100 ÷ `housing.unit_size_m2`, rounded;
-  `land_use` takes no part, and a lot missing one of them is left out. Built
-  form still counts homes the original way (from `land_use` and `housing.unit_size_m2`).
+  homes being built form's `num_housing_units`: one for a single-family house, its
+  built space over `housing.unit_size_m2` for multifamily and mixed use. They are
+  the same homes as `density` and `population`; a lot without them is left out.
   `commercial_land_share`, the share of the block's lot area in `commerce` or
   `office` (*Comercio y servicios*); `land_use_mix`, the entropy of the lots'
   land uses by area over the log of the number of uses present, as the notebook
-  (one use is 0). Inputs: the source lots only; the scenario reads
-  `housing.floor_share` and `housing.unit_size_m2` with the other lot attributes.
+  (one use is 0). Inputs: the source lots and built form's lots.
 - `reimagina_streets`: what the streets within 500 m of the block are like, as
   shares (0-1) of their length. Streets are `right_of_way` elements (lines) with
   their make-up as attributes (urban_fabric.md). `bike_lane_coverage` and
