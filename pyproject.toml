@@ -13,6 +13,7 @@ dependencies = [
     "lyra-utils",
     "networkx>=3.6.1",
     "numpy>=2.4.6",
+    "osmnx>=2.0",
     "pandana>=0.8",
     "pandas>=3.0.5",
     "psycopg[binary]>=3.3.4",
@@ -20,6 +21,7 @@ dependencies = [
     "pydantic",
     "pyyaml>=6.0.3",
     "rasterio>=1.4.4",
+    "scipy>=1.17",
     "tables>=3.10",
 ]
 

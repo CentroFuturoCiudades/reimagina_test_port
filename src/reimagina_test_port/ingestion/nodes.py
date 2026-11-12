@@ -1,16 +1,20 @@
 """Lyra nodes that build a city's baseline from the data lake and write it into a
 Reimagina baseline scenario: reimagina_baseline, reimagina_baseline_elements and
 reimagina_baseline_write. The elements are blocks, lots, amenities and
-establishments."""
+establishments. Its street network: reimagina_street_network,
+reimagina_street_network_tables and reimagina_street_network_write
+(ingestion/network.py)."""
 
 from typing import Literal
 
 import geopandas as gpd
 import pandas as pd
+import shapely
 from lyra.sdk import (
     DatasetContext,
     Dependency,
     MetricParameters,
+    RunContext,
     TableColumn,
     TableOutput,
     Unit,
@@ -20,8 +24,12 @@ from lyra.sdk import (
 from lyra.sdk.errors import MetricInputError
 from pydantic import Field
 
-from reimagina_test_port.common.nodes import column
+from reimagina_test_port.common.nodes import column, timed
 from reimagina_test_port.common.schema import UNITS, identity_columns
+from reimagina_test_port.indicators.accessibility.nodes import (
+    EDGES_DECLARATION,
+    NODES_DECLARATION,
+)
 from reimagina_test_port.ingestion.cities import CITIES
 from reimagina_test_port.ingestion.points import (
     AMENITY_ATTRIBUTES,
@@ -312,3 +320,222 @@ def baseline_write(
     by_type = counts.pop("by_type")
     written = {name: by_type[t] for t, name in WRITTEN_COLUMNS.items()}
     return pd.DataFrame([{**counts, **written, "dry_run": parameters.dry_run}])
+
+
+# ------------------------------------------------------------------ street network
+
+
+class NetworkParameters(BaselineParameters):
+    """City whose street network is built, and an optional file of streets."""
+
+    streets_uri: str | None = Field(
+        default=None,
+        description=(
+            "Optional (Geo)Parquet or vector file of street lines (az:// or a path) "
+            "that replaces the OpenStreetMap network inside its zone."
+        ),
+    )
+    zone_uri: str | None = Field(
+        default=None,
+        description=(
+            "Optional polygon file of the zone streets_uri replaces; without it, "
+            "the streets' convex hull."
+        ),
+    )
+
+
+def _network_input_error(field: str, message: str) -> MetricInputError:
+    return MetricInputError("reimagina_street_network", f"parameters.{field}", message)
+
+
+@dataset(
+    name="reimagina_street_network",
+    description=(
+        "Build a city's street network from scratch: OpenStreetMap's ways over "
+        "the convex hull of the city's blocks plus a margin, within its "
+        "municipality (sources.streets.boundary_uri), with the city's filter (Mexicali: the "
+        "ULI's pedestrian network), in its metric CRS. With streets_uri, those "
+        "streets replace the network inside their zone (zone_uri, or their "
+        "convex hull) and are sewn to it, as exe_reimagina's Condesa network."
+    ),
+    outputs={
+        "reimagina_street_network_nodes": NODES_DECLARATION,
+        "reimagina_street_network_edges": EDGES_DECLARATION,
+    },
+)
+def street_network(
+    parameters: NetworkParameters, context: DatasetContext
+) -> dict[str, pd.DataFrame]:
+    """Nodes and edges in the tables reimagina_road_network returns."""
+    from reimagina_test_port.common import lake
+    from reimagina_test_port.ingestion import network
+
+    city = CITIES[parameters.city]
+    if city.streets is None:
+        raise _network_input_error(
+            "city", f"{city.name} has no sources.streets in its YAML."
+        )
+    with timed("blocks", context.logger):
+        raw = lake.read_parquet(city.blocks_uri, ["geometry"])
+        blocks = gpd.GeoSeries.from_wkb(raw["geometry"], crs="EPSG:4326")
+    with timed("OpenStreetMap", context.logger):
+        boundary = None
+        if city.streets.boundary_uri:
+            raw = lake.read_parquet(city.streets.boundary_uri, ["geometry"])
+            boundary = gpd.GeoSeries.from_wkb(raw["geometry"], crs="EPSG:4326")
+        nodes, edges = network.osm_network(
+            blocks, city.target_crs, city.streets, boundary
+        )
+    if parameters.streets_uri:
+        folder = context.temp_dir / "streets"
+        lines = network.read_geometries(
+            lake.download(parameters.streets_uri, folder),
+            city.target_crs,
+            ("LineString", "MultiLineString"),
+        )
+        zone = None
+        if parameters.zone_uri:
+            polygons = network.read_geometries(
+                lake.download(parameters.zone_uri, folder),
+                city.target_crs,
+                ("Polygon", "MultiPolygon"),
+            )
+            zone = shapely.union_all(polygons.to_numpy())
+        with timed("streets merge", context.logger):
+            nodes, edges, report = network.merge_streets(
+                nodes, edges, lines, city.streets, zone
+            )
+        context.logger.info("Streets merged: %s", report)
+    elif parameters.zone_uri:
+        raise _network_input_error("zone_uri", "zone_uri needs streets_uri.")
+    return {
+        "reimagina_street_network_nodes": nodes.reset_index(),
+        "reimagina_street_network_edges": edges.rename(
+            columns={"length": "distance"}
+        ).assign(two_way=True),
+    }
+
+
+NETWORK_INPUTS = {
+    "nodes": Dependency("reimagina_street_network_nodes"),
+    "edges": Dependency("reimagina_street_network_edges"),
+}
+
+
+@metric(
+    name="reimagina_street_network_tables",
+    description=(
+        "Return a city's street network as built (reimagina_street_network), to "
+        "inspect it. Nothing is uploaded or written to Reimagina's database."
+    ),
+    inputs=NETWORK_INPUTS,
+    outputs={
+        "reimagina_street_network_tables_nodes": NODES_DECLARATION,
+        "reimagina_street_network_tables_edges": EDGES_DECLARATION,
+    },
+)
+def street_network_tables(
+    parameters: NetworkParameters, nodes: pd.DataFrame, edges: pd.DataFrame
+) -> dict[str, pd.DataFrame]:
+    """The dataset's tables."""
+    return {
+        "reimagina_street_network_tables_nodes": nodes,
+        "reimagina_street_network_tables_edges": edges,
+    }
+
+
+class NetworkWriteParameters(NetworkParameters):
+    """Project whose road_network_uri gets the new network."""
+
+    project_id: str = Field(pattern=UUID_PATTERN, description="Project UUID.")
+    dry_run: bool = Field(
+        default=False,
+        description=(
+            "Build the H5 and report, without uploading it or changing the project."
+        ),
+    )
+
+
+NETWORK_WRITE_DECLARATION = TableOutput(
+    columns=[
+        TableColumn(
+            name="nodes", type="integer", unit=Unit.COUNT, description="Network nodes."
+        ),
+        TableColumn(
+            name="edges", type="integer", unit=Unit.COUNT, description="Network edges."
+        ),
+        TableColumn(
+            name="road_network_uri",
+            type="string",
+            unit=None,
+            description="Where the H5 is (or would be, on a dry run).",
+        ),
+        TableColumn(
+            name="previous_road_network_uri",
+            type="string",
+            unit=None,
+            description="The project's road_network_uri before this run.",
+        ),
+        TableColumn(
+            name="dry_run",
+            type="boolean",
+            unit=None,
+            description="Whether nothing was uploaded or changed.",
+        ),
+    ]
+)
+
+
+@metric(
+    name="reimagina_street_network_write",
+    description=(
+        "Save a city's street network (reimagina_street_network) as the pandana "
+        "H5 the indicators read, upload it to the city's output_prefix in the "
+        "lake, named by its contents (an existing file is never overwritten), and "
+        "set the project's road_network_uri to it. Recompute indicators "
+        "afterwards with reimagina_scenario_write."
+    ),
+    inputs=NETWORK_INPUTS,
+    outputs={"reimagina_street_network_write": NETWORK_WRITE_DECLARATION},
+)
+def street_network_write(
+    parameters: NetworkWriteParameters,
+    nodes: pd.DataFrame,
+    edges: pd.DataFrame,
+    context: RunContext,
+) -> pd.DataFrame:
+    """Final node: one summary row."""
+    from reimagina_test_port.common import lake
+    from reimagina_test_port.ingestion import network
+
+    city = CITIES[parameters.city]
+    nodes = nodes.set_index("id")[["x", "y"]]
+    edges = edges.rename(columns={"distance": "length"})[["from", "to", "length"]]
+    name = network.h5_name(city.cve_code, nodes, edges)
+    path = network.save_h5(nodes, edges, context.temp_dir / name)
+    uri = f"{city.streets.output_prefix}/{name}"
+    if not parameters.dry_run:
+        try:
+            lake.upload(path, uri)
+        except FileExistsError:
+            context.logger.info("%s is already in the lake: the same network", uri)
+    try:
+        previous = network.set_road_network_uri(
+            parameters.project_id, uri, dry_run=parameters.dry_run
+        )
+    except network.ProjectNotFoundError as exc:
+        raise MetricInputError(
+            "reimagina_street_network_write", "parameters.project_id", str(exc)
+        ) from exc
+    context.logger.info("road_network_uri: %s -> %s", previous, uri)
+    return pd.DataFrame(
+        [
+            {
+                "nodes": len(nodes),
+                "edges": len(edges),
+                "road_network_uri": uri,
+                "previous_road_network_uri": previous,
+                "dry_run": parameters.dry_run,
+            }
+        ]
+    )

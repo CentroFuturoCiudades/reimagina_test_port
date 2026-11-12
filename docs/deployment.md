@@ -62,6 +62,11 @@ worker a managed identity with read access, or set `AZURE_CLIENT_ID`,
 `AZURE_TENANT_ID` and `AZURE_CLIENT_SECRET`. Optional: `ACCESS_CRS` forces the
 network's CRS; `ACCESSIBILITY_FASTPATH=0` uses the original, slower model code.
 
+`reimagina_street_network_write` also writes: it uploads the network's H5 under
+the city's `sources.streets.output_prefix`, so that identity needs write access
+there, and it fetches OpenStreetMap from the Overpass API
+(`overpass-api.de`), so the worker needs outbound internet.
+
 ```sh
 cd deploy
 cp .env.example .env   # set both API keys and REIMAGINA_POSTGRES_DSN

@@ -56,6 +56,31 @@ sources:
   denue:   # INEGI DENUE 05_2025 as published: amenities and establishments by the SCIAN crosswalk
     uri: az://raw/inegi/denue/02_baja_california/denue_02_0525_csv/conjunto_de_datos/denue_inegi_02_.csv
     params: {municipio: Mexicali, encoding: latin-1}
+  # Street network (ingestion/network.py, reimagina_street_network): OpenStreetMap
+  # over the blocks' convex hull plus margin_m, within the municipality
+  # (boundary_uri: keeps Calexico out), through Overpass. The filter is the pedestrian
+  # network of MX_Mexicali_2025_ULI.yml (`network.pedestrian`): it keeps private
+  # and gated streets, which osmnx's walk filter drops (Condesa and the gated
+  # communities), and retain_all keeps pieces apart from the rest. The H5 goes to
+  # output_prefix, named by its contents, and becomes the project's
+  # road_network_uri.
+  streets:
+    uri: osm://overpass
+    params:
+      custom_filter: >-
+        ["highway"]["area"!~"yes"]
+        ["highway"!~"motorway|proposed|construction|abandoned|platform|raceway|emergency_bay"]
+        ["service"!~"slipway|emergency_access|parking_aisle|driveway|drive-through"]
+        ["access"!~"no|forestry|emergency|delivery|agricultural|customers|military|permit|unknown"]
+      retain_all: true
+      margin_m: 500
+      boundary_uri: az://cleaned/inegi/marco_geostadistico/2024/areas_municipales.parquet/CVE_ENT=02/CVE_MUN=002
+      output_prefix: az://sandbox/projects/EXE/cleaned/vialidades
+      # Merging a file of streets (optional): snap to a network node, split a
+      # network edge, bridge a gap; from exe_reimagina's Condesa network.
+      snap_m: 15
+      split_max_m: 60
+      connector_max_m: 5
 
 params:
   lots:   # exe_reimagina cities/mexicali.toml values

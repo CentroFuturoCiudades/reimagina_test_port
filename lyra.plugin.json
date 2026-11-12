@@ -5180,6 +5180,404 @@
       },
       "role": "metric",
       "spatial_inputs": {}
+    },
+    {
+      "description": "Build a city's street network from scratch: OpenStreetMap's ways over the convex hull of the city's blocks plus a margin, within its municipality (sources.streets.boundary_uri), with the city's filter (Mexicali: the ULI's pedestrian network), in its metric CRS. With streets_uri, those streets replace the network inside their zone (zone_uri, or their convex hull) and are sewn to it, as exe_reimagina's Condesa network.",
+      "inputs": {},
+      "name": "reimagina_street_network",
+      "outputs": {
+        "reimagina_street_network_edges": {
+          "columns": [
+            {
+              "description": "Node ID.",
+              "name": "from",
+              "nullable": false,
+              "type": "integer",
+              "unit": null
+            },
+            {
+              "description": "Node ID.",
+              "name": "to",
+              "nullable": false,
+              "type": "integer",
+              "unit": null
+            },
+            {
+              "description": "Edge length (the network's first impedance).",
+              "name": "distance",
+              "nullable": false,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Whether edges are traversable both ways.",
+              "name": "two_way",
+              "nullable": false,
+              "type": "boolean",
+              "unit": null
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        },
+        "reimagina_street_network_nodes": {
+          "columns": [
+            {
+              "description": "Node ID.",
+              "name": "id",
+              "nullable": false,
+              "type": "integer",
+              "unit": null
+            },
+            {
+              "description": "X in the network's CRS.",
+              "name": "x",
+              "nullable": false,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Y in the network's CRS.",
+              "name": "y",
+              "nullable": false,
+              "type": "number",
+              "unit": null
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "NetworkParameters": {
+            "additionalProperties": false,
+            "description": "City whose street network is built, and an optional file of streets.",
+            "properties": {
+              "city": {
+                "const": "mexicali",
+                "description": "City preset (ingestion/cities/<city>.yaml).",
+                "title": "City",
+                "type": "string"
+              },
+              "streets_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional (Geo)Parquet or vector file of street lines (az:// or a path) that replaces the OpenStreetMap network inside its zone.",
+                "title": "Streets Uri"
+              },
+              "zone_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional polygon file of the zone streets_uri replaces; without it, the streets' convex hull.",
+                "title": "Zone Uri"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "title": "NetworkParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/NetworkParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_street_network_request",
+        "type": "object"
+      },
+      "role": "dataset",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "Return a city's street network as built (reimagina_street_network), to inspect it. Nothing is uploaded or written to Reimagina's database.",
+      "inputs": {
+        "edges": {
+          "arguments": {},
+          "output": "reimagina_street_network_edges"
+        },
+        "nodes": {
+          "arguments": {},
+          "output": "reimagina_street_network_nodes"
+        }
+      },
+      "name": "reimagina_street_network_tables",
+      "outputs": {
+        "reimagina_street_network_tables_edges": {
+          "columns": [
+            {
+              "description": "Node ID.",
+              "name": "from",
+              "nullable": false,
+              "type": "integer",
+              "unit": null
+            },
+            {
+              "description": "Node ID.",
+              "name": "to",
+              "nullable": false,
+              "type": "integer",
+              "unit": null
+            },
+            {
+              "description": "Edge length (the network's first impedance).",
+              "name": "distance",
+              "nullable": false,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Whether edges are traversable both ways.",
+              "name": "two_way",
+              "nullable": false,
+              "type": "boolean",
+              "unit": null
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        },
+        "reimagina_street_network_tables_nodes": {
+          "columns": [
+            {
+              "description": "Node ID.",
+              "name": "id",
+              "nullable": false,
+              "type": "integer",
+              "unit": null
+            },
+            {
+              "description": "X in the network's CRS.",
+              "name": "x",
+              "nullable": false,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Y in the network's CRS.",
+              "name": "y",
+              "nullable": false,
+              "type": "number",
+              "unit": null
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "NetworkParameters": {
+            "additionalProperties": false,
+            "description": "City whose street network is built, and an optional file of streets.",
+            "properties": {
+              "city": {
+                "const": "mexicali",
+                "description": "City preset (ingestion/cities/<city>.yaml).",
+                "title": "City",
+                "type": "string"
+              },
+              "streets_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional (Geo)Parquet or vector file of street lines (az:// or a path) that replaces the OpenStreetMap network inside its zone.",
+                "title": "Streets Uri"
+              },
+              "zone_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional polygon file of the zone streets_uri replaces; without it, the streets' convex hull.",
+                "title": "Zone Uri"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "title": "NetworkParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/NetworkParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_street_network_tables_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "Save a city's street network (reimagina_street_network) as the pandana H5 the indicators read, upload it to the city's output_prefix in the lake, named by its contents (an existing file is never overwritten), and set the project's road_network_uri to it. Recompute indicators afterwards with reimagina_scenario_write.",
+      "inputs": {
+        "edges": {
+          "arguments": {},
+          "output": "reimagina_street_network_edges"
+        },
+        "nodes": {
+          "arguments": {},
+          "output": "reimagina_street_network_nodes"
+        }
+      },
+      "name": "reimagina_street_network_write",
+      "outputs": {
+        "reimagina_street_network_write": {
+          "columns": [
+            {
+              "description": "Network nodes.",
+              "name": "nodes",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Network edges.",
+              "name": "edges",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Where the H5 is (or would be, on a dry run).",
+              "name": "road_network_uri",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "The project's road_network_uri before this run.",
+              "name": "previous_road_network_uri",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Whether nothing was uploaded or changed.",
+              "name": "dry_run",
+              "nullable": false,
+              "type": "boolean",
+              "unit": null
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "NetworkWriteParameters": {
+            "additionalProperties": false,
+            "description": "Project whose road_network_uri gets the new network.",
+            "properties": {
+              "city": {
+                "const": "mexicali",
+                "description": "City preset (ingestion/cities/<city>.yaml).",
+                "title": "City",
+                "type": "string"
+              },
+              "dry_run": {
+                "default": false,
+                "description": "Build the H5 and report, without uploading it or changing the project.",
+                "title": "Dry Run",
+                "type": "boolean"
+              },
+              "project_id": {
+                "description": "Project UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Project Id",
+                "type": "string"
+              },
+              "streets_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional (Geo)Parquet or vector file of street lines (az:// or a path) that replaces the OpenStreetMap network inside its zone.",
+                "title": "Streets Uri"
+              },
+              "zone_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional polygon file of the zone streets_uri replaces; without it, the streets' convex hull.",
+                "title": "Zone Uri"
+              }
+            },
+            "required": [
+              "city",
+              "project_id"
+            ],
+            "title": "NetworkWriteParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/NetworkWriteParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_street_network_write_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
     }
   ],
   "plugin": {

@@ -340,6 +340,40 @@ use's. A land use not listed, or a lot without land use, has no value. Mexicali:
 `single_family` and `multifamily` 100, `mixed_use` 80 (80 housing, 20 other),
 `commerce`, `office`, `industrial` and `amenity` 0.
 
+## Street network
+
+`ingestion/network.py` builds the H5 that `projects.road_network_uri` points at,
+from exe_reimagina's `src/data_prep/osm_network.py` (OSM to pandana) and
+`scripts/escenarios/condesa/build_network.py` (a redesign sewn into the city's
+network). The city YAML's `sources.streets` (`uri: osm://overpass`) sets it up.
+
+1. Always, from scratch: OpenStreetMap's ways over the convex hull of the city's
+   blocks plus `margin_m` (so the roads between the city and its outlying
+   localities are in, as in exe_reimagina's `roads.py`), within the municipality
+   (`boundary_uri`: OSM joins Calexico's streets to Mexicali's at the border
+   crossings, the ULI's issue #610), through Overpass (osmnx), with the city's `custom_filter`, two-way,
+   in the city's CRS (the blocks' UTM zone, which the indicators expect).
+   Mexicali's filter is the pedestrian network of `MX_Mexicali_2025_ULI.yml`
+   (`network.pedestrian`): unlike osmnx's `walk` it keeps private and gated
+   streets (Condesa, gated communities), and `retain_all` keeps pieces apart
+   from the rest. exe_reimagina's H5 was the `drive` network.
+2. Optionally, `streets_uri`: a (Geo)Parquet or vector file of street lines that
+   replaces the network inside its zone (`zone_uri`, or the lines' convex hull).
+   Edges whose midpoint is in the zone go (an avenue that only grazes it stays);
+   the lines are noded where they cross; an end within `snap_m` (15 m) of a
+   network node is that node, a loose end within `split_max_m` (60 m) of an edge
+   splits it where it meets it, and a piece still apart is bridged by its
+   shortest gap up to `connector_max_m` (5 m). Pieces left apart are logged.
+
+`reimagina_street_network(city, streets_uri?, zone_uri?)` returns nodes and edges
+in `reimagina_road_network`'s tables; `reimagina_street_network_tables` shows them.
+`reimagina_street_network_write(..., project_id, dry_run)` saves them as pandana's
+H5 (`length` in metres, two-way), uploads it to `output_prefix` as
+`vialidades_<cve>_<hash>.h5` (named by its contents; an existing file is never
+overwritten) and sets the project's `road_network_uri`, returning the previous
+one. A dry run builds the H5 without uploading it or changing the project. Then
+`reimagina_scenario_write` recomputes accessibility over the new network.
+
 ## Baseline writer
 
 `reimagina_baseline_write(city, project_id, scenario_id)` fills an existing
@@ -405,6 +439,6 @@ is generated, never edited manually. Regenerate it after declaration changes.
 Lyra dependencies come from GitHub and their resolved revisions are in `uv.lock`.
 The SDK must provide `LocalRunner`. `psycopg` matches the version in the Lyra
 image. Accessibility adds `pandana`, `tables`, `networkx`, `adlfs` and
-`azure-identity`, and the baseline adds `rasterio`; both are imported only when
-those nodes run. This project has no `lyra-app` dependency and does not import server
+`azure-identity`, the baseline adds `rasterio` and the street network `osmnx` and
+`scipy`; they are imported only when those nodes run. This project has no `lyra-app` dependency and does not import server
 internals. Deployment is described in [deployment](deployment.md).
