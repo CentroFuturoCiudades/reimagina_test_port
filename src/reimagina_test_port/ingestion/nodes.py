@@ -42,9 +42,27 @@ CityName = Literal[tuple(CITIES)]  # ty: ignore[invalid-type-form]
 
 
 class BaselineParameters(MetricParameters):
-    """City whose baseline is built from the data lake."""
+    """City whose baseline is built from the data lake, and an optional redesign
+    of one of its zones."""
 
     city: CityName = Field(description="City preset (ingestion/cities/<city>.yaml).")
+    overlay_uri: str | None = Field(
+        default=None,
+        description=(
+            "Optional folder (az:// or a path) of a redesign's elements, such as a "
+            "master plan: blocks, lots, amenities, establishments and road_segments "
+            "GeoParquet files. They replace the city's elements and streets inside "
+            "zone_uri (ingestion/overlay.py)."
+        ),
+    )
+    zone_uri: str | None = Field(
+        default=None,
+        description=(
+            "Optional polygon file of the zone that overlay_uri, or streets_uri, "
+            "replaces. overlay_uri needs it; for streets_uri alone, the streets' "
+            "convex hull by default."
+        ),
+    )
 
 
 def point_declaration(attributes: dict[str, str]) -> TableOutput:
@@ -179,7 +197,9 @@ BASELINE_LOT_ATTRIBUTES = [
         "Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE "
         "record is an amenity or an establishment by the SCIAN crosswalk; with "
         "the amenities file's, they go to the nearest lot within 50 m as a point "
-        "at its center, and each lot's land use follows from what it holds."
+        "at its center, and each lot's land use follows from what it holds. "
+        "With overlay_uri, a redesign's elements (a master plan) replace the "
+        "city's inside zone_uri."
     ),
     outputs={
         "reimagina_baseline_lots": baseline_declaration(blocks=False),
@@ -198,8 +218,27 @@ def baseline_dataset(
     def progress(stage: str, current: int, total: int) -> None:
         context.report_progress(stage=stage, current=current, total=total)
 
-    result = baseline.build(CITIES[parameters.city], context.temp_dir, progress)
+    city = CITIES[parameters.city]
+    result = baseline.build(city, context.temp_dir, progress)
     context.logger.info("Baseline: %s", result["report"])
+    if parameters.overlay_uri:
+        from reimagina_test_port.ingestion import overlay
+
+        if not parameters.zone_uri:
+            raise MetricInputError(
+                "reimagina_baseline",
+                "parameters.zone_uri",
+                "overlay_uri needs zone_uri.",
+            )
+        folder = context.temp_dir / "overlay"
+        tables, report = overlay.replace(
+            {name: result[name] for name in overlay.FILES},
+            overlay.read(parameters.overlay_uri, folder),
+            overlay.read_zone(parameters.zone_uri, folder, city.target_crs),
+            city.target_crs,
+        )
+        result |= tables
+        context.logger.info("Overlay: %s", report)
     return {
         "reimagina_baseline_lots": result["lots"],
         "reimagina_baseline_blocks": result["blocks"],
@@ -429,13 +468,6 @@ class NetworkParameters(BaselineParameters):
             "that replaces the OpenStreetMap network inside its zone."
         ),
     )
-    zone_uri: str | None = Field(
-        default=None,
-        description=(
-            "Optional polygon file of the zone streets_uri replaces; without it, "
-            "the streets' convex hull."
-        ),
-    )
     refresh_osm: bool = Field(
         default=False,
         description=(
@@ -463,7 +495,8 @@ def _network_input_error(field: str, message: str) -> MetricInputError:
         "municipality (sources.streets.boundary_uri), with the city's filter (Mexicali: the "
         "ULI's pedestrian network), in its metric CRS. With streets_uri, those "
         "streets replace the network inside their zone (zone_uri, or their "
-        "convex hull) and are sewn to it, as exe_reimagina's Condesa network. "
+        "convex hull) and are sewn to it, as exe_reimagina's Condesa network; "
+        "with overlay_uri, its road_segments do, inside zone_uri. "
         "The OpenStreetMap download is saved in the lake beside the H5s and read "
         "from there by later runs (refresh_osm downloads it again)."
     ),
@@ -477,7 +510,7 @@ def street_network(
 ) -> dict[str, pd.DataFrame]:
     """Nodes and edges in the tables reimagina_road_network returns."""
     from reimagina_test_port.common import lake
-    from reimagina_test_port.ingestion import network
+    from reimagina_test_port.ingestion import network, overlay
 
     city = CITIES[parameters.city]
     if city.streets is None:
@@ -501,10 +534,16 @@ def street_network(
             workdir=context.temp_dir / "osm",
             refresh=parameters.refresh_osm,
         )
-    if parameters.streets_uri:
+    # A redesign brings its own streets, unless streets_uri names others.
+    streets_uri = parameters.streets_uri or (
+        overlay.file_uri(parameters.overlay_uri, overlay.STREETS_FILE)
+        if parameters.overlay_uri
+        else None
+    )
+    if streets_uri:
         folder = context.temp_dir / "streets"
         lines = network.read_geometries(
-            lake.download(parameters.streets_uri, folder),
+            lake.download(streets_uri, folder),
             city.target_crs,
             ("LineString", "MultiLineString"),
         )

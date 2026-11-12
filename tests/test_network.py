@@ -321,6 +321,38 @@ def offline(monkeypatch, tmp_path):
     return city
 
 
+def test_a_redesign_brings_its_streets(offline, tmp_path):
+    # The overlay folder's road_segments replace the network inside zone_uri, as
+    # streets_uri would: the same cross as above, sewn into the grid.
+    plan = tmp_path / "plan"
+    plan.mkdir()
+    gpd.GeoDataFrame(
+        {"access": ["public", "public"]},
+        geometry=[
+            LineString([(200, 100), (200, 300)]),
+            LineString([(100, 200), (300, 200)]),
+        ],
+        crs=CRS,
+    ).to_crs(4326).to_parquet(plan / "road_segments.parquet")
+    gpd.GeoDataFrame(geometry=[box(150, 150, 250, 250)], crs=CRS).to_file(
+        tmp_path / "zone.fgb"
+    )
+    runner = LocalRunner.from_definitions(
+        {"reimagina-test-port": plugin.create_plugin()}
+    )
+    tables = runner.run(
+        "reimagina_street_network_tables",
+        {
+            "parameters": {
+                "city": "mexicali",
+                "overlay_uri": str(plan),
+                "zone_uri": str(tmp_path / "zone.fgb"),
+            }
+        },
+    )
+    assert len(tables["reimagina_street_network_tables_nodes"]) == 25
+
+
 def test_street_network_dataset(offline, tmp_path):
     streets = tmp_path / "streets.parquet"
     gpd.GeoDataFrame(

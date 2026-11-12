@@ -483,7 +483,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's baseline elements from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights, Meta's canopy height (each lot's tree_coverage), the city's amenity layers (normalized into the amenities file) and the DENUE. Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE record is an amenity or an establishment by the SCIAN crosswalk; with the amenities file's, they go to the nearest lot within 50 m as a point at its center, and each lot's land use follows from what it holds.",
+      "description": "Build a city's baseline elements from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights, Meta's canopy height (each lot's tree_coverage), the city's amenity layers (normalized into the amenities file) and the DENUE. Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE record is an amenity or an establishment by the SCIAN crosswalk; with the amenities file's, they go to the nearest lot within 50 m as a point at its center, and each lot's land use follows from what it holds. With overlay_uri, a redesign's elements (a master plan) replace the city's inside zone_uri.",
       "inputs": {},
       "name": "reimagina_baseline",
       "outputs": {
@@ -775,13 +775,39 @@
         "$defs": {
           "BaselineParameters": {
             "additionalProperties": false,
-            "description": "City whose baseline is built from the data lake.",
+            "description": "City whose baseline is built from the data lake, and an optional redesign\nof one of its zones.",
             "properties": {
               "city": {
                 "const": "mexicali",
                 "description": "City preset (ingestion/cities/<city>.yaml).",
                 "title": "City",
                 "type": "string"
+              },
+              "overlay_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional folder (az:// or a path) of a redesign's elements, such as a master plan: blocks, lots, amenities, establishments and road_segments GeoParquet files. They replace the city's elements and streets inside zone_uri (ingestion/overlay.py).",
+                "title": "Overlay Uri"
+              },
+              "zone_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional polygon file of the zone that overlay_uri, or streets_uri, replaces. overlay_uri needs it; for streets_uri alone, the streets' convex hull by default.",
+                "title": "Zone Uri"
               }
             },
             "required": [
@@ -1176,13 +1202,39 @@
         "$defs": {
           "BaselineParameters": {
             "additionalProperties": false,
-            "description": "City whose baseline is built from the data lake.",
+            "description": "City whose baseline is built from the data lake, and an optional redesign\nof one of its zones.",
             "properties": {
               "city": {
                 "const": "mexicali",
                 "description": "City preset (ingestion/cities/<city>.yaml).",
                 "title": "City",
                 "type": "string"
+              },
+              "overlay_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional folder (az:// or a path) of a redesign's elements, such as a master plan: blocks, lots, amenities, establishments and road_segments GeoParquet files. They replace the city's elements and streets inside zone_uri (ingestion/overlay.py).",
+                "title": "Overlay Uri"
+              },
+              "zone_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional polygon file of the zone that overlay_uri, or streets_uri, replaces. overlay_uri needs it; for streets_uri alone, the streets' convex hull by default.",
+                "title": "Zone Uri"
               }
             },
             "required": [
@@ -1282,13 +1334,39 @@
         "$defs": {
           "BaselineParameters": {
             "additionalProperties": false,
-            "description": "City whose baseline is built from the data lake.",
+            "description": "City whose baseline is built from the data lake, and an optional redesign\nof one of its zones.",
             "properties": {
               "city": {
                 "const": "mexicali",
                 "description": "City preset (ingestion/cities/<city>.yaml).",
                 "title": "City",
                 "type": "string"
+              },
+              "overlay_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional folder (az:// or a path) of a redesign's elements, such as a master plan: blocks, lots, amenities, establishments and road_segments GeoParquet files. They replace the city's elements and streets inside zone_uri (ingestion/overlay.py).",
+                "title": "Overlay Uri"
+              },
+              "zone_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional polygon file of the zone that overlay_uri, or streets_uri, replaces. overlay_uri needs it; for streets_uri alone, the streets' convex hull by default.",
+                "title": "Zone Uri"
               }
             },
             "required": [
@@ -1449,6 +1527,19 @@
                 "title": "Dry Run",
                 "type": "boolean"
               },
+              "overlay_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional folder (az:// or a path) of a redesign's elements, such as a master plan: blocks, lots, amenities, establishments and road_segments GeoParquet files. They replace the city's elements and streets inside zone_uri (ingestion/overlay.py).",
+                "title": "Overlay Uri"
+              },
               "project_id": {
                 "description": "Project UUID.",
                 "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
@@ -1460,6 +1551,19 @@
                 "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                 "title": "Scenario Id",
                 "type": "string"
+              },
+              "zone_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional polygon file of the zone that overlay_uri, or streets_uri, replaces. overlay_uri needs it; for streets_uri alone, the streets' convex hull by default.",
+                "title": "Zone Uri"
               }
             },
             "required": [
@@ -5530,7 +5634,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's street network from scratch: OpenStreetMap's ways over the convex hull of the city's blocks plus a margin, within its municipality (sources.streets.boundary_uri), with the city's filter (Mexicali: the ULI's pedestrian network), in its metric CRS. With streets_uri, those streets replace the network inside their zone (zone_uri, or their convex hull) and are sewn to it, as exe_reimagina's Condesa network. The OpenStreetMap download is saved in the lake beside the H5s and read from there by later runs (refresh_osm downloads it again).",
+      "description": "Build a city's street network from scratch: OpenStreetMap's ways over the convex hull of the city's blocks plus a margin, within its municipality (sources.streets.boundary_uri), with the city's filter (Mexicali: the ULI's pedestrian network), in its metric CRS. With streets_uri, those streets replace the network inside their zone (zone_uri, or their convex hull) and are sewn to it, as exe_reimagina's Condesa network; with overlay_uri, its road_segments do, inside zone_uri. The OpenStreetMap download is saved in the lake beside the H5s and read from there by later runs (refresh_osm downloads it again).",
       "inputs": {},
       "name": "reimagina_street_network",
       "outputs": {
@@ -5608,6 +5712,19 @@
                 "title": "City",
                 "type": "string"
               },
+              "overlay_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional folder (az:// or a path) of a redesign's elements, such as a master plan: blocks, lots, amenities, establishments and road_segments GeoParquet files. They replace the city's elements and streets inside zone_uri (ingestion/overlay.py).",
+                "title": "Overlay Uri"
+              },
               "refresh_osm": {
                 "default": false,
                 "description": "Download OpenStreetMap again instead of reading the copy saved in the lake by an earlier run, and replace that copy.",
@@ -5637,7 +5754,7 @@
                   }
                 ],
                 "default": null,
-                "description": "Optional polygon file of the zone streets_uri replaces; without it, the streets' convex hull.",
+                "description": "Optional polygon file of the zone that overlay_uri, or streets_uri, replaces. overlay_uri needs it; for streets_uri alone, the streets' convex hull by default.",
                 "title": "Zone Uri"
               }
             },
@@ -5752,6 +5869,19 @@
                 "title": "City",
                 "type": "string"
               },
+              "overlay_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional folder (az:// or a path) of a redesign's elements, such as a master plan: blocks, lots, amenities, establishments and road_segments GeoParquet files. They replace the city's elements and streets inside zone_uri (ingestion/overlay.py).",
+                "title": "Overlay Uri"
+              },
               "refresh_osm": {
                 "default": false,
                 "description": "Download OpenStreetMap again instead of reading the copy saved in the lake by an earlier run, and replace that copy.",
@@ -5781,7 +5911,7 @@
                   }
                 ],
                 "default": null,
-                "description": "Optional polygon file of the zone streets_uri replaces; without it, the streets' convex hull.",
+                "description": "Optional polygon file of the zone that overlay_uri, or streets_uri, replaces. overlay_uri needs it; for streets_uri alone, the streets' convex hull by default.",
                 "title": "Zone Uri"
               }
             },
@@ -5882,6 +6012,19 @@
                 "title": "Dry Run",
                 "type": "boolean"
               },
+              "overlay_uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional folder (az:// or a path) of a redesign's elements, such as a master plan: blocks, lots, amenities, establishments and road_segments GeoParquet files. They replace the city's elements and streets inside zone_uri (ingestion/overlay.py).",
+                "title": "Overlay Uri"
+              },
               "project_id": {
                 "description": "Project UUID.",
                 "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
@@ -5917,7 +6060,7 @@
                   }
                 ],
                 "default": null,
-                "description": "Optional polygon file of the zone streets_uri replaces; without it, the streets' convex hull.",
+                "description": "Optional polygon file of the zone that overlay_uri, or streets_uri, replaces. overlay_uri needs it; for streets_uri alone, the streets' convex hull by default.",
                 "title": "Zone Uri"
               }
             },
