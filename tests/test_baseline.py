@@ -24,6 +24,7 @@ from reimagina_test_port.ingestion import (
     network,
     prep,
     raw_amenities,
+    street_fit,
     streets,
 )
 from reimagina_test_port.ingestion.cities import (
@@ -575,9 +576,15 @@ def test_streets_take_the_network_shapes(city, tmp_path):
     )
     bare = replace(city, street_lighting=None, bike_lanes=None)
     table = streets.build(bare, nodes, shaped, tmp_path).set_index("source_record_ref")
-    lines = table.geometry.to_crs(CRS)
-    assert lines["3-4"].equals_exact(bend, 0.01)
-    assert lines["1-2"].equals_exact(LineString([(0, -5), (40, -5)]), 0.01)
+    shapes = table.geometry.to_crs(CRS)
+    # A strip of the class's default width (residential: 10 m) around each line.
+    width = 2 * street_fit.DEFAULTS["default_half_width_m"]["residential"]
+    assert shapes["3-4"].buffer(0.2).contains(bend.interpolate(0.5, normalized=True))
+    assert street_fit.strip_width([shapes["3-4"]])[0] == pytest.approx(width, rel=0.1)
+    plain = LineString([(0, -5), (40, -5)]).buffer(width / 2, cap_style="flat")
+    # Less what its junction with the next street takes.
+    assert shapes["1-2"].difference(plain).area < 1
+    assert shapes["1-2"].area > 0.7 * plain.area
 
 
 def test_streets_without_lighting_or_lanes(city, tmp_path):
@@ -679,8 +686,10 @@ def test_refined_streets(refined_city, tmp_path):
     table = table.set_index("source_record_ref", drop=False)
     row = table.loc["1-2"]
     assert row.id == str(uuid.uuid5(NAMESPACE, "mexicali:right_of_way:1-2"))
-    axis = gpd.GeoSeries([row.geometry], crs=4326).to_crs(CRS).iloc[0]
-    assert axis.length == pytest.approx(120, abs=1)
+    shape = gpd.GeoSeries([row.geometry], crs=4326).to_crs(CRS).iloc[0]
+    # A polygon, dead end to dead end: as long as its axis.
+    assert shape.geom_type == "Polygon" and shape.is_valid
+    assert street_fit.strip_length([shape])[0] == pytest.approx(120, abs=1)
     # Bands: a measured width's, one value per band, summing 100.
     for use, share in zip(table["bands.use"], table["bands.share"], strict=True):
         assert len(json.loads(use)) == len(json.loads(share))
@@ -692,6 +701,18 @@ def test_refined_streets(refined_city, tmp_path):
         "id", "parent_id", "source_record_ref", "bands.use", "bands.share",
         "streetlights", "geometry",
     ]  # fmt: skip
+
+
+def test_streets_are_polygons_with_their_attributes(city, refined_city, tmp_path):
+    for preset in (city, refined_city):
+        table = streets.build(preset, *refined_network(), tmp_path / preset.key)
+        assert set(table.geom_type) == {"Polygon"}
+        assert table.geometry.is_valid.all() and not table.geometry.is_empty.any()
+        assert list(table.columns) == [
+            "id", "parent_id", "source_record_ref", "bands.use", "bands.share",
+            "streetlights", "geometry",
+        ]  # fmt: skip
+        assert set(table.attrs["footprints"]) == {"inside", "simplified"}
 
 
 def test_refined_keeps_pedestrian(refined_city, tmp_path):
@@ -712,7 +733,11 @@ def test_unrefined_streets_unchanged(city, tmp_path):
     )
     assert sorted(plain.source_record_ref) == ["1-2", "2-3", "5-6", "7-8"]
     assert "fit" in plain.attrs and plain.attrs["fit"]["fitted"] == 0
-    pd.testing.assert_frame_equal(plain, untagged)
+    # Only the polygons' widths follow the class (untagged: residential).
+    pd.testing.assert_frame_equal(
+        plain.drop(columns="geometry"), untagged.drop(columns="geometry")
+    )
+    assert set(plain.geom_type) == {"Polygon"} == set(untagged.geom_type)
 
 
 def bike_lanes_of(rows: list[tuple], path: Path) -> BikeLanes:

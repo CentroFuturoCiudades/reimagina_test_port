@@ -7,7 +7,8 @@ What differs from the lab:
 
 - ``fit`` returns one line per right of way (its axis, without the carrying-on into
   the junctions) with its bands as attributes, not polygons of sidewalks, lanes,
-  medians and junctions.
+  medians and junctions; ``footprints`` makes each a polygon, lot front to lot
+  front, the junctions (owned by none) cut out.
 - No internal roads (``internal_classes``, street parcels): an OSM ``drive`` network
   is public streets.
 - No topology of its own: the nodes are OSM's, so bridges are not crossings.
@@ -1092,6 +1093,22 @@ def smooth_widths(
 # ------------------------------------------------------------------------------- fit
 
 
+def half_width(kind: str, p: dict) -> float:
+    """A class's default half width (``default_half_width_m``; 4 m if unknown)."""
+    return p["default_half_width_m"].get(kind, 4)
+
+
+def widest_at_nodes(roads: gpd.GeoDataFrame, p: dict) -> dict:
+    """Node → half width of the widest street meeting there, by class."""
+    widest: dict = defaultdict(float)
+    for a, b, kind in zip(
+        roads["from_node"], roads["to_node"], roads["road_type"], strict=True
+    ):
+        for node in (a, b):
+            widest[node] = max(widest[node], half_width(kind, p))
+    return widest
+
+
 def empty(crs: object = None) -> gpd.GeoDataFrame:
     return gpd.GeoDataFrame(columns=COLUMNS, geometry=[], crs=crs)
 
@@ -1112,15 +1129,9 @@ def fit(
     lot_tree = shapely.STRtree(lot_shapes)
 
     def half(kind: str) -> float:
-        return p["default_half_width_m"].get(kind, 4)
+        return half_width(kind, p)
 
-    # Node → half width of the widest street meeting there, by class.
-    widest_at: dict = defaultdict(float)
-    for a, b, kind in zip(
-        roads["from_node"], roads["to_node"], roads["road_type"], strict=True
-    ):
-        for node in (a, b):
-            widest_at[node] = max(widest_at[node], half(kind))
+    widest_at = widest_at_nodes(roads, p)
     rows = []
     used: Counter = Counter()
     road_geoms = roads.geometry.to_numpy()
@@ -1201,3 +1212,144 @@ def check(out: gpd.GeoDataFrame) -> None:
         raise ValueError("right of way keys repeat")
     if (out.geometry.is_empty | out.geometry.isna()).any():
         raise ValueError("a right of way has no axis")
+
+
+# ------------------------------------------------------------------------ footprints
+
+
+def strip_length(geoms: Any) -> np.ndarray:
+    """The length ``L`` of strips (polygons) from their area ``A`` and perimeter
+    ``P``, taking ``P ≈ 2L + 2W`` and ``A ≈ L·W``: ``L = P/4 + √(P²/16 − A)``. It
+    holds for curved strips too. A geometry of several pieces: the sum of theirs;
+    a line's, its length."""
+    geoms = np.asarray(geoms, dtype=object)
+    parts, of = shapely.get_parts(geoms, return_index=True)
+    area, perimeter = shapely.area(parts), shapely.length(parts)
+    root = np.sqrt(np.clip(perimeter**2 / 16 - area, 0, None))
+    polygon = shapely.get_type_id(parts) == 3
+    length = np.where(polygon, perimeter / 4 + root, perimeter)
+    return np.bincount(of, weights=length, minlength=len(geoms))
+
+
+def strip_width(geoms: Any) -> np.ndarray:
+    """The width ``W = A / L`` of strips (``strip_length``); 0 for lines."""
+    length = strip_length(geoms)
+    area = shapely.area(np.asarray(geoms, dtype=object))
+    return np.divide(area, length, out=np.zeros_like(length), where=length > 0)
+
+
+def ribbon(axis: LineString, width: float) -> tuple[shapely.Geometry, bool]:
+    """``axis`` ± ``width / 2``, flat at its ends, and whether the axis had to be
+    simplified first (it crosses itself, or GEOS couldn't buffer it)."""
+    simplified = not axis.is_simple
+    line = shapely.simplify(axis, 0.5) if simplified else axis
+    try:
+        return line.buffer(width / 2, cap_style="flat"), simplified
+    except shapely.errors.GEOSException:
+        line = shapely.simplify(axis, 0.5)
+        return line.buffer(width / 2, cap_style="flat"), True
+
+
+def areas_of(g: shapely.Geometry) -> shapely.Geometry:
+    """The polygons of ``g`` (a collection's lines and points dropped)."""
+    parts = [
+        part
+        for part in shapely.get_parts(shapely.make_valid(g))
+        if part.geom_type in ("Polygon", "MultiPolygon") and not part.is_empty
+    ]
+    return shapely.union_all(parts) if parts else Polygon()
+
+
+def largest(g: shapely.Geometry, tolerance: float = 0.1) -> Polygon:
+    """The largest polygon of ``g``, valid and simplified to ``tolerance``."""
+    parts = [p for p in shapely.get_parts(areas_of(g)) if p.geom_type == "Polygon"]
+    if not parts:
+        return Polygon()
+    best = max(parts, key=lambda part: part.area)
+    simple = shapely.simplify(best, tolerance)
+    return simple if simple.is_valid and not simple.is_empty else best
+
+
+def cut_junctions(
+    axes: list[LineString],
+    widths: list[float],
+    nodes: list[set],
+    reach: list[float],
+    min_kept_share: float = 0.25,
+) -> dict:
+    """Rights of way as polygons, lot front to lot front, the junctions cut out.
+
+    Each axis is carried ``reach`` metres into its junctions and made a strip of its
+    width (``ribbon``); a junction is where strips of rights of way sharing a node
+    overlap, and no right of way owns it. A right of way keeps the largest piece of
+    its strip, not carried on (so a dead end stops where its axis does), outside the
+    junctions; one the cut leaves less than ``min_kept_share`` of it (wholly inside
+    a junction, or a sliver: ``inside``) keeps its strip and overlaps them.
+
+    Returns ``shapes`` (one Polygon per axis), ``inside`` and ``simplified`` (row
+    positions) and ``junctions`` (their union)."""
+    strips, simplified = [], set()
+    for k, (axis, width, by) in enumerate(zip(axes, widths, reach, strict=True)):
+        shape, was_simplified = ribbon(extend(axis, by) if by else axis, width)
+        strips.append(shape)
+        if was_simplified:
+            simplified.add(k)
+    pieces = []
+    tree = shapely.STRtree(strips)
+    for i, j in zip(*tree.query(strips, predicate="intersects"), strict=True):
+        if j <= i or not nodes[i] & nodes[j]:
+            continue
+        overlap = areas_of(strips[i].intersection(strips[j]))
+        if overlap.area > 1.0:
+            pieces.append(overlap)
+    junctions = shapely.union_all(pieces) if pieces else Polygon()
+    shapes, inside = [], set()
+    for k in range(len(strips)):
+        plain = largest(ribbon(axes[k], widths[k])[0])
+        cut = largest(plain.difference(junctions)) if pieces else plain
+        if cut.area < min_kept_share * plain.area:
+            inside.add(k)
+            cut = plain
+        shapes.append(cut)
+    return {
+        "shapes": shapes,
+        "inside": sorted(inside),
+        "simplified": sorted(simplified),
+        "junctions": junctions,
+    }
+
+
+def footprints(
+    fitted: gpd.GeoDataFrame, roads: gpd.GeoDataFrame, params: dict | None = None
+) -> gpd.GeoSeries:
+    """``fit``'s rights of way (its output, from ``roads``) as polygons, indexed as
+    ``fitted``: each axis ± ``width_m / 2`` (the axis is centred between the lot
+    fronts, and ``smooth_widths`` may change ``width_m`` without its sides), carried
+    into its junctions by the half width of the widest street there, as ``fit`` does,
+    with the junctions cut out (``cut_junctions``). ``attrs`` holds the positions of
+    those ``inside`` a junction and of the ``simplified`` axes, and the
+    ``junctions``."""
+    p = params_of(params or {})
+    if fitted.empty:
+        return gpd.GeoSeries([], index=fitted.index, crs=fitted.crs)
+    widest = widest_at_nodes(roads, p)
+    nodes_of = {
+        key: {a, b}
+        for key, a, b in zip(
+            roads["road_key"], roads["from_node"], roads["to_node"], strict=True
+        )
+    }
+    nodes = [
+        set().union(*(nodes_of.get(k, set()) for k in keys))
+        for keys in fitted["road_keys"]
+    ]
+    reach = [max((widest[n] for n in ns), default=0.0) for ns in nodes]
+    out = cut_junctions(
+        list(fitted.geometry),
+        fitted["width_m"].astype(float).tolist(),
+        nodes,
+        reach,
+    )
+    shapes = gpd.GeoSeries(out.pop("shapes"), index=fitted.index, crs=fitted.crs)
+    shapes.attrs.update(out)
+    return shapes

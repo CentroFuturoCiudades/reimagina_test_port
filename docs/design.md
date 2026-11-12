@@ -150,8 +150,10 @@ never 0.
   (one use is 0). Inputs: the source lots only; the scenario reads
   `housing.floor_share` and `housing.unit_size_m2` with the other lot attributes.
 - `reimagina_streets`: what the streets within 500 m of the block are like, as
-  shares (0-1) of their length. Streets are `right_of_way` elements (lines) with
-  their make-up as attributes (urban_fabric.md). `bike_lane_coverage` and
+  shares (0-1) of their length. Streets are `right_of_way` elements (polygons;
+  an older baseline's, lines) with their make-up as attributes (urban_fabric.md).
+  A polygon's length within 500 m is `street_fit.strip_length` of its part there
+  (see *Rights of way*), a line's its length. `bike_lane_coverage` and
   `protected_bike_lane_coverage`: streets whose bands (`bands.use`) have a
   `shared_lanes` or `protected_bike_lane`, or only a protected one; a lane is part
   of its street, so the notebook's 100 m tolerance between lanes and centrelines
@@ -442,8 +444,8 @@ one. A dry run builds the H5 without uploading it or changing the project. Then
 
 `reimagina_baseline_streets` (`ingestion/streets.py`) turns that network into the
 baseline's `right_of_way` elements (urban_fabric.md, *Right of way*): one per
-street, a pair of nodes whatever the direction of its edges, with the edge's
-shape (the network's `geometry`), keyed `<lower id>-<higher id>` (`source_record_ref`), id
+street, a pair of nodes whatever the direction of its edges, a polygon around
+the edge's shape (the network's `geometry`; see *Polygons* below), keyed `<lower id>-<higher id>` (`source_record_ref`), id
 `uuid5(NS, "<city>:right_of_way:<key>")`, no parent. The network is the ULI's
 pedestrian one, so footways and paths are streets too. Two optional sources of
 the city YAML fill its attributes; another city changes the files and columns:
@@ -487,6 +489,29 @@ name are used and not written. `refine` lives in `reimagina_baseline_streets`, s
 changes neither the network nor its H5. Turning it on changes the vehicular keys:
 the writer replaces those elements. Where there are no lots, a side takes its
 class's default width (`measured_sides < 2`).
+
+**Polygons.** Every `right_of_way` is written as a polygon, lot front to lot front
+(EPSG:4326), with the same three attributes; its width is its shape. A fitted
+street's is its axis ± `width_m / 2` (`street_fit.footprints`; the axis is
+already centred, and `width_m` may have been smoothed, so `width_left_m` /
+`width_right_m` aren't used); any other street's (pedestrian, `refine: false`) a
+strip of its class's default width (`2 × default_half_width_m`), cut where it
+overlaps a fitted one. Junctions belong to no street: each axis is carried into
+its junctions by the half width of the widest street there, the junction is where
+the strips of streets sharing a node overlap, and it's cut out of each; a street
+keeps the largest piece, valid and simplified to 10 cm (a dead end stops at its
+axis's end). One left with less than a quarter of its strip (wholly inside a
+junction, or a sliver) keeps its strip and overlaps the junction; an axis that
+crosses itself is simplified first (`table.attrs["footprints"]` counts both). The
+axes and `width_m` stay in memory for the lighting and bike lane matches.
+
+A strip's length `L` and width `W` follow from its area `A` and perimeter `P`
+(`P ≈ 2L + 2W`, `A ≈ L·W`, curved too): `L = P/4 + √(P²/16 − A)`, `W = A / L`
+(`street_fit.strip_length`, `strip_width`; a band's metres are `W × share / 100`).
+The streets indicator weighs by `L`. On the Condesa test areas `W` is within ±5 %
+of the fitted `width_m` on only a quarter to a third of the straight stretches
+(junction cuts at an angle and short stretches): read it as an estimate. A map
+drawn from the base shows the junctions empty.
 
 ## Baseline writer
 

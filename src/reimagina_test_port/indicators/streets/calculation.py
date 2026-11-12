@@ -3,8 +3,10 @@
 ``calculate_cycling_street_proportion``), street lighting coverage and street
 connectivity.
 
-Streets are ``right_of_way`` elements (lines), with their make-up as attributes
-(urban_fabric.md):
+Streets are ``right_of_way`` elements (polygons, lot front to lot front; older
+baselines, lines), with their make-up as attributes (urban_fabric.md). A street's
+length within a block's neighbourhood is ``street_fit.strip_length`` of its polygon
+clipped to it (a line's, its length):
 
 - ``bike_lane_coverage``: share of street length with a bike lane band
   (``bands.use`` has ``shared_lanes`` or ``protected_bike_lane``);
@@ -33,6 +35,8 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import shapely
+
+from reimagina_test_port.ingestion.street_fit import strip_length
 
 if TYPE_CHECKING:
     import pandana as pdna
@@ -65,10 +69,12 @@ def coverage_by_block(
     blocks: gpd.GeoDataFrame, streets: gpd.GeoDataFrame, crs: str
 ) -> pd.DataFrame:
     """``COVERAGE_KEYS`` per block, in order; lengths in ``crs``."""
-    lines = streets.geometry.to_crs(crs).to_numpy()
+    shapes = streets.geometry.to_crs(crs).to_numpy()
+    # Reprojected polygons may come out slightly invalid.
+    shapes = np.where(shapely.is_valid(shapes), shapes, shapely.make_valid(shapes))
     areas = shapely.buffer(blocks.geometry.to_crs(crs).to_numpy(), NEIGHBOURHOOD_M)
-    area, street = shapely.STRtree(lines).query(areas, predicate="intersects")
-    length = shapely.length(shapely.intersection(lines[street], areas[area]))
+    area, street = shapely.STRtree(shapes).query(areas, predicate="intersects")
+    length = strip_length(shapely.intersection(shapes[street], areas[area]))
     lit = pd.to_numeric(streets["streetlights"]).to_numpy("float64")[street] / 100
     frame = pd.DataFrame(
         {

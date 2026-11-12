@@ -2,8 +2,9 @@
 over its street network (``reimagina_street_network``, ``ingestion/network.py``).
 
 - One element per street of the network: a pair of nodes, whatever the direction,
-  keyed ``<lower id>-<higher id>``, with the edge's shape (OSM's way, or the
-  straight line between its nodes where the network has none).
+  keyed ``<lower id>-<higher id>``, around the edge's shape (OSM's way, or the
+  straight line between its nodes where the network has none); see the polygons
+  below.
 - ``sources.street_lighting`` (optional): a file of block faces with a lighting
   answer (its ``column``). A street's ``streetlights`` (0-100) is the share of lit
   faces among the answered ones whose midpoint lies within ``max_distance_m`` of
@@ -33,6 +34,12 @@ as above. The fitted streets also change two matches, by their width (``width_m`
   that side's sidewalk.
 
 ``width_m``, ``lanes``, ``name`` are used here and not written.
+
+Every street is written as a polygon, lot front to lot front (``footprints``): a
+fitted one its axis ± ``width_m / 2`` (``street_fit.footprints``), any other a strip
+of its class's default width (``2 × default_half_width_m``; ``residential`` without
+``highway``) cut where it overlaps a fitted one. Junctions are cut out and belong to
+no street. The axes stay in memory for the matches above.
 """
 
 import json
@@ -333,12 +340,81 @@ def with_bike_lane(
     return use, share
 
 
+def classes_of(edges: pd.DataFrame, keys: pd.Index) -> pd.Series:
+    """Per street key (``<lower id>-<higher id>``): its ``street_fit`` class, by OSM's
+    ``highway``; ``residential`` without one, None if ``street_fit`` doesn't know it."""
+    a, b = edges["from"].astype("int64"), edges["to"].astype("int64")
+    key = np.minimum(a, b).astype(str) + "-" + np.maximum(a, b).astype(str)
+    highway = (
+        edges["highway"]
+        if "highway" in edges
+        else pd.Series(None, index=edges.index, dtype=object)
+    )
+    kind = highway.map(street_fit.ROAD_CLASS_BY_HIGHWAY).where(
+        highway.notna(), "residential"
+    )
+    by_key = pd.Series(kind.to_numpy(), index=key.to_numpy())
+    by_key = by_key[~by_key.index.duplicated()]
+    return by_key.reindex(keys)
+
+
+def footprints(
+    streets: gpd.GeoSeries,
+    classes: pd.Series,
+    fitted: gpd.GeoDataFrame | None,
+    roads: gpd.GeoDataFrame | None,
+    params: dict,
+) -> tuple[gpd.GeoSeries, dict]:
+    """Every street (``streets``: the fitted axes first, then the network's lines) as
+    a polygon, and how many were left ``inside`` a junction or ``simplified``.
+
+    The fitted ones: ``street_fit.footprints``. The rest: a strip of their class's
+    default width, the junctions among them cut out, then cut where they overlap a
+    fitted one or its junctions (a strip left with nothing keeps its own)."""
+    p = street_fit.params_of(params)
+    n = 0 if fitted is None else len(fitted)
+    shapes: list = []
+    junctions = shapely.Polygon()
+    inside, simplified = 0, 0
+    if n:
+        own = street_fit.footprints(fitted, roads, params)
+        shapes += list(own)
+        junctions = shapely.union_all([*own.to_numpy(), own.attrs["junctions"]])
+        inside += len(own.attrs["inside"])
+        simplified += len(own.attrs["simplified"])
+    rest = streets.iloc[n:]
+    if len(rest):
+        widths = [
+            2 * street_fit.half_width(kind if isinstance(kind, str) else "", p)
+            for kind in classes.reindex(rest.index)
+        ]
+        nodes = [set(key.split("-")) for key in rest.index]
+        out = street_fit.cut_junctions(list(rest), widths, nodes, [0.0] * len(rest))
+        inside += len(out["inside"])
+        simplified += len(out["simplified"])
+        for shape in out["shapes"]:
+            cut = (
+                street_fit.largest(shape.difference(junctions))
+                if not junctions.is_empty
+                else shape
+            )
+            shapes.append(cut if not cut.is_empty else shape)
+    polygons = gpd.GeoSeries(shapes, index=streets.index, crs=streets.crs)
+    return polygons, {"inside": inside, "simplified": simplified}
+
+
 def fit_streets(
-    city: CityPreset, nodes: pd.DataFrame, edges: pd.DataFrame, workdir: Path
+    city: CityPreset,
+    nodes: pd.DataFrame,
+    edges: pd.DataFrame,
+    workdir: Path,
+    roads: gpd.GeoDataFrame | None = None,
 ) -> gpd.GeoDataFrame:
-    """The network's vehicular streets as rights of way (``street_fit.fit``), indexed
-    by their key, in ``city.target_crs``."""
-    roads = roads_from_network(nodes, edges, city.target_crs)
+    """The network's vehicular streets (``roads``, from ``roads_from_network`` unless
+    given) as rights of way (``street_fit.fit``), indexed by their key, in
+    ``city.target_crs``."""
+    if roads is None:
+        roads = roads_from_network(nodes, edges, city.target_crs)
     if roads.empty:
         return street_fit.empty(city.target_crs).set_index("key")
     fitted = street_fit.fit(
@@ -362,9 +438,12 @@ def build(
     the rest are as ever (see the module's docstring); ``table.attrs["fit"]`` says
     how many of each."""
     streets = network_streets(nodes, edges, city.target_crs)
-    fitted = None
+    classes = classes_of(edges, streets.index)
+    fitted, roads = None, None
+    params = dict(city.streets.fit) if city.streets is not None else {}  # ty: ignore
     if city.streets is not None and city.streets.refine:
-        fitted = fit_streets(city, nodes, edges, workdir)
+        roads = roads_from_network(nodes, edges, city.target_crs)
+        fitted = fit_streets(city, nodes, edges, workdir, roads)
         streets = streets.drop(
             [k for keys in fitted["road_keys"] for k in keys], errors="ignore"
         )
@@ -420,11 +499,19 @@ def build(
             "streetlights": lit.to_numpy(),
         }
     )
+    polygons, report = footprints(
+        streets,
+        classes,
+        None if fitted is None else fitted.reset_index(),
+        roads,
+        params,
+    )
     table = gpd.GeoDataFrame(
         frame,
-        geometry=shapely.force_2d(streets.to_crs(4326).to_numpy()),
+        geometry=shapely.force_2d(polygons.to_crs(4326).to_numpy()),
         crs=4326,
     )
+    table.attrs["footprints"] = report
     table.attrs["fit"] = {
         "fitted": n,
         "both_sides": 0
