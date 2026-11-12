@@ -143,7 +143,7 @@ never 0.
   homes as urban_fabric.md's *A lot's homes*: built space (`area` × `cos` ×
   `num_levels`) × `housing.floor_share` ÷ 100 ÷ `housing.unit_size_m2`, rounded;
   `land_use` takes no part, and a lot missing one of them is left out. Built
-  form still counts homes the original way (from `land_use` and `unit_size_m2`).
+  form still counts homes the original way (from `land_use` and `housing.unit_size_m2`).
   `commercial_land_share`, the share of the block's lot area in `commerce` or
   `office` (*Comercio y servicios*); `land_use_mix`, the entropy of the lots'
   land uses by area over the log of the number of uses present, as the notebook
@@ -259,7 +259,7 @@ and `footprints.py` are copied unchanged (excluded from ruff): blocks join censu
 by CVEGEO; lots get area, normativa (containing polygon, else nearest within 3 m)
 and the block of their nearest representative point; heights give `cos`,
 `num_levels` and built-up area. `elements.py` gives `commerce_type`, the
-multifamily `unit_size_m2` and `land_use`, classified from what each lot holds
+multifamily `housing.unit_size_m2` and `land_use`, classified from what each lot holds
 (below). Blocks also declare `lot.size_m2` and `lot.frontage_m`, targets that stay
 unset when the city is loaded (reimagina_urbano_api `urban_fabric.md`).
 

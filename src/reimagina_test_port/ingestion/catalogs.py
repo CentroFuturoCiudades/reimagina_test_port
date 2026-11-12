@@ -39,7 +39,7 @@ ATTRIBUTES = {
     ("lot", "land_use"): ("enum", LAND_USES, None),
     ("lot", "num_levels"): ("integer", None, None),
     ("lot", "area"): ("number", None, "m2"),
-    ("lot", "unit_size_m2"): ("number", None, "m2"),
+    ("lot", "housing.unit_size_m2"): ("number", None, "m2"),
     ("lot", "housing.floor_share"): ("number", None, "%"),
     ("block", "lot.size_m2"): ("number", None, "m2"),
     ("block", "lot.frontage_m"): ("number", None, "m"),

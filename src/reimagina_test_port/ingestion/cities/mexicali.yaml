@@ -88,9 +88,9 @@ sources:
   # right_of_way elements over that network (ingestion/streets.py):
   # streetlights from INEGI's 2020 housing inventory block faces (national, one file
   # per state): a street takes the faces within max_distance_m; ALUMPUB 1 lit, 3 not.
-  # In the package's data folder (relative paths are), as published by INEGI.
+  # The state's .zip, as published by INEGI.
   street_lighting:
-    uri: data/inegi/02_Frentes_INV2020_shp.zip
+    uri: az://raw/inegi/inventario_vivienda/2020/02_baja_california/02_Frentes_INV2020_shp.zip
     params:
       member: 02_Frentes_INV2020_shp/INV2020_IND_EU_FTE_02.shp
       where: {CVE_MUN: "002"}
@@ -99,9 +99,9 @@ sources:
       unlit: ["3"]
       max_distance_m: 25
   # bands.use: IMIP's existing bike lanes, Mexicali's own; a street within 15 m of
-  # one has it. In the package's data folder.
+  # one has it.
   bike_lanes:
-    uri: data/mexicali/ciclovia_exist.geojson
+    uri: az://raw/por_estado/02_baja_california/002_mexicali/imip/ciclovia_exist/ciclovia_exist.geojson
     params:
       type_column: TIPO
       protected: [SEGREGADO INDEPENDIENTE, EXCLUSIVO DE TRAZO INDEPENDIENTE]

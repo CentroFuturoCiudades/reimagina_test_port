@@ -588,7 +588,7 @@
             },
             {
               "description": "Census average occupants per inhabited dwelling.",
-              "name": "people_per_household",
+              "name": "housing.people_per_household",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -725,15 +725,15 @@
               "unit": "m2"
             },
             {
-              "description": "unit size m2",
-              "name": "unit_size_m2",
+              "description": "housing.unit size m2",
+              "name": "housing.unit_size_m2",
               "nullable": true,
               "type": "number",
               "unit": "m2"
             },
             {
-              "description": "people per household",
-              "name": "people_per_household",
+              "description": "housing.people per household",
+              "name": "housing.people_per_household",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -927,7 +927,7 @@
             },
             {
               "description": "Census average occupants per inhabited dwelling.",
-              "name": "people_per_household",
+              "name": "housing.people_per_household",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -1064,15 +1064,15 @@
               "unit": "m2"
             },
             {
-              "description": "unit size m2",
-              "name": "unit_size_m2",
+              "description": "housing.unit size m2",
+              "name": "housing.unit_size_m2",
               "nullable": true,
               "type": "number",
               "unit": "m2"
             },
             {
-              "description": "people per household",
-              "name": "people_per_household",
+              "description": "housing.people per household",
+              "name": "housing.people_per_household",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -4444,20 +4444,6 @@
               "unit": null
             },
             {
-              "description": "unit size m2",
-              "name": "unit_size_m2",
-              "nullable": true,
-              "type": "number",
-              "unit": "m2"
-            },
-            {
-              "description": "people per household",
-              "name": "people_per_household",
-              "nullable": true,
-              "type": "number",
-              "unit": "count"
-            },
-            {
               "description": "occupancy rate",
               "name": "occupancy_rate",
               "nullable": true,
@@ -4477,6 +4463,13 @@
               "nullable": true,
               "type": "number",
               "unit": "m2"
+            },
+            {
+              "description": "housing.people per household",
+              "name": "housing.people_per_household",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
             }
           ],
           "geometry": "geometry",

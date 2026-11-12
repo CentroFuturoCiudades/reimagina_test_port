@@ -484,7 +484,7 @@ def test_build(city, tmp_path):
     assert lots.loc["1-A-7-2#2", "housing.floor_share"] == 100
     assert lots.loc["1-B-8-1", "housing.floor_share"] == 0
     assert lots.loc["sin_clave", "housing.floor_share"] == 0
-    assert blocks.loc[CVEGEO[0], "people_per_household"] == 3.25
+    assert blocks.loc[CVEGEO[0], "housing.people_per_household"] == 3.25
     # Targets: declared, unset when loaded.
     assert blocks[["lot.size_m2", "lot.frontage_m"]].isna().all().all()
     # Amenities and establishments go to the lot holding them, or the nearest
@@ -911,9 +911,10 @@ def test_mexicali_yaml():
 
     assert city.street_lighting.max_distance_m == 25
     assert city.street_lighting.source.member.endswith("INV2020_IND_EU_FTE_02.shp")
-    # Relative paths are the package's files.
-    assert city.bike_lanes.source.uri == str(
-        cities.PACKAGE / "data/mexicali/ciclovia_exist.geojson"
+    # Both files are in the lake, beside the city's other sources.
+    assert city.street_lighting.source.uri.startswith("az://raw/inegi/")
+    assert city.bike_lanes.source.uri.endswith(
+        "imip/ciclovia_exist/ciclovia_exist.geojson"
     )
     assert city.bike_lanes.type_column == "TIPO"
 
