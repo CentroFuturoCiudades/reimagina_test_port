@@ -3,7 +3,7 @@
 From reimagina-lyra ``ingestion/lake.py``. Authenticates with
 ``DefaultAzureCredential``: the worker's managed identity, or ``az login``
 locally. Local paths are accepted too. Everything reads, except ``upload`` (the
-street network's H5), which never overwrites a file.
+street network's H5 and its OSM cache), which overwrites a file only when told to.
 """
 
 import shutil
@@ -63,17 +63,23 @@ def list_names(uri: str) -> list[str]:
     return sorted(p.name for p in Path(uri).iterdir())
 
 
-def upload(path: Path, uri: str) -> str:
+def exists(uri: str) -> bool:
+    if uri.startswith("az://"):
+        return bool(filesystem().exists(uri))
+    return Path(uri).exists()
+
+
+def upload(path: Path, uri: str, *, overwrite: bool = False) -> str:
     """Copy a local file to ``uri`` (``az://`` or a local path); an existing file
-    there fails with ``FileExistsError``."""
+    there fails with ``FileExistsError`` unless ``overwrite``."""
     if uri.startswith("az://"):
         fs = filesystem()
-        if fs.exists(uri):
+        if not overwrite and fs.exists(uri):
             raise FileExistsError(uri)
         fs.put_file(str(path), uri)
     else:
         target = Path(uri)
-        if target.exists():
+        if not overwrite and target.exists():
             raise FileExistsError(uri)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, target)

@@ -397,7 +397,7 @@ def city(tmp_path, monkeypatch):
     monkeypatch.setattr(
         network,
         "osm_network",
-        lambda blocks, crs, params, boundary: (NETWORK_NODES, NETWORK_EDGES),
+        lambda blocks, crs, params, boundary, **_: (NETWORK_NODES, NETWORK_EDGES),
     )
     return replace(preset, streets=replace(preset.streets, boundary_uri=None))
 
@@ -564,6 +564,20 @@ def test_streets(city, tmp_path):
         uuid.uuid5(NAMESPACE, f"mexicali:right_of_way:{first}")
     )
     assert table.crs.to_epsg() == 4326
+
+
+def test_streets_take_the_network_shapes(city, tmp_path):
+    nodes, edges = network_tables()
+    # The second street bends 30 m south; the others have no shape (straight).
+    bend = LineString([(60, -5), (80, -35), (100, -5)])
+    shaped = gpd.GeoDataFrame(edges, geometry=[None, None, bend, None], crs=CRS).to_crs(
+        4326
+    )
+    bare = replace(city, street_lighting=None, bike_lanes=None)
+    table = streets.build(bare, nodes, shaped, tmp_path).set_index("source_record_ref")
+    lines = table.geometry.to_crs(CRS)
+    assert lines["3-4"].equals_exact(bend, 0.01)
+    assert lines["1-2"].equals_exact(LineString([(0, -5), (40, -5)]), 0.01)
 
 
 def test_streets_without_lighting_or_lanes(city, tmp_path):

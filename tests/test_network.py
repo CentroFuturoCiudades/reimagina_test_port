@@ -2,6 +2,7 @@
 sewn into it, and the H5 the indicators read back."""
 
 import dataclasses
+from pathlib import Path
 
 import geopandas as gpd
 import networkx as nx
@@ -88,11 +89,66 @@ def test_graph_tables():
     expected = gpd.GeoSeries.from_xy([-115.45], [32.62], crs=4326).to_crs(CRS)
     assert nodes.loc[10, "x"] == pytest.approx(expected.x[0])
     # The parallel edge keeps the shortest; the loop is dropped.
-    assert edges.to_dict("records") == [
+    assert edges.drop(columns="geometry").to_dict("records") == [
         {"from": 10, "to": 20, "length": 94.0},
         {"from": 20, "to": 10, "length": 94.0},
         {"from": 20, "to": 30, "length": 111.0},
     ]
+    # Each edge keeps its shape, in the same CRS as the nodes.
+    start = edges.loc[0, "geometry"].coords[0]
+    assert start == pytest.approx((nodes.loc[10, "x"], nodes.loc[10, "y"]))
+
+
+def test_osm_download_is_cached_in_the_lake(monkeypatch, tmp_path):
+    calls = []
+
+    def download(area, params):
+        calls.append(area)
+        return osm_like_graph()
+
+    monkeypatch.setattr(network, "osm_graph", download)
+    params = dataclasses.replace(PARAMS, output_prefix=str(tmp_path / "lake"))
+    blocks = gpd.GeoSeries([box(-115.451, 32.619, -115.448, 32.622)], crs=4326)
+
+    def build(**options):
+        return network.osm_network(
+            blocks, CRS, params, cve_code="02002", workdir=tmp_path / "w", **options
+        )
+
+    first = build()
+    files = sorted(p.name for p in (tmp_path / "lake").iterdir())
+    assert len(files) == 2 and files[0].startswith("osm_02002_")
+    # The next run reads the lake's copy, with the same tables and shapes.
+    second = build()
+    assert len(calls) == 1
+    pd.testing.assert_frame_equal(second[0], first[0])
+    pd.testing.assert_frame_equal(
+        second[1].drop(columns="geometry"), first[1].drop(columns="geometry")
+    )
+    assert all(
+        a.equals_exact(b, 1e-6)
+        for a, b in zip(second[1]["geometry"], first[1]["geometry"], strict=True)
+    )
+    # refresh downloads again and replaces the copy; another filter is another file.
+    build(refresh=True)
+    assert len(calls) == 2
+    network.osm_network(
+        blocks,
+        CRS,
+        dataclasses.replace(params, custom_filter='["highway"]'),
+        cve_code="02002",
+        workdir=tmp_path / "w",
+    )
+    assert len(calls) == 3
+    assert len(list((tmp_path / "lake").iterdir())) == 4
+
+
+def test_without_cve_code_nothing_is_cached(monkeypatch, tmp_path):
+    monkeypatch.setattr(network, "osm_graph", lambda area, params: osm_like_graph())
+    params = dataclasses.replace(PARAMS, output_prefix=str(tmp_path / "lake"))
+    blocks = gpd.GeoSeries([box(-115.451, 32.619, -115.448, 32.622)], crs=4326)
+    network.osm_network(blocks, CRS, params)
+    assert not (tmp_path / "lake").exists()
 
 
 def test_study_area_covers_blocks_and_margin():
@@ -145,6 +201,24 @@ def test_streets_replace_their_zone():
     assert walk(merged_nodes, merged_edges, (200, 100), (200, 300)) == pytest.approx(
         200
     )
+
+
+def test_new_streets_keep_their_shape():
+    nodes, edges = grid()
+    # A curved street across a block, corner to corner: its edge is the curve,
+    # not the chord.
+    curve = LineString([(100, 100), (120, 180), (200, 200)])
+    streets = gpd.GeoSeries([curve], crs=CRS)
+    params = dataclasses.replace(PARAMS, split_max_m=0, connector_max_m=0)
+    merged_nodes, merged_edges, _ = network.merge_streets(
+        nodes, edges, streets, params, zone=box(0, 0, 1, 1)
+    )
+    lines = network.shapes(merged_nodes, merged_edges)
+    new = merged_edges.index[merged_edges["length"].eq(curve.length)]
+    assert len(new) == 1
+    assert lines[new[0]].equals_exact(curve, 0.01)
+    # The grid's edges have no shape here: the straight line between their nodes.
+    assert lines[0].length == pytest.approx(100)
 
 
 def test_a_loose_end_splits_the_nearest_street():
@@ -213,8 +287,13 @@ def test_upload_never_overwrites(tmp_path):
     source.write_bytes(b"x")
     target = str(tmp_path / "lake" / "a.h5")
     assert lake.upload(source, target) == target
+    assert lake.exists(target)
     with pytest.raises(FileExistsError):
         lake.upload(source, target)
+    # Unless told to (the OSM cache's refresh).
+    source.write_bytes(b"y")
+    lake.upload(source, target, overwrite=True)
+    assert Path(target).read_bytes() == b"y"
 
 
 # ------------------------------------------------------------------ Lyra nodes
@@ -237,7 +316,7 @@ def offline(monkeypatch, tmp_path):
         lambda uri, columns: pd.DataFrame({"geometry": square.to_wkb()}),
     )
     monkeypatch.setattr(
-        network, "osm_network", lambda blocks, crs, params, boundary: grid()
+        network, "osm_network", lambda blocks, crs, params, boundary, **_: grid()
     )
     return city
 
@@ -261,5 +340,7 @@ def test_street_network_dataset(offline, tmp_path):
     nodes = tables["reimagina_street_network_tables_nodes"]
     edges = tables["reimagina_street_network_tables_edges"]
     assert len(nodes) == 25  # the crossing is a new node, the old one went
-    assert set(edges.columns) >= {"from", "to", "distance", "two_way"}
+    assert set(edges.columns) >= {"from", "to", "distance", "two_way", "geometry"}
+    # Every edge has a shape: the grid's are straight lines between their nodes.
+    assert edges.geometry.notna().all()
     assert edges["two_way"].all()

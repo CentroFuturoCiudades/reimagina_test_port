@@ -418,8 +418,19 @@ network). The city YAML's `sources.streets` (`uri: osm://overpass`) sets it up.
    splits it where it meets it, and a piece still apart is bridged by its
    shortest gap up to `connector_max_m` (5 m). Pieces left apart are logged.
 
-`reimagina_street_network(city, streets_uri?, zone_uri?)` returns nodes and edges
-in `reimagina_road_network`'s tables; `reimagina_street_network_tables` shows them.
+The OSM download is saved in the lake the first time, beside the H5s
+(`output_prefix`), as `osm_<cve>_<hash>_nodes.parquet` and `_edges.parquet`
+(EPSG:4326, each edge with its way's shape); the hash covers the study area, the
+filter and `retain_all`. Later runs with the same three read those files instead
+of asking Overpass (about 6 minutes for Mexicali, and refused when it is busy);
+`refresh_osm` downloads again and replaces them. Another area or filter is another
+file.
+
+`reimagina_street_network(city, streets_uri?, zone_uri?, refresh_osm?)` returns
+nodes and edges in `reimagina_road_network`'s tables, the edges with their shape
+(`geometry`, in the city's CRS): OSM's way, a new street's line, or the straight
+line between its nodes for an edge that step 2 splits or adds as a connector;
+`reimagina_street_network_tables` shows them. The H5 keeps no shapes.
 `reimagina_street_network_write(..., project_id, dry_run)` saves them as pandana's
 H5 (`length` in metres, two-way), uploads it to `output_prefix` as
 `vialidades_<cve>_<hash>.h5` (named by its contents; an existing file is never
@@ -431,8 +442,8 @@ one. A dry run builds the H5 without uploading it or changing the project. Then
 
 `reimagina_baseline_streets` (`ingestion/streets.py`) turns that network into the
 baseline's `right_of_way` elements (urban_fabric.md, *Right of way*): one per
-street, a pair of nodes whatever the direction of its edges, as the straight line
-between them, keyed `<lower id>-<higher id>` (`source_record_ref`), id
+street, a pair of nodes whatever the direction of its edges, with the edge's
+shape (the network's `geometry`), keyed `<lower id>-<higher id>` (`source_record_ref`), id
 `uuid5(NS, "<city>:right_of_way:<key>")`, no parent. The network is the ULI's
 pedestrian one, so footways and paths are streets too. Two optional sources of
 the city YAML fill its attributes; another city changes the files and columns:

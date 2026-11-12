@@ -2,7 +2,8 @@
 over its street network (``reimagina_street_network``, ``ingestion/network.py``).
 
 - One element per street of the network: a pair of nodes, whatever the direction,
-  as the straight line between them; keyed ``<lower id>-<higher id>``.
+  keyed ``<lower id>-<higher id>``, with the edge's shape (OSM's way, or the
+  straight line between its nodes where the network has none).
 - ``sources.street_lighting`` (optional): a file of block faces with a lighting
   answer (its ``column``). A street's ``streetlights`` (0-100) is the share of lit
   faces among the answered ones whose midpoint lies within ``max_distance_m`` of
@@ -58,19 +59,24 @@ def read(source: Source, workdir: Path, columns: list[str]) -> gpd.GeoDataFrame:
 def network_streets(
     nodes: pd.DataFrame, edges: pd.DataFrame, crs: str
 ) -> gpd.GeoSeries:
-    """One straight line per pair of nodes the network joins (both directions are
-    one street), in ``crs``, indexed by ``<lower id>-<higher id>``."""
+    """One line per pair of nodes the network joins (both directions are one
+    street), in ``crs``, indexed by ``<lower id>-<higher id>``: the edge's
+    ``geometry``, or the straight line between its nodes without one."""
     a, b = edges["from"].astype("int64"), edges["to"].astype("int64")
-    pairs = (
+    keep = (
         pd.DataFrame({"lo": np.minimum(a, b), "hi": np.maximum(a, b)})
         .query("lo != hi")
         .drop_duplicates()
     )
     xy = nodes.set_index(nodes["id"].astype("int64"))[["x", "y"]]
     lines = shapely.linestrings(
-        np.stack([xy.loc[pairs["lo"]].to_numpy(), xy.loc[pairs["hi"]].to_numpy()], 1)
+        np.stack([xy.loc[keep["lo"]].to_numpy(), xy.loc[keep["hi"]].to_numpy()], 1)
     )
-    keys = pairs["lo"].astype(str) + "-" + pairs["hi"].astype(str)
+    if isinstance(edges, gpd.GeoDataFrame) and edges.crs is not None:
+        own = edges.geometry.to_crs(crs).loc[keep.index].to_numpy()
+        present = ~(shapely.is_missing(own) | shapely.is_empty(own))
+        lines[present] = own[present]
+    keys = keep["lo"].astype(str) + "-" + keep["hi"].astype(str)
     return gpd.GeoSeries(lines, index=pd.Index(keys.to_numpy(), name="key"), crs=crs)
 
 

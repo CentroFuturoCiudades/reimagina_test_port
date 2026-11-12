@@ -424,6 +424,19 @@ class NetworkParameters(BaselineParameters):
             "the streets' convex hull."
         ),
     )
+    refresh_osm: bool = Field(
+        default=False,
+        description=(
+            "Download OpenStreetMap again instead of reading the copy saved in the "
+            "lake by an earlier run, and replace that copy."
+        ),
+    )
+
+
+# The road network's edges with each street's shape, in the city's metric CRS.
+STREET_EDGES_DECLARATION = TableOutput(
+    columns=EDGES_DECLARATION.columns, geometry="geometry"
+)
 
 
 def _network_input_error(field: str, message: str) -> MetricInputError:
@@ -438,11 +451,13 @@ def _network_input_error(field: str, message: str) -> MetricInputError:
         "municipality (sources.streets.boundary_uri), with the city's filter (Mexicali: the "
         "ULI's pedestrian network), in its metric CRS. With streets_uri, those "
         "streets replace the network inside their zone (zone_uri, or their "
-        "convex hull) and are sewn to it, as exe_reimagina's Condesa network."
+        "convex hull) and are sewn to it, as exe_reimagina's Condesa network. "
+        "The OpenStreetMap download is saved in the lake beside the H5s and read "
+        "from there by later runs (refresh_osm downloads it again)."
     ),
     outputs={
         "reimagina_street_network_nodes": NODES_DECLARATION,
-        "reimagina_street_network_edges": EDGES_DECLARATION,
+        "reimagina_street_network_edges": STREET_EDGES_DECLARATION,
     },
 )
 def street_network(
@@ -466,7 +481,13 @@ def street_network(
             raw = lake.read_parquet(city.streets.boundary_uri, ["geometry"])
             boundary = gpd.GeoSeries.from_wkb(raw["geometry"], crs="EPSG:4326")
         nodes, edges = network.osm_network(
-            blocks, city.target_crs, city.streets, boundary
+            blocks,
+            city.target_crs,
+            city.streets,
+            boundary,
+            cve_code=city.cve_code,
+            workdir=context.temp_dir / "osm",
+            refresh=parameters.refresh_osm,
         )
     if parameters.streets_uri:
         folder = context.temp_dir / "streets"
@@ -490,11 +511,14 @@ def street_network(
         context.logger.info("Streets merged: %s", report)
     elif parameters.zone_uri:
         raise _network_input_error("zone_uri", "zone_uri needs streets_uri.")
+    lines = network.shapes(nodes, edges)
     return {
         "reimagina_street_network_nodes": nodes.reset_index(),
-        "reimagina_street_network_edges": edges.rename(
-            columns={"length": "distance"}
-        ).assign(two_way=True),
+        "reimagina_street_network_edges": gpd.GeoDataFrame(
+            edges[["from", "to"]].assign(distance=edges["length"], two_way=True),
+            geometry=lines,
+            crs=city.target_crs,
+        ),
     }
 
 
@@ -513,7 +537,7 @@ NETWORK_INPUTS = {
     inputs=NETWORK_INPUTS,
     outputs={
         "reimagina_street_network_tables_nodes": NODES_DECLARATION,
-        "reimagina_street_network_tables_edges": EDGES_DECLARATION,
+        "reimagina_street_network_tables_edges": STREET_EDGES_DECLARATION,
     },
 )
 def street_network_tables(
