@@ -173,7 +173,8 @@ def osm_cache_uris(
     """Nodes' and edges' parquet of the OSM download for ``area`` and the city's
     filter, under ``prefix``: ``osm_<cve>_<hash>_{nodes,edges}.parquet``. Another
     area, filter or ``retain_all`` is another file."""
-    return _cache_uris(prefix, cve_code, area, params, b"v2")  # v2: edges carry OSM_TAGS
+    # v2: edges carry OSM_TAGS
+    return _cache_uris(prefix, cve_code, area, params, b"v2")
 
 
 def legacy_osm_cache_uris(
