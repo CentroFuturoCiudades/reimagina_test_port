@@ -1,12 +1,12 @@
-"""Diversity of the POIs within walking distance of each lot, by poi_type: the
-Shannon entropy of the types of the POIs reached, over its maximum,
+"""Diversity of the POIs within walking distance of each lot: the Shannon entropy of
+the subcategories of the POIs reached, over its maximum,
 
     D = -sum(p_i ln p_i) / ln k,
 
-where p_i is the share of the POIs reached that are of type i and k is how many
-types the POIs given have. A lot reaching nothing, or only one type, scores 0; one
-reaching as many POIs of each of the k types scores 1. A POI of several types counts once in
-each, however many entries it has.
+where p_i is the share of the POIs reached that are of subcategory i and k is how
+many subcategories the set has, fixed. A lot reaching nothing, or only one
+subcategory, scores 0; one reaching as many POIs of each of the k scores 1. A POI
+counts once, however many entries it has.
 
 A POI is reached when the walk to it is within the radius, walked as in
 ``access_calculation``: from one of the lot's entries to one of the POI's, over the
@@ -133,10 +133,11 @@ def poi_diversity(
     network: StreetNetwork,
     crs: str,
     radius: float,
+    k: int,
 ) -> np.ndarray:
-    """D per lot, in order; NaN without geometry. ``pois`` has one row per POI and
-    type, ``types`` its poi_type, and ``radius`` is in metres. Rows at the same
-    place are walked once."""
+    """D per lot, in order; NaN without geometry. ``pois`` has one row per POI,
+    ``types`` its subcategory, ``radius`` is in metres and ``k`` is how many
+    subcategories the set has. Rows at the same place are walked once."""
     origins = entries(
         gpd.GeoSeries(lots.geometry.to_numpy(), crs=lots.crs).to_crs(crs), network
     )
@@ -165,7 +166,7 @@ def poi_diversity(
     share = counts[reached] / total[reached, None]
     # As sum(p ln 1/p), 0 where p = 0: a negated sum of zeros would give -0.0.
     surprise = np.log(np.divide(1, share, where=share > 0, out=np.ones_like(share)))
-    values[reached] = (share * surprise).sum(axis=1) / np.log(len(kinds))
+    values[reached] = (share * surprise).sum(axis=1) / np.log(k)
     return values
 
 

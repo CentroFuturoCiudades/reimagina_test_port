@@ -3354,7 +3354,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Diversity of the POIs within walking distance, by poi_type: the Shannon entropy of the types of the POIs within 500 m over the road network, over ln k, k being how many types the POIs have. Lots count the POIs their entries reach, walked as in reimagina_nearest_poi_distance; blocks average their lots weighted by population.",
+      "description": "Diversity of each set of destinations within walking distance: the Shannon entropy of its subcategories, by scian_code, among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has. Lots count the POIs their entries reach, walked as in reimagina_nearest_poi_distance; blocks average their lots weighted by population.",
       "inputs": {
         "blocks": {
           "arguments": {},
@@ -3403,8 +3403,8 @@
               "unit": null
             },
             {
-              "description": "Shannon entropy of the poi_types of the POIs within 500 m over the road network, over ln k, k being how many types the POIs have (0 = one type or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
-              "name": "poi_diversity",
+              "description": "Shannon entropy of the set's subcategories (by scian_code) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
+              "name": "diversity_fresh_food",
               "nullable": true,
               "type": "number",
               "unit": "ratio"
@@ -3437,8 +3437,8 @@
               "unit": null
             },
             {
-              "description": "Shannon entropy of the poi_types of the POIs within 500 m over the road network, over ln k, k being how many types the POIs have (0 = one type or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
-              "name": "poi_diversity",
+              "description": "Shannon entropy of the set's subcategories (by scian_code) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
+              "name": "diversity_fresh_food",
               "nullable": true,
               "type": "number",
               "unit": "ratio"
@@ -4742,7 +4742,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Compute a scenario's POI diversity and write it to Reimagina's element_state_indicator_value, under the same rules as reimagina_scenario_indicators. Only blocks are written.",
+      "description": "Compute a scenario's diversity of each set of destinations and write it to Reimagina's element_state_indicator_value as diversity_<set>, under the same rules as reimagina_scenario_indicators. Only blocks are written.",
       "inputs": {
         "blocks": {
           "arguments": {},
@@ -4874,6 +4874,13 @@
               "nullable": true,
               "type": "number",
               "unit": "count"
+            },
+            {
+              "description": "The element's scian_code; missing without one.",
+              "name": "scian_code",
+              "nullable": false,
+              "type": "string",
+              "unit": null
             }
           ],
           "geometry": "geometry",

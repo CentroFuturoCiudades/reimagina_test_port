@@ -42,12 +42,26 @@ from reimagina_test_port.indicators.accessibility.nodes import (
     POIS_DECLARATION,
 )
 from reimagina_test_port.indicators.population_access.nodes import (
-    DIVERSITY_KEY,
+    DIVERSITY_KEYS,
     PoiType,
 )
 from reimagina_test_port.scenario import source, writer
 
 logger = logging.getLogger(__name__)
+
+# The destinations, plus the scian_code that gives their diversity subcategory.
+SCENARIO_POIS_DECLARATION = TableOutput(
+    columns=[
+        *POIS_DECLARATION.columns,
+        TableColumn(
+            name="scian_code",
+            type="string",
+            unit=None,
+            description="The element's scian_code; missing without one.",
+        ),
+    ],
+    geometry="geometry",
+)
 
 
 class ScenarioParameters(MetricParameters):
@@ -102,7 +116,7 @@ def scenario_dataset(
         "Acquire a scenario's present amenities and establishments, one row per "
         "active poi_catalog type whose rule they meet."
     ),
-    outputs={"reimagina_scenario_pois": POIS_DECLARATION},
+    outputs={"reimagina_scenario_pois": SCENARIO_POIS_DECLARATION},
 )
 def scenario_pois(
     parameters: ScenarioParameters, context: DatasetContext
@@ -433,9 +447,9 @@ def composites_write():
 @metric(
     name="reimagina_scenario_poi_diversity",
     description=(
-        "Compute a scenario's POI diversity and write it to Reimagina's "
-        "element_state_indicator_value, under the same rules as "
-        "reimagina_scenario_indicators. Only blocks are written."
+        "Compute a scenario's diversity of each set of destinations and write it "
+        "to Reimagina's element_state_indicator_value as diversity_<set>, under "
+        "the same rules as reimagina_scenario_indicators. Only blocks are written."
     ),
     inputs={"blocks": Dependency("reimagina_poi_diversity_blocks")},
     outputs={"reimagina_scenario_poi_diversity": WRITE_DECLARATION},
@@ -449,7 +463,7 @@ def scenario_poi_diversity(
     return write_group(
         parameters,
         {"block": blocks},
-        {DIVERSITY_KEY: "number"},
+        dict.fromkeys(DIVERSITY_KEYS, "number"),
         node="reimagina_scenario_poi_diversity",
         log=context.logger,
     )

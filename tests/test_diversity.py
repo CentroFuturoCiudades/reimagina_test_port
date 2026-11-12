@@ -50,7 +50,7 @@ def test_reachable_walks_like_the_nearest_distance():
     assert set(map(tuple, pairs.to_numpy())) == {(0, 0), (1, 1), (0, 1)}
 
 
-def test_entropy_of_the_types_reached():
+def test_entropy_of_the_subcategories_reached():
     lots = gpd.GeoDataFrame(
         geometry=[Point(500, 10), Point(1500, 10), Point(2500, 10), None], crs=CRS
     )
@@ -59,8 +59,8 @@ def test_entropy_of_the_types_reached():
             # Around the first lot, one of a and one of b.
             Point(480, 5),
             Point(520, 5),
-            # Around the second, three of a and one of b: the POI at 1470 m is of
-            # both types, and the box is one POI however many entries it has.
+            # Around the second, three of a and one of b: two POIs share the place
+            # at 1470 m, and the box is one POI however many entries it has.
             Point(1450, 5),
             Point(1470, 5),
             Point(1470, 5),
@@ -73,14 +73,14 @@ def test_entropy_of_the_types_reached():
         crs=CRS,
     )
     types = ["a", "b", "a", "a", "b", "a", "b", "a"]
-    # k = 2: the types the POIs have.
-    values = poi_diversity(lots, pois, types, street(), CRS, 100)
+    # k = 3 is the set's, though only two subcategories are there.
+    values = poi_diversity(lots, pois, types, street(), CRS, 100, 3)
     np.testing.assert_allclose(
-        values, [normalised(1, 1, k=2), normalised(3, 1, k=2), 0, np.nan]
+        values, [normalised(1, 1, k=3), normalised(3, 1, k=3), 0, np.nan]
     )
-    # One type reached is 0, not -0.0.
+    # One subcategory reached is 0, not -0.0.
     assert not np.signbit(values[2])
-    assert normalised(1, 1, k=2) == pytest.approx(1)
+    assert values[0] == pytest.approx(np.log(2) / np.log(3))
 
 
 def test_blocks_average_their_lots_weighted_by_population():
@@ -97,17 +97,16 @@ def test_blocks_average_their_lots_weighted_by_population():
     assert np.isnan(block[1:]).all()
 
 
-def test_snapshot_counts_the_types_received():
+def test_snapshot_without_scian_code_scores_zero():
     runner = LocalRunner.from_definitions(
         {"reimagina-test-port": create_snapshot_plugin()}
     )
     outputs = runner.run(
         "reimagina_poi_diversity", {"parameters": {"snapshot": "synthetic"}}
     )
-    lots = outputs["reimagina_poi_diversity_lots"]["poi_diversity"]
-    # Five POIs of five types, so k = 5: every lot reaches all five but one, which
-    # reaches four.
-    assert sorted(lots.round(6).unique()) == pytest.approx([np.log(4) / np.log(5), 1])
-    assert lots.lt(1).sum() == 1
+    # The synthetic POIs have no scian_code, so no subcategory: 0 where measured.
+    lots = outputs["reimagina_poi_diversity_lots"]["diversity_fresh_food"]
+    assert lots.notna().any()
+    assert (lots.dropna() == 0).all()
     blocks = outputs["reimagina_poi_diversity_blocks"].set_index("id")
-    assert np.isnan(blocks.loc["block-empty", "poi_diversity"])
+    assert np.isnan(blocks.loc["block-empty", "diversity_fresh_food"])

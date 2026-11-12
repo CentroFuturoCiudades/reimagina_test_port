@@ -225,7 +225,7 @@ def _matches(rules: dict[str, dict[str, Any]], element: dict[str, Any]) -> list[
 
 def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
     """Present amenities and establishments, one row per poi_catalog type whose
-    rule they meet: id, poi_type, capacity, geometry."""
+    rule they meet: id, poi_type, capacity, scian_code, geometry."""
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
         params = {"scenario": scenario_id, "baseline": _baseline_id(cur, scenario_id)}
         rules = _destination_rules(cur)
@@ -238,7 +238,8 @@ def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
                 logger.warning(
                     "%s reads its parent's %s", poi_type, sorted(parent_keys)
                 )
-        params["keys"] = sorted(own)
+        # scian_code also gives the subcategory of the diversity sets.
+        params["keys"] = sorted(own | {"scian_code"})
         cur.execute(_POI_ELEMENTS_QUERY, params)
         elements = cur.fetchall()
         cur.execute(_POI_ATTRIBUTES_QUERY, params)
@@ -250,13 +251,12 @@ def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
             value_type, num, text, js
         )
     rows = [
-        (element_id, poi_type, geometry)
+        (element_id, poi_type, values.get("scian_code"), geometry)
         for element_id, element_type, geometry in elements
-        for poi_type in _matches(
-            rules, {**attributes.get(element_id, {}), "type": element_type}
-        )
+        for values in [attributes.get(element_id, {})]
+        for poi_type in _matches(rules, {**values, "type": element_type})
     ]
-    frame = pd.DataFrame(rows, columns=["id", "poi_type", "geometry"])
+    frame = pd.DataFrame(rows, columns=["id", "poi_type", "scian_code", "geometry"])
     frame.insert(2, "capacity", pd.Series(dtype="float64", index=frame.index))
     return gpd.GeoDataFrame(
         frame.drop(columns="geometry"), geometry=_geometry(frame["geometry"]), crs=CRS

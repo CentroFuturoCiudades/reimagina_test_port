@@ -336,7 +336,7 @@ def seed_catalog(conn) -> None:
         *accessibility_nodes.DISTANCE_KEYS,
         *accessibility_nodes.SCORE_KEYS,
         *population_access_nodes.KEYS,
-        population_access_nodes.DIVERSITY_KEY,
+        *population_access_nodes.DIVERSITY_KEYS,
     ]
     for element_type in ("lot", "block"):
         for key in keys:
@@ -628,19 +628,23 @@ def test_population_access_without_coverage_uses_the_default(dsn, caplog):
     assert access[0] == 93
 
 
-def test_write_poi_diversity(dsn):
+def test_write_poi_diversity(dsn, monkeypatch):
+    # A set over the seeded scian_codes: the clinic's, the pharmacy's and one absent.
+    subcategories = {"clinic": ("621112",), "pharmacy": ("464111",), "other": ("0",)}
+    monkeypatch.setitem(
+        population_access_nodes.DIVERSITY_SETS, "fresh_food", subcategories
+    )
     write(BASELINE)
     values = stored(dsn, BASELINE)
-    # The clinic is of health and health_services, the pharmacy of health_services:
-    # one and two POIs of k = 2 types.
-    share = np.array([1, 2]) / 3
-    expected = -(share * np.log(share)).sum() / np.log(2)
-    assert values[(BLOCK, "poi_diversity")][0] == pytest.approx(expected, abs=1e-4)
+    # One of each: the clinic counts once, though of two poi_types; k = 3.
+    expected = np.log(2) / np.log(3)
+    key = "diversity_fresh_food"
+    assert values[(BLOCK, key)][0] == pytest.approx(expected, abs=1e-4)
     # Only blocks are written.
-    assert (HOUSE, "poi_diversity") not in values
-    # The fork keeps only the park: one type, so 0 where the house now is.
+    assert (HOUSE, key) not in values
+    # The fork keeps only the park, without scian_code: 0 where the house now is.
     write(FORK)
-    assert stored(dsn, FORK)[(BLOCK_2, "poi_diversity")][0] == 0
+    assert stored(dsn, FORK)[(BLOCK_2, key)][0] == 0
 
 
 def test_write_clears_values_back_to_baseline(dsn):
