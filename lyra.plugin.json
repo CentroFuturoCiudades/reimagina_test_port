@@ -4517,7 +4517,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Compute a scenario's accessibility and write it to Reimagina's element_state_indicator_value, under the same rules as reimagina_scenario_indicators. Only blocks are written: a lot's accessibility is its block's. Built-form values are not touched.",
+      "description": "Compute a scenario's accessibility and write it to Reimagina's element_state_indicator_value, under the same rules as reimagina_scenario_indicators. Only blocks are written: a lot's accessibility is its block's. A fork keeps the baseline's accessibility_<type> where its own differs by less than 0.001. Built-form values are not touched.",
       "inputs": {
         "blocks": {
           "arguments": {},

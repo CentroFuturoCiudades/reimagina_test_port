@@ -41,6 +41,7 @@ from reimagina_test_port.indicators.accessibility.nodes import (
     EDGES_DECLARATION,
     NODES_DECLARATION,
     POIS_DECLARATION,
+    SCORE_KEYS,
 )
 from reimagina_test_port.indicators.land_use.calculation import KEYS as LAND_USE_KEYS
 from reimagina_test_port.indicators.population_access.nodes import PoiType
@@ -276,6 +277,13 @@ BUILT_FORM_KEYS = dict.fromkeys(UNITS, "number")
 ACCESSIBILITY_WRITE_KEYS = {
     key: "text" if key == "farthest_amenity" else "number" for key in ACCESSIBILITY_KEYS
 }
+# accessibility_<type> is a percentile rank among all blocks: a change anywhere
+# shifts every block in between by ~1/blocks. A fork keeps the baseline's value
+# where its own differs by less than this, so it stores the blocks that changed.
+ACCESSIBILITY_SCORE_TOLERANCE = 0.001
+ACCESSIBILITY_WRITE_TOLERANCES = dict.fromkeys(
+    SCORE_KEYS, ACCESSIBILITY_SCORE_TOLERANCE
+)
 
 
 def write_group(
@@ -285,6 +293,7 @@ def write_group(
     *,
     node: str,
     prepare: Callable[[Any], Any] | None = None,
+    tolerances: dict[str, float] | None = None,
     log: Any = logger,
 ) -> pd.DataFrame:
     """Write one group of keys (built-form or accessibility) in its own transaction.
@@ -305,6 +314,7 @@ def write_group(
             parameters.scenario_id,
             values,
             keys,
+            tolerances=tolerances,
             full=parameters.full,
             job_run_id=parameters.job_run_id,
             dry_run=parameters.dry_run,
@@ -362,7 +372,9 @@ def scenario_indicators(
         "Compute a scenario's accessibility and write it to Reimagina's "
         "element_state_indicator_value, under the same rules as "
         "reimagina_scenario_indicators. Only blocks are written: a lot's "
-        "accessibility is its block's. Built-form values are not touched."
+        "accessibility is its block's. A fork keeps the baseline's "
+        "accessibility_<type> where its own differs by less than 0.001. "
+        "Built-form values are not touched."
     ),
     inputs={"blocks": Dependency("reimagina_accessibility_blocks")},
     outputs={"reimagina_scenario_accessibility": WRITE_DECLARATION},
@@ -378,6 +390,7 @@ def scenario_accessibility(
         {"block": blocks},
         ACCESSIBILITY_WRITE_KEYS,
         node="reimagina_scenario_accessibility",
+        tolerances=ACCESSIBILITY_WRITE_TOLERANCES,
         log=context.logger,
     )
 

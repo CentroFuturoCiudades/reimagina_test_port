@@ -33,7 +33,7 @@ from reimagina_test_port.indicators.population_access import (
 from reimagina_test_port.indicators.streets import calculation as streets_calculation
 from reimagina_test_port.ingestion import baseline_writer, catalogs
 from reimagina_test_port.ingestion import nodes as ingestion_nodes
-from reimagina_test_port.scenario import contract
+from reimagina_test_port.scenario import contract, writer
 from reimagina_test_port.scenario import nodes as scenario_nodes
 from reimagina_test_port.scenario import source as scenario
 
@@ -630,6 +630,58 @@ def test_population_access_without_coverage_uses_the_default(dsn, caplog):
     assert "without coverage_m" in caplog.text
     access = stored(dsn, BASELINE)[(BLOCK, "population_with_access_health_services")]
     assert access[0] == 93
+
+
+def test_accessibility_tolerance_keeps_the_baseline_value(dsn):
+    write(BASELINE)
+    baseline = stored(dsn, BASELINE)
+    key = next(
+        k for e, k in baseline if e == BLOCK and k in accessibility_nodes.SCORE_KEYS
+    )
+    value = baseline[(BLOCK, key)][0]
+
+    def write_score(delta: float, tolerance: float | None = 0.001) -> tuple[int, int]:
+        table = pd.DataFrame({"id": [BLOCK], key: [value + delta]})
+        return writer.write_indicators(
+            FORK,
+            writer.long_values(table, "block", {key: "number"}),
+            {key: "number"},
+            tolerances=None if tolerance is None else {key: tolerance},
+        )
+
+    # A shift below the tolerance is not stored: the fork shows the baseline's.
+    assert write_score(-0.0009) == (0, 0)
+    assert (BLOCK, key) not in stored(dsn, FORK)
+    # At the tolerance it is.
+    assert write_score(0.001) == (1, 0)
+    assert stored(dsn, FORK)[(BLOCK, key)][0] == pytest.approx(value + 0.001)
+    # Back within the tolerance: the stored value is cleared.
+    assert write_score(0.0005) == (0, 1)
+    assert (BLOCK, key) not in stored(dsn, FORK)
+    # Without a tolerance any difference is stored.
+    assert write_score(0.0001, tolerance=None) == (1, 0)
+
+
+def test_write_accessibility_uses_the_tolerance():
+    assert set(scenario_nodes.ACCESSIBILITY_WRITE_TOLERANCES) == set(
+        accessibility_nodes.SCORE_KEYS
+    )
+    assert set(scenario_nodes.ACCESSIBILITY_WRITE_TOLERANCES.values()) == {0.001}
+
+
+@pytest.mark.parametrize(
+    ("keys", "tolerances"),
+    [
+        ({"farthest_amenity": "text"}, {"farthest_amenity": 0.001}),
+        ({"minutes": "number"}, {"density": 0.001}),
+        ({"minutes": "number"}, {"minutes": -1.0}),
+        ({"minutes": "number"}, {"minutes": float("nan")}),
+    ],
+)
+def test_write_rejects_invalid_tolerances(keys, tolerances):
+    values = pd.DataFrame(columns=["id", "element_type", "parent_id", "key"])
+    with pytest.raises(ValueError, match="Tolerances"):
+        writer.write_indicators(str(uuid4()), values, keys, tolerances=tolerances)
 
 
 def test_write_clears_values_back_to_baseline(dsn):
