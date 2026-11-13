@@ -714,10 +714,10 @@ def test_refined_streets(refined_city, tmp_path):
         assert sum(json.loads(share)) == pytest.approx(100)
     assert {"sidewalk", "lanes"} <= set(json.loads(row["bands.use"]))
     assert table.crs.to_epsg() == 4326
-    # Only the three attributes: nothing of width, lanes or name is written.
+    # Only the four attributes: nothing of width, lanes or name is written.
     assert list(table.columns) == [
         "id", "parent_id", "source_record_ref", "bands.use", "bands.share",
-        "streetlights", "geometry",
+        "streetlights", "tree_coverage", "geometry",
     ]  # fmt: skip
 
 
@@ -728,7 +728,7 @@ def test_streets_are_polygons_with_their_attributes(city, refined_city, tmp_path
         assert table.geometry.is_valid.all() and not table.geometry.is_empty.any()
         assert list(table.columns) == [
             "id", "parent_id", "source_record_ref", "bands.use", "bands.share",
-            "streetlights", "geometry",
+            "streetlights", "tree_coverage", "geometry",
         ]  # fmt: skip
         assert set(table.attrs["footprints"]) == {"inside", "simplified"}
 

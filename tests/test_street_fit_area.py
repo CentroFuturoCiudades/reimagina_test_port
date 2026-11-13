@@ -29,6 +29,11 @@ from reimagina_test_port.ingestion.cities import CITIES
 
 DATA = Path(__file__).parent / "data"
 AREAS = ["test_area", "lazaro_cardenas"]
+# The maps are not in the repo yet: skip rather than fail until they are.
+pytestmark = pytest.mark.skipif(
+    not all((DATA / f"{area}.gpkg").exists() for area in AREAS),
+    reason="tests/data/test_area.gpkg and lazaro_cardenas.gpkg are missing",
+)
 
 
 def load(area: str) -> tuple[gpd.GeoDataFrame, gpd.GeoSeries]:
