@@ -50,13 +50,13 @@ def lot_indicators(attributes: dict[str, Any]) -> dict[str, float | None]:
         else:
             units = 0
     elif land_use in ("multifamily", "mixed_use"):
-        out["unit_size_m2"] = size = _number(attributes.get("unit_size_m2"))
+        out["unit_size_m2"] = size = _number(attributes.get("housing.unit_size_m2"))
         if built is not None and size:
             units = round(built / size)
     elif land_use in NON_RESIDENTIAL:
         units = 0
     if units is not None:
-        people = _number(attributes.get("people_per_household"))
+        people = _number(attributes.get("housing.people_per_household"))
         occupancy = _number(
             attributes.get("occupancy_rate")
         )  # vacant homes out; absent = 1

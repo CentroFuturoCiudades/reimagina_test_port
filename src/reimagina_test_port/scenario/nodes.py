@@ -1,8 +1,10 @@
 """Lyra nodes over a Reimagina scenario: reimagina_scenario (its lots and blocks),
-reimagina_scenario_pois and reimagina_road_network (accessibility inputs), and the
-writes reimagina_scenario_indicators, reimagina_scenario_accessibility,
+reimagina_scenario_pois and reimagina_road_network (accessibility inputs),
+reimagina_scenario_rights_of_way (streets input), and the writes
+reimagina_scenario_indicators, reimagina_scenario_accessibility,
 reimagina_scenario_population_access, reimagina_scenario_poi_diversity,
-reimagina_scenario_composites and
+reimagina_scenario_land_use,
+reimagina_scenario_streets, reimagina_scenario_composites and
 reimagina_scenario_write."""
 
 import inspect
@@ -26,7 +28,7 @@ from lyra.sdk import (
 from lyra.sdk.errors import MetricInputError
 from pydantic import Field
 
-from reimagina_test_port.common.nodes import timed
+from reimagina_test_port.common.nodes import column, timed
 from reimagina_test_port.common.schema import (
     ATTRIBUTES,
     NUMERIC_ATTRIBUTES,
@@ -40,11 +42,15 @@ from reimagina_test_port.indicators.accessibility.nodes import (
     EDGES_DECLARATION,
     NODES_DECLARATION,
     POIS_DECLARATION,
+    SCORE_KEYS,
 )
+from reimagina_test_port.indicators.land_use.calculation import KEYS as LAND_USE_KEYS
 from reimagina_test_port.indicators.population_access.nodes import (
     DIVERSITY_KEYS,
     PoiType,
 )
+from reimagina_test_port.indicators.streets.calculation import KEYS as STREETS_KEYS
+from reimagina_test_port.indicators.streets.calculation import lane_flags
 from reimagina_test_port.scenario import source, writer
 
 logger = logging.getLogger(__name__)
@@ -168,6 +174,67 @@ def road_network(
     }
 
 
+RIGHTS_OF_WAY_DECLARATION = TableOutput(
+    columns=[
+        TableColumn(name="id", type="string", unit=None, description="Element ID."),
+        column(
+            "bike_lane",
+            "boolean",
+            None,
+            "Whether the right_of_way's bands.use has shared_lanes or a "
+            "protected_bike_lane.",
+        ),
+        column(
+            "protected_bike_lane",
+            "boolean",
+            None,
+            "Whether the right_of_way's bands.use has a protected_bike_lane.",
+        ),
+        column(
+            "streetlights",
+            "number",
+            None,
+            "Share (0-100) of the right_of_way's length with street lighting.",
+        ),
+    ],
+    geometry="geometry",
+)
+
+
+def read_elements(
+    node: str, scenario_id: str, element_types: list[str], keys: list[str]
+) -> gpd.GeoDataFrame:
+    try:
+        return source.read_elements(scenario_id, element_types, keys)
+    except source.ScenarioNotFoundError as exc:
+        raise MetricInputError(node, "parameters.scenario_id", str(exc)) from exc
+
+
+@dataset(
+    name="reimagina_scenario_rights_of_way",
+    description=(
+        "Acquire a scenario's present streets (right_of_way): whether their "
+        "bands.use has a bike lane and a protected one, and their streetlights."
+    ),
+    outputs={"reimagina_scenario_rights_of_way": RIGHTS_OF_WAY_DECLARATION},
+)
+def scenario_rights_of_way(
+    parameters: ScenarioParameters, context: DatasetContext
+) -> gpd.GeoDataFrame:
+    """Streets (polygons; an older baseline's, lines), with baseline fallback; a list column has no Lyra type, so
+    bands.use leaves as two flags."""
+    with timed("read streets", context.logger):
+        streets = read_elements(
+            "reimagina_scenario_rights_of_way",
+            parameters.scenario_id,
+            ["right_of_way"],
+            ["bands.use", "streetlights"],
+        )
+    table = streets[["id"]].join(lane_flags(streets["bands.use"]))
+    table["streetlights"] = pd.to_numeric(streets["streetlights"]).astype("float64")
+    return gpd.GeoDataFrame(table, geometry=streets.geometry)
+
+
 class WriteParameters(ScenarioParameters):
     """Scenario to write, with exe_reimagina's job options."""
 
@@ -228,6 +295,13 @@ BUILT_FORM_KEYS = dict.fromkeys(UNITS, "number")
 ACCESSIBILITY_WRITE_KEYS = {
     key: "text" if key == "farthest_amenity" else "number" for key in ACCESSIBILITY_KEYS
 }
+# accessibility_<type> is a percentile rank among all blocks: a change anywhere
+# shifts every block in between by ~1/blocks. A fork keeps the baseline's value
+# where its own differs by less than this, so it stores the blocks that changed.
+ACCESSIBILITY_SCORE_TOLERANCE = 0.001
+ACCESSIBILITY_WRITE_TOLERANCES = dict.fromkeys(
+    SCORE_KEYS, ACCESSIBILITY_SCORE_TOLERANCE
+)
 
 
 def write_group(
@@ -237,6 +311,7 @@ def write_group(
     *,
     node: str,
     prepare: Callable[[Any], Any] | None = None,
+    tolerances: dict[str, float] | None = None,
     log: Any = logger,
 ) -> pd.DataFrame:
     """Write one group of keys (built-form or accessibility) in its own transaction.
@@ -257,6 +332,7 @@ def write_group(
             parameters.scenario_id,
             values,
             keys,
+            tolerances=tolerances,
             full=parameters.full,
             job_run_id=parameters.job_run_id,
             dry_run=parameters.dry_run,
@@ -314,7 +390,9 @@ def scenario_indicators(
         "Compute a scenario's accessibility and write it to Reimagina's "
         "element_state_indicator_value, under the same rules as "
         "reimagina_scenario_indicators. Only blocks are written: a lot's "
-        "accessibility is its block's. Built-form values are not touched."
+        "accessibility is its block's. A fork keeps the baseline's "
+        "accessibility_<type> where its own differs by less than 0.001. "
+        "Built-form values are not touched."
     ),
     inputs={"blocks": Dependency("reimagina_accessibility_blocks")},
     outputs={"reimagina_scenario_accessibility": WRITE_DECLARATION},
@@ -330,6 +408,7 @@ def scenario_accessibility(
         {"block": blocks},
         ACCESSIBILITY_WRITE_KEYS,
         node="reimagina_scenario_accessibility",
+        tolerances=ACCESSIBILITY_WRITE_TOLERANCES,
         log=context.logger,
     )
 
@@ -372,6 +451,55 @@ def scenario_population_access(
         {"block": blocks},
         keys,
         node="reimagina_scenario_population_access",
+        log=context.logger,
+    )
+
+
+def block_description(what: str) -> str:
+    return (
+        f"Compute a scenario's {what} and write it to Reimagina's "
+        "element_state_indicator_value, under the same rules as "
+        "reimagina_scenario_indicators. Only blocks are written; other indicators "
+        "are not touched."
+    )
+
+
+@metric(
+    name="reimagina_scenario_land_use",
+    description=block_description(
+        "net residential density, commercial land share and land use mix"
+    ),
+    inputs={"blocks": Dependency("reimagina_land_use_blocks")},
+    outputs={"reimagina_scenario_land_use": WRITE_DECLARATION},
+)
+def scenario_land_use(
+    parameters: WriteParameters, blocks: gpd.GeoDataFrame, context: RunContext
+) -> pd.DataFrame:
+    return write_group(
+        parameters,
+        {"block": blocks},
+        dict.fromkeys(LAND_USE_KEYS, "number"),
+        node="reimagina_scenario_land_use",
+        log=context.logger,
+    )
+
+
+@metric(
+    name="reimagina_scenario_streets",
+    description=block_description(
+        "bike lane and street lighting coverage and street connectivity"
+    ),
+    inputs={"blocks": Dependency("reimagina_streets_blocks")},
+    outputs={"reimagina_scenario_streets": WRITE_DECLARATION},
+)
+def scenario_streets(
+    parameters: WriteParameters, blocks: gpd.GeoDataFrame, context: RunContext
+) -> pd.DataFrame:
+    return write_group(
+        parameters,
+        {"block": blocks},
+        dict.fromkeys(STREETS_KEYS, "number"),
+        node="reimagina_scenario_streets",
         log=context.logger,
     )
 
@@ -473,17 +601,20 @@ def scenario_poi_diversity(
     name="reimagina_scenario_write",
     description=(
         "Compute and write a scenario's built-form indicators, accessibility, "
-        "population access, POI diversity and composites: "
+        "population access, POI diversity, land use, streets and composites: "
         "reimagina_scenario_indicators, reimagina_scenario_accessibility, "
-        "reimagina_scenario_population_access, reimagina_scenario_poi_diversity "
-        "and reimagina_scenario_composites, each in its own transaction. The "
-        "result adds up all five."
+        "reimagina_scenario_population_access, reimagina_scenario_poi_diversity, "
+        "reimagina_scenario_land_use, reimagina_scenario_streets and "
+        "reimagina_scenario_composites, each in its own transaction. The result "
+        "adds up all of them."
     ),
     inputs={
         "indicators": Dependency("reimagina_scenario_indicators"),
         "accessibility": Dependency("reimagina_scenario_accessibility"),
         "population_access": Dependency("reimagina_scenario_population_access"),
         "poi_diversity": Dependency("reimagina_scenario_poi_diversity"),
+        "land_use": Dependency("reimagina_scenario_land_use"),
+        "streets": Dependency("reimagina_scenario_streets"),
         "composites": Dependency("reimagina_scenario_composites"),
     },
     outputs={"reimagina_scenario_write": WRITE_DECLARATION},
@@ -494,11 +625,21 @@ def scenario_write(
     accessibility: pd.DataFrame,
     population_access: pd.DataFrame,
     poi_diversity: pd.DataFrame,
+    land_use: pd.DataFrame,
+    streets: pd.DataFrame,
     composites: pd.DataFrame,
 ) -> pd.DataFrame:
     """Final node: the writes' summary in one row."""
     writes = pd.concat(
-        [indicators, accessibility, population_access, poi_diversity, composites]
+        [
+            indicators,
+            accessibility,
+            population_access,
+            poi_diversity,
+            land_use,
+            streets,
+            composites,
+        ]
     )
     return pd.DataFrame(
         [

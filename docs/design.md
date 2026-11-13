@@ -19,6 +19,9 @@ src/reimagina_test_port/
 ├── indicators/    one subpackage per indicator type, each with its nodes.py
 │   ├── built_form/      calculation.py
 │   ├── accessibility/   model.py, metrics.py, fastpath.py, network.py
+│   ├── population_access/ calculation.py (GHSCI walks from lot entries)
+│   ├── land_use/        calculation.py (density, commercial share, land use mix)
+│   ├── streets/         calculation.py (bike lanes, lighting, connectivity)
 │   └── composites/      composite.py (the math), composite_config.yaml (the tree),
 │                        composite_metric.py (its nodes)
 └── common/        shared: lake, vocabulary, schema (element identity,
@@ -45,9 +48,15 @@ lots and blocks built from the data lake by the `reimagina_baseline` dataset;
 nothing is written. `reimagina_baseline_write` writes them into a baseline
 scenario. `create_plugin()` registers this graph.
 
+`reimagina_land_use` and `reimagina_streets` (below) are
+written by `reimagina_scenario_land_use` and
+`reimagina_scenario_streets`, which `reimagina_scenario_write` also runs.
+
 `create_snapshot_plugin()` registers the same metrics over
 `reimagina_prepared_snapshot` and `reimagina_prepared_accessibility` instead,
-which read prepared GeoParquet files. It is for offline tests and examples; it is
+which read prepared GeoParquet files, except land use and streets: they
+are plain `@metric` functions over the scenario's datasets, so they run over
+scenarios only (their tests call the functions directly). It is for offline tests and examples; it is
 not in the manifest or the image.
 
 ## Scenario source
@@ -120,6 +129,56 @@ the CFC lake, or a local path), downloads it into the job's scratch folder with
 `DefaultAzureCredential`, and returns the pandana H5's nodes and edges (its first
 impedance as `distance`). A project without the URI fails as an input error.
 
+## ULI block indicators
+
+Ported from uli_mexicali_calculations_notebooks
+(`inidcadores_finales_export.ipynb`) and the GHSCI outputs it sits beside, per
+block, from the scenario's elements instead of the notebook's polygons, so a
+scenario that changes its lots changes them. Each group is a metric with one
+block output and its own write; a block without the inputs a value needs is null,
+never 0.
+
+- `reimagina_land_use` (walkability index): `net_residential_density`, homes per
+  hectare of the lots that hold homes (the notebook's *Habitacional*), a lot's
+  homes being built form's `num_housing_units`: one for a single-family house, its
+  built space over `housing.unit_size_m2` for multifamily and mixed use. They are
+  the same homes as `density` and `population`; a lot without them is left out.
+  `commercial_land_share`, the share of the block's lot area in `commerce` or
+  `office` (*Comercio y servicios*); `land_use_mix`, the entropy of the lots'
+  land uses by area over the log of the number of uses present, as the notebook
+  (one use is 0). Inputs: the source lots and built form's lots.
+- `reimagina_streets`: what the streets within 500 m of the block are like, as
+  shares (0-1) of their length. Streets are `right_of_way` elements (polygons;
+  an older baseline's, lines) with their make-up as attributes (urban_fabric.md).
+  A polygon's length within 500 m is `street_fit.strip_length` of its part there
+  (see *Rights of way*), a line's its length. `bike_lane_coverage` and
+  `protected_bike_lane_coverage`: streets whose bands (`bands.use`) have a
+  `shared_lanes` or `protected_bike_lane`, or only a protected one; a lane is part
+  of its street, so the notebook's 100 m tolerance between lanes and centrelines
+  is not needed. `street_lighting_coverage` (ULI "Presence of street lighting"):
+  each street's `streetlights` (share of its length lit, 0-100, from INEGI's
+  block faces) weighted by its length, over the streets that have the value.
+  The notebook measures streets inside its polygons; a block has none inside.
+  Lengths are counted in pieces of at most 25 m, cut once per street: a piece
+  counts in full for each block within 500 m of its midpoint. Only the pieces
+  across the 500 m edge are off, and the share moves by more than 0.02 only where
+  the block has a few hundred metres of street with a value around it (Mexicali:
+  5 of 16,342 blocks). Clipping each street to each block took about 70 s for
+  Mexicali; the pieces take about 9 s.
+  `reimagina_scenario_rights_of_way` returns each street's two lane flags (Lyra
+  has no list column) and `streetlights`. Until a baseline has `right_of_way`
+  streets (`reimagina_baseline_streets`), these three are null.
+  `intersection_density` (ULI "Street connectivity") comes from the road network
+  instead (pandana, from the node nearest the block's representative point):
+  nodes joining three or more streets within 1 km, per km² of a 1 km circle
+  (GHSCI divides by the buffered network and consolidates intersections within
+  12 m).
+
+Streets are read as POIs are: from their attribute values (`bands.use` or
+`streetlights`), so a street without either is not read. The keys are in
+`indicator_catalog` (job codes `land_use`, `streets`) and
+are composite sources.
+
 ## Composites
 
 A composite indicator combines other indicators into one score per block (or
@@ -180,6 +239,28 @@ baseline again, or belong to an element no longer present, are removed. Rows
 whose stored value is unchanged are not rewritten and keep their `job_run_id`
 and `computed_at`, so writing the same scenario again changes nothing.
 
+The comparison reads the baseline's values of the group's keys once (a
+`MATERIALIZED` CTE) and joins them by hash. Joined directly, PostgreSQL may look
+each value up by `element_id` instead: on dev, 13 s against 0.5 s for population
+access or accessibility (about 300,000 values), and 53 s in a fork's job.
+
+`accessibility_<type>` is a percentile rank among all blocks, so a change
+anywhere moves every block it passes in the ranking by about 1/blocks
+(0.0001 after rounding). To keep a fork from storing those shifts for the whole
+city, a fork keeps the baseline's `accessibility_<type>` where its own differs by
+less than 0.001 (`ACCESSIBILITY_SCORE_TOLERANCE`); the value it shows is then off
+by less than that. The comparison is always against the baseline, so the error
+does not accumulate across writes. Other keys keep the exact comparison.
+
+After a write that changed rows, the writer runs `ANALYZE` on
+`element_state_indicator_value` (best effort, 5 s lock timeout; a failure only
+logs a warning, since the values are already committed). The API reads a fork as
+its own rows, else the baseline's (`NOT EXISTS`); while the table's statistics do
+not know a new fork, the planner takes it for about one row and picks a nested
+loop that compares every baseline row with every fork row. On dev the map of a
+17k-row fork took 246 s that way and 0.6 s once analyzed. Autoanalyze would only
+catch up after about 10% of the table changes.
+
 For a fork, values that cannot have changed are not sent to the database at
 all. A lot the fork did not edit (no `element_state` row) and that has no stored
 fork value has its baseline value, which is what it computes. Blocks are always
@@ -206,7 +287,7 @@ and `footprints.py` are copied unchanged (excluded from ruff): blocks join censu
 by CVEGEO; lots get area, normativa (containing polygon, else nearest within 3 m)
 and the block of their nearest representative point; heights give `cos`,
 `num_levels` and built-up area. `elements.py` gives `commerce_type`, the
-multifamily `unit_size_m2` and `land_use`, classified from what each lot holds
+multifamily `housing.unit_size_m2` and `land_use`, classified from what each lot holds
 (below). Blocks also declare `lot.size_m2` and `lot.frontage_m`, targets that stay
 unset when the city is loaded (reimagina_urbano_api `urban_fabric.md`).
 
@@ -351,12 +432,14 @@ network). The city YAML's `sources.streets` (`uri: osm://overpass`) sets it up.
    blocks plus `margin_m` (so the roads between the city and its outlying
    localities are in, as in exe_reimagina's `roads.py`), within the municipality
    (`boundary_uri`: OSM joins Calexico's streets to Mexicali's at the border
-   crossings, the ULI's issue #610), through Overpass (osmnx), with the city's `custom_filter`, two-way,
-   in the city's CRS (the blocks' UTM zone, which the indicators expect).
-   Mexicali's filter is the pedestrian network of `MX_Mexicali_2025_ULI.yml`
-   (`network.pedestrian`): unlike osmnx's `walk` it keeps private and gated
-   streets (Condesa, gated communities), and `retain_all` keeps pieces apart
-   from the rest. exe_reimagina's H5 was the `drive` network.
+   crossings, the ULI's issue #610), through Overpass (osmnx), of the city's
+   `network_type` (`walk` by default) and its `custom_filter` when it has one, in
+   the city's CRS (the blocks' UTM zone, which the indicators expect). The H5 is
+   two-way whatever the type. Mexicali takes osmnx's `drive` network, as
+   exe_reimagina's H5, without a filter of its own; it used the pedestrian
+   network of `MX_Mexicali_2025_ULI.yml` (`network.pedestrian`) before. `retain_all`
+   keeps pieces apart from the rest. The OSM copy is keyed by the type too, so
+   changing it downloads again.
 2. Optionally, `streets_uri`: a (Geo)Parquet or vector file of street lines that
    replaces the network inside its zone (`zone_uri`, or the lines' convex hull).
    Edges whose midpoint is in the zone go (an avenue that only grazes it stays);
@@ -365,8 +448,19 @@ network). The city YAML's `sources.streets` (`uri: osm://overpass`) sets it up.
    splits it where it meets it, and a piece still apart is bridged by its
    shortest gap up to `connector_max_m` (5 m). Pieces left apart are logged.
 
-`reimagina_street_network(city, streets_uri?, zone_uri?)` returns nodes and edges
-in `reimagina_road_network`'s tables; `reimagina_street_network_tables` shows them.
+The OSM download is saved in the lake the first time, beside the H5s
+(`output_prefix`), as `osm_<cve>_<hash>_nodes.parquet` and `_edges.parquet`
+(EPSG:4326, each edge with its way's shape); the hash covers the study area, the
+filter and `retain_all`. Later runs with the same three read those files instead
+of asking Overpass (about 6 minutes for Mexicali, and refused when it is busy);
+`refresh_osm` downloads again and replaces them. Another area or filter is another
+file.
+
+`reimagina_street_network(city, streets_uri?, zone_uri?, refresh_osm?)` returns
+nodes and edges in `reimagina_road_network`'s tables, the edges with their shape
+(`geometry`, in the city's CRS): OSM's way, a new street's line, or the straight
+line between its nodes for an edge that step 2 splits or adds as a connector;
+`reimagina_street_network_tables` shows them. The H5 keeps no shapes.
 `reimagina_street_network_write(..., project_id, dry_run)` saves them as pandana's
 H5 (`length` in metres, two-way), uploads it to `output_prefix` as
 `vialidades_<cve>_<hash>.h5` (named by its contents; an existing file is never
@@ -374,14 +468,90 @@ overwritten) and sets the project's `road_network_uri`, returning the previous
 one. A dry run builds the H5 without uploading it or changing the project. Then
 `reimagina_scenario_write` recomputes accessibility over the new network.
 
+### Rights of way
+
+`reimagina_baseline_streets` (`ingestion/streets.py`) turns that network into the
+baseline's `right_of_way` elements (urban_fabric.md, *Right of way*): one per
+street, a pair of nodes whatever the direction of its edges, a polygon around
+the edge's shape (the network's `geometry`; see *Polygons* below), keyed `<lower id>-<higher id>` (`source_record_ref`), id
+`uuid5(NS, "<city>:right_of_way:<key>")`, no parent. The network is the ULI's
+pedestrian one, so footways and paths are streets too. Two optional sources of
+the city YAML fill its attributes; another city changes the files and columns:
+
+- `sources.street_lighting`: block faces with a lighting answer (`column`), after
+  `where` (a national file's municipality). `streetlights` (0-100) is the share of
+  lit faces (`lit`) among the answered ones (`lit` or `unlit`) whose midpoint lies
+  within `max_distance_m` (25) of the street; without one it has no value.
+  Mexicali: INEGI's 2020 housing inventory (`ALUMPUB` 1 lit, 3 not, 7-9
+  unanswered), national and one file per state.
+- `sources.bike_lanes`: the city's own lane lines. A street whose midpoint lies
+  within `max_distance_m` (15) of one has a bike lane: a `protected_bike_lane`
+  band when the lane's `type_column` is in `protected`, else its lanes are
+  `shared_lanes`. Mexicali: IMIP's existing lanes (`TIPO`).
+
+The traffic lanes are one band, `lanes`: their total space, not lane by lane.
+Only a protected bike lane takes a band of its own, next to the sidewalk.
+`bands.use` and `bands.share` are a default profile until widths are loaded:
+`sidewalk, lanes, sidewalk` (20/60/20), `sidewalk, shared_lanes, sidewalk`
+(20/60/20) or `sidewalk, protected_bike_lane, lanes, sidewalk` (20/10/50/20),
+written as JSON lists; the writer stores `json` attributes in `value_json`. A
+relative `uri` is a file of the package (`src/reimagina_test_port/data/...`):
+Mexicali's block faces are `data/inegi/02_Frentes_INV2020_shp.zip` and its bike
+lanes `data/mexicali/ciclovia_exist.geojson`. `reimagina_baseline_write` writes
+them with the rest; it needs `right_of_way` in the API's `element_type` enum.
+
+**Fitting the streets (`sources.streets.params.refine`, off by default).** The
+network's edges keep OSM's `highway`, `name` and `lanes`. With `refine: true`, the
+vehicular streets (every class but `pedestrian`; an edge without `highway`, from
+merged streets, is `residential`) go through `ingestion/street_fit.py`, which
+measures each street against the cadastre's lots (`parcels`): one right of way per
+stretch from intersection to intersection (a dual carriageway is one, keyed by its
+lowest `<lo>-<hi>`), its axis centred between the lot fronts, and `bands.use` /
+`bands.share` the measured width's (sidewalk, lanes, median, lanes, sidewalk; the
+bike lane inserted on its side). Pedestrian streets are as above. Two matches
+scale with the width: faces count within `max(max_distance_m, width / 2 +
+front_tolerance_m)`, and a lane counts if `min_share` of the axis lies within
+`max(max_distance_m, width / 2)` of it, on its side. `params.fit` overrides
+`street_fit.DEFAULTS`. The attributes written are the same three; width, lanes and
+name are used and not written. `refine` lives in `reimagina_baseline_streets`, so it
+changes neither the network nor its H5. Turning it on changes the vehicular keys:
+the writer replaces those elements. Where there are no lots, a side takes its
+class's default width (`measured_sides < 2`).
+
+**Polygons.** Every `right_of_way` is written as a polygon, lot front to lot front
+(EPSG:4326), with the same three attributes; its width is its shape. A fitted
+street's is its axis ± `width_m / 2` (`street_fit.footprints`; the axis is
+already centred, and `width_m` may have been smoothed, so `width_left_m` /
+`width_right_m` aren't used); any other street's (pedestrian, `refine: false`) a
+strip of its class's default width (`2 × default_half_width_m`), cut where it
+overlaps a fitted one. Junctions belong to no street: each end of an axis is
+trimmed across it, as far along it as its strip overlaps the strips of the streets
+at the node there (`street_fit.cut_junctions`), and the polygon is the strip of
+the trimmed axis, one clean piece with flat ends (a dead end isn't trimmed; a
+street going straight on is trimmed next to nothing). A street ending halfway along
+a corridor stops at its edge, and the corridor goes on whole. One the trims leave
+less than 1 m of axis
+(wholly inside a junction) keeps its strip and overlaps the others; an axis that
+crosses itself is simplified first (`table.attrs["footprints"]` counts both). The
+axes and `width_m` stay in memory for the lighting and bike lane matches.
+
+A strip's length `L` and width `W` follow from its area `A` and perimeter `P`
+(`P ≈ 2L + 2W`, `A ≈ L·W`, curved too): `L = P/4 + √(P²/16 − A)`, `W = A / L`
+(`street_fit.strip_length`, `strip_width`; a band's metres are `W × share / 100`).
+The streets indicator weighs by `L`. On the Condesa `W` is within ±5 % of the
+fitted `width_m` on 89 % of the streets (99 % of those longer than wide): the
+formula gives a strip's longer side, so a stretch the trims leave shorter than
+wide (about one in ten) swaps its length and width. A map drawn from the base
+shows the junctions empty.
+
 ## Baseline writer
 
 `reimagina_baseline_write(city, project_id, scenario_id)` fills an existing
 baseline scenario (created in the API, without forks) in one transaction:
 `elements` (new ids only; an existing element, such as a block shared with
 another baseline, is reused unchanged), `element_state` and
-`element_state_attribute_value`, for blocks, lots, amenities and
-establishments. The API's `element_type` enum must include `amenity` (it has
+`element_state_attribute_value`, for blocks, lots, amenities,
+establishments and streets (`right_of_way`). The API's `element_type` enum must include `amenity` (it has
 `establishment`); otherwise the write fails naming the missing types. Before
 writing, `ingestion/catalogs.py` adds the `attribute_catalog` rows of
 `BASELINE_ATTRIBUTES` and the `indicator_catalog` rows of every built-form and

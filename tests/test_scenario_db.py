@@ -19,19 +19,21 @@ import pytest
 from lyra.sdk import GraphExecutionError, LocalRunner
 from lyra.sdk.errors import MetricInputError
 from psycopg import conninfo, sql
-from shapely.geometry import box
+from shapely.geometry import LineString, box
 
 from reimagina_test_port import plugin
 from reimagina_test_port.common import schema
 from reimagina_test_port.indicators.accessibility import model as accessibility
 from reimagina_test_port.indicators.accessibility import nodes as accessibility_nodes
 from reimagina_test_port.indicators.composites import catalog as composite_catalog
+from reimagina_test_port.indicators.land_use import calculation as land_use_calculation
 from reimagina_test_port.indicators.population_access import (
     nodes as population_access_nodes,
 )
+from reimagina_test_port.indicators.streets import calculation as streets_calculation
 from reimagina_test_port.ingestion import baseline_writer, catalogs
 from reimagina_test_port.ingestion import nodes as ingestion_nodes
-from reimagina_test_port.scenario import contract
+from reimagina_test_port.scenario import contract, writer
 from reimagina_test_port.scenario import nodes as scenario_nodes
 from reimagina_test_port.scenario import source as scenario
 
@@ -60,7 +62,7 @@ CREATE EXTENSION postgis;
 CREATE SCHEMA reimagina_urbano;
 SET search_path = reimagina_urbano, public;
 CREATE TYPE element_type AS ENUM (
-    'block', 'lot', 'building', 'tree', 'amenity', 'establishment'
+    'block', 'lot', 'building', 'tree', 'amenity', 'establishment', 'right_of_way'
 );
 CREATE TYPE attribute_value_type AS ENUM ('number', 'integer', 'text', 'enum', 'json');
 CREATE TABLE projects (id uuid PRIMARY KEY, road_network_uri text);
@@ -145,10 +147,11 @@ CREATE TABLE element_state_indicator_value (
 INSERT INTO attribute_catalog (element_type, key, value_type) VALUES
     ('lot', 'land_use', 'enum'), ('lot', 'cos', 'number'),
     ('lot', 'num_levels', 'integer'), ('lot', 'area', 'number'),
-    ('lot', 'unit_size_m2', 'number'), ('lot', 'people_per_household', 'number'),
+    ('lot', 'housing.unit_size_m2', 'number'),
+    ('lot', 'housing.people_per_household', 'number'),
     ('lot', 'occupancy_rate', 'number'),
     ('lot', 'commerce_type', 'text'), ('block', 'vivtot', 'number'),
-    ('block', 'people_per_household', 'number'),
+    ('block', 'housing.people_per_household', 'number'),
     ('amenity', 'category', 'enum'), ('amenity', 'scian_code', 'text'),
     ('establishment', 'category', 'enum'), ('establishment', 'scian_code', 'text');
 CREATE TABLE poi_catalog (
@@ -181,7 +184,7 @@ HOUSE_ATTRS = {
     "area": 200,
     "cos": 0.5,
     "num_levels": 2,
-    "people_per_household": 3.5,
+    "housing.people_per_household": 3.5,
     "occupancy_rate": 0.9,
 }
 SHOP_ATTRS = {"land_use": "commerce", "area": 100, "cos": 1, "num_levels": 1}
@@ -190,8 +193,8 @@ FLATS_ATTRS = {
     "area": 1000,
     "cos": 0.6,
     "num_levels": 4,
-    "unit_size_m2": 80,
-    "people_per_household": 3,
+    "housing.unit_size_m2": 80,
+    "housing.people_per_household": 3,
 }
 
 
@@ -316,7 +319,7 @@ def seed(conn, network_uri: str) -> None:
     set_attrs(conn, FORK, SHOP, {"land_use": "single_family", "num_levels": 2})
     add_point(conn, FORK, PARK, "amenity", SHOP, {"category": "public_space"})
     add_state(conn, FORK, FLATS)
-    set_attrs(conn, FORK, FLATS, {"unit_size_m2": None})
+    set_attrs(conn, FORK, FLATS, {"housing.unit_size_m2": None})
     add_state(conn, FORK, CLINIC, parent=FLATS)
     set_attrs(conn, FORK, CLINIC, {"category": None, "scian_code": None})
     add_state(conn, FORK, HOUSE, wkt=SMALL, parent=BLOCK_2)
@@ -337,6 +340,8 @@ def seed_catalog(conn) -> None:
         *accessibility_nodes.SCORE_KEYS,
         *population_access_nodes.KEYS,
         *population_access_nodes.DIVERSITY_KEYS,
+        *land_use_calculation.KEYS,
+        *streets_calculation.KEYS,
     ]
     for element_type in ("lot", "block"):
         for key in keys:
@@ -411,7 +416,7 @@ def test_fork_falls_back_to_baseline(dsn):
     assert lots[SHOP]["num_levels"] == 2
     assert lots[SHOP]["area"] == 100
     # An all-NULL scenario row hides the baseline value.
-    assert pd.isna(lots[FLATS]["unit_size_m2"])
+    assert pd.isna(lots[FLATS]["housing.unit_size_m2"])
     # Geometry and parent from the fork's own state row.
     assert lots[HOUSE]["parent_id"] == BLOCK_2
     assert lots[HOUSE]["geometry"].bounds == pytest.approx((0, 0, 0.0001, 0.0001))
@@ -650,6 +655,58 @@ def test_write_diversity(dsn, monkeypatch):
     assert stored(dsn, FORK)[(BLOCK_2, key)][0] == 0
 
 
+def test_accessibility_tolerance_keeps_the_baseline_value(dsn):
+    write(BASELINE)
+    baseline = stored(dsn, BASELINE)
+    key = next(
+        k for e, k in baseline if e == BLOCK and k in accessibility_nodes.SCORE_KEYS
+    )
+    value = baseline[(BLOCK, key)][0]
+
+    def write_score(delta: float, tolerance: float | None = 0.001) -> tuple[int, int]:
+        table = pd.DataFrame({"id": [BLOCK], key: [value + delta]})
+        return writer.write_indicators(
+            FORK,
+            writer.long_values(table, "block", {key: "number"}),
+            {key: "number"},
+            tolerances=None if tolerance is None else {key: tolerance},
+        )
+
+    # A shift below the tolerance is not stored: the fork shows the baseline's.
+    assert write_score(-0.0009) == (0, 0)
+    assert (BLOCK, key) not in stored(dsn, FORK)
+    # At the tolerance it is.
+    assert write_score(0.001) == (1, 0)
+    assert stored(dsn, FORK)[(BLOCK, key)][0] == pytest.approx(value + 0.001)
+    # Back within the tolerance: the stored value is cleared.
+    assert write_score(0.0005) == (0, 1)
+    assert (BLOCK, key) not in stored(dsn, FORK)
+    # Without a tolerance any difference is stored.
+    assert write_score(0.0001, tolerance=None) == (1, 0)
+
+
+def test_write_accessibility_uses_the_tolerance():
+    assert set(scenario_nodes.ACCESSIBILITY_WRITE_TOLERANCES) == set(
+        accessibility_nodes.SCORE_KEYS
+    )
+    assert set(scenario_nodes.ACCESSIBILITY_WRITE_TOLERANCES.values()) == {0.001}
+
+
+@pytest.mark.parametrize(
+    ("keys", "tolerances"),
+    [
+        ({"farthest_amenity": "text"}, {"farthest_amenity": 0.001}),
+        ({"minutes": "number"}, {"density": 0.001}),
+        ({"minutes": "number"}, {"minutes": -1.0}),
+        ({"minutes": "number"}, {"minutes": float("nan")}),
+    ],
+)
+def test_write_rejects_invalid_tolerances(keys, tolerances):
+    values = pd.DataFrame(columns=["id", "element_type", "parent_id", "key"])
+    with pytest.raises(ValueError, match="Tolerances"):
+        writer.write_indicators(str(uuid4()), values, keys, tolerances=tolerances)
+
+
 def test_write_clears_values_back_to_baseline(dsn):
     write(BASELINE)
     write(FORK)
@@ -707,6 +764,38 @@ def test_dry_run_and_job_run(dsn):
     values = stored(dsn, BASELINE)
     assert values[(HOUSE, "num_levels")][2] is None
     assert values[(SHOP, "num_levels")][2] == job
+
+
+def scenario_statistics(dsn: str) -> list[str]:
+    """The scenario ids the planner's statistics know in the value table."""
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT most_common_vals::text::text[] FROM pg_stats "
+            "WHERE schemaname = 'reimagina_urbano' "
+            "AND tablename = 'element_state_indicator_value' "
+            "AND attname = 'scenario_id'"
+        ).fetchone()
+    return list(row[0] or []) if row else []
+
+
+def test_write_refreshes_the_statistics(dsn):
+    # Without them the API plans a fork as ~1 row (a nested loop over the baseline).
+    write(BASELINE, dry_run=True)
+    assert scenario_statistics(dsn) == []
+    write(BASELINE)
+    assert scenario_statistics(dsn) == [BASELINE]
+    write(FORK)
+    assert sorted(scenario_statistics(dsn)) == sorted([BASELINE, FORK])
+
+
+def test_failed_statistics_refresh_only_warns(caplog):
+    class Failing:
+        def transaction(self):
+            raise psycopg.errors.LockNotAvailable("lock timeout")
+
+    with caplog.at_level(logging.WARNING):
+        writer._refresh_statistics(Failing(), logging.getLogger("test"))
+    assert "ANALYZE of the indicator values failed" in caplog.text
 
 
 def test_composites_register_their_catalog_rows(dsn):
@@ -790,7 +879,7 @@ def new_tables(count: int = 4):
             "parent_id": [None, None],
             "source_record_ref": ["cvegeo:1", "cvegeo:2"],
             "vivtot": [10.0, None],
-            "people_per_household": [3.0, None],
+            "housing.people_per_household": [3.0, None],
             "lot.size_m2": [None, None],
             "lot.frontage_m": [None, None],
         },
@@ -806,11 +895,12 @@ def new_tables(count: int = 4):
             "cos": [0.5, 1.0, 0.6, None][:count],
             "num_levels": [2, 1, 4, None][:count],
             "area": [200.0, 100.0, 1000.0, 50.0][:count],
-            "unit_size_m2": [None, None, 80.0, None][:count],
-            "people_per_household": [3.5, None, 3.0, None][:count],
+            "housing.unit_size_m2": [None, None, 80.0, None][:count],
+            "housing.people_per_household": [3.5, None, 3.0, None][:count],
             "occupancy_rate": [0.9, None, None, None][:count],
             "housing.floor_share": [100.0, 100.0, 80.0, None][:count],
             "commerce_type": [None, "shop", None, None][:count],
+            "tree_coverage": [12.5, None, None, None][:count],
         },
         geometry=[lot_box(i, 0.00002) for i in range(count)],
         crs=4326,
@@ -927,20 +1017,20 @@ def test_write_new_baseline(new_baseline, dsn):
     first = write_new_baseline()
     # The blocks already exist: reused, not created. 23 lot and block values, 4 of
     # the amenity (no name) and 4 of the establishment (no workers). The catalogs
-    # get the 10 attributes they lacked (housing.floor_share, the block's targets,
-    # 4 of the amenity and 3 of the establishment), block.density and the
+    # get the 11 attributes they lacked (housing.floor_share, tree_coverage, the
+    # block's targets, 4 of the amenity and 3 of the establishment), block.density and the
     # composites' keys (the scenario writer registers those too); the dry run
     # rolled its rows back.
     assert first == {
         "elements": 8,
         "elements_created": 6,
-        "attribute_values": 31,
+        "attribute_values": 32,  # with the first lot's tree_coverage
         "elements_removed": 0,
-        "attributes_added": 10,
+        "attributes_added": 11,
         "indicators_added": 1 + len(composite_catalog.catalog_rows()),
         "by_type": {"block": 2, "lot": 4, "amenity": 1, "establishment": 1},
     }
-    assert counts(dsn, NEW_BASELINE) == (8, 31)
+    assert counts(dsn, NEW_BASELINE) == (8, 32)
     with psycopg.connect(dsn) as conn:
         # Added rows take the plugin's types and units; existing ones stay.
         rows = dict(
@@ -1076,8 +1166,8 @@ def test_migrate_fork_edits(new_baseline, dsn):
         module.migrate(dsn, FORK, NEW_FORK, apply=False)
 
 
-def test_baseline_write_metric(new_baseline, dsn, monkeypatch):
-    from reimagina_test_port.ingestion import baseline
+def test_baseline_write_metric(new_baseline, dsn, monkeypatch, offline_network):
+    from reimagina_test_port.ingestion import baseline, streets
 
     tables = new_tables()
     monkeypatch.setattr(
@@ -1091,6 +1181,21 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch):
             "report": {},
         },
     )
+    street = gpd.GeoDataFrame(
+        {
+            "id": [str(uuid4())],
+            "parent_id": [None],
+            "source_record_ref": ["1-2"],
+            "bands.use": ['["sidewalk", "protected_bike_lane", "lanes", "sidewalk"]'],
+            "bands.share": ["[20, 10, 50, 20]"],
+            "streetlights": [50.0],
+            "tree_coverage": [30.0],
+        },
+        # A right of way drawn as a polygon.
+        geometry=[LineString([(-115.5, 32.6), (-115.49, 32.6)]).buffer(0.0001)],
+        crs=4326,
+    )
+    monkeypatch.setattr(streets, "build", lambda *_: street)
     runner = LocalRunner.from_definitions(
         {"reimagina-test-port": plugin.create_plugin()}
     )
@@ -1101,9 +1206,38 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch):
     parameters["scenario_id"] = NEW_BASELINE
     result = runner.run("reimagina_baseline_write", {"parameters": parameters})
     row = result["reimagina_baseline_write"].iloc[0].to_dict()
-    assert (row["elements"], row["elements_created"], row["dry_run"]) == (8, 6, False)
-    written = [row[c] for c in ("blocks", "lots", "amenities", "establishments")]
-    assert written == [2, 4, 1, 1]
+    assert (row["elements"], row["elements_created"], row["dry_run"]) == (9, 7, False)
+    columns = ("blocks", "lots", "amenities", "establishments", "rights_of_way")
+    assert [row[c] for c in columns] == [2, 4, 1, 1, 1]
+
+    # A street's bands are stored as JSON lists; its streetlights and
+    # tree_coverage as numbers. A lot's tree_coverage too.
+    def stored(element_id: str) -> dict:
+        with psycopg.connect(dsn) as conn:
+            return dict(
+                conn.execute(
+                    "SELECT ac.key, coalesce(v.value_json::text, v.value_num::text) "
+                    "FROM reimagina_urbano.element_state_attribute_value v "
+                    "JOIN reimagina_urbano.attribute_catalog ac "
+                    "ON ac.id = v.attribute_id WHERE v.element_id = %s::uuid",
+                    (element_id,),
+                ).fetchall()
+            )
+
+    assert stored(street["id"].iloc[0]) == {
+        "bands.use": '["sidewalk", "protected_bike_lane", "lanes", "sidewalk"]',
+        "bands.share": "[20, 10, 50, 20]",
+        "streetlights": "50",
+        "tree_coverage": "30",
+    }
+    assert stored(tables["lot"]["id"].iloc[0])["tree_coverage"] == "12.5"
+    with psycopg.connect(dsn) as conn:
+        catalog = conn.execute(
+            "SELECT element_type::text, value_type::text, unit "
+            "FROM reimagina_urbano.attribute_catalog WHERE key = 'tree_coverage' "
+            "ORDER BY 1"
+        ).fetchall()
+    assert catalog == [("lot", "number", "%"), ("right_of_way", "number", "%")]
 
 
 # ------------------------------------------------------------------ street network
@@ -1142,7 +1276,9 @@ def offline_network(monkeypatch, tmp_path):
         {"from": [1, 2, 3], "to": [2, 3, 1], "length": [100, 141.4, 100]}
     )
     monkeypatch.setattr(
-        network, "osm_network", lambda blocks, crs, params, boundary: (nodes, edges)
+        network,
+        "osm_network",
+        lambda blocks, crs, params, boundary, **_: (nodes, edges),
     )
     return lake_folder
 

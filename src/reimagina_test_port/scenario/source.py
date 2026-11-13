@@ -102,6 +102,7 @@ _POI_COVERAGE_QUERY = sql.SQL(
     "WHERE status = 'active' AND params ->> 'coverage_m' IS NOT NULL"
 ).format(**_TABLES)
 
+# Also read_elements' query, for other point and line elements (%(types)s).
 # Starts from those attribute values and only then looks up their state, instead
 # of resolving every element of the scenario first. Capacity stays NULL, as
 # before: the model counts each destination once.
@@ -113,7 +114,7 @@ _POI_VALUES = """
         FROM {element_state_attribute_value} v
         JOIN {attribute_catalog} ac ON ac.id = v.attribute_id
         WHERE v.scenario_id IN (%(scenario)s::uuid, %(baseline)s::uuid)
-          AND ac.element_type IN ('amenity', 'establishment')
+          AND ac.element_type::text = ANY(%(types)s)
           AND ac.key = ANY(%(keys)s)
         ORDER BY v.element_id, v.attribute_id, (v.scenario_id = %(scenario)s::uuid) DESC
     )
@@ -227,7 +228,11 @@ def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
     """Present amenities and establishments, one row per poi_catalog type whose
     rule they meet: id, poi_type, capacity, scian_code, geometry."""
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
-        params = {"scenario": scenario_id, "baseline": _baseline_id(cur, scenario_id)}
+        params = {
+            "scenario": scenario_id,
+            "baseline": _baseline_id(cur, scenario_id),
+            "types": ["amenity", "establishment"],
+        }
         rules = _destination_rules(cur)
         own: set[str] = set()
         for poi_type, rule in rules.items():
@@ -261,6 +266,35 @@ def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
     return gpd.GeoDataFrame(
         frame.drop(columns="geometry"), geometry=_geometry(frame["geometry"]), crs=CRS
     )
+
+
+def read_elements(
+    scenario_id: str, element_types: list[str], keys: list[str]
+) -> gpd.GeoDataFrame:
+    """Present elements of ``element_types`` with a value for any of ``keys``:
+    id, type, one column per key (missing when unset), geometry."""
+    with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
+        params = {
+            "scenario": scenario_id,
+            "baseline": _baseline_id(cur, scenario_id),
+            "types": element_types,
+            "keys": keys,
+        }
+        cur.execute(_POI_ELEMENTS_QUERY, params)
+        elements = pd.DataFrame(cur.fetchall(), columns=["id", "type", "geometry"])
+        cur.execute(_POI_ATTRIBUTES_QUERY, params)
+        attribute_rows = cur.fetchall()
+    attributes: dict[str, dict[str, Any]] = {}
+    for element_id, key, value_type, num, text, js in attribute_rows:
+        attributes.setdefault(element_id, {})[key] = decode_value(
+            value_type, num, text, js
+        )
+    table = elements[["id", "type"]].copy()
+    for key in keys:
+        table[key] = pd.Series(
+            [attributes.get(i, {}).get(key) for i in elements["id"]], dtype=object
+        )
+    return gpd.GeoDataFrame(table, geometry=_geometry(elements["geometry"]), crs=CRS)
 
 
 def read_coverage_m() -> dict[str, float]:

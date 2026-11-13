@@ -18,6 +18,11 @@ from shapely.geometry import box
 REVISION = "cf17664d169116a2760741ea92737abf9b9ad212"
 SOURCE = "pipelines/indicators/built-form/src/built_form/__init__.py"
 ROOT = Path(__file__).resolve().parents[1]
+# The upstream arithmetic reads the old lot keys; the fixture stores urban_fabric.md's.
+RENAMED = {
+    "unit_size_m2": "housing.unit_size_m2",
+    "people_per_household": "housing.people_per_household",
+}
 
 
 def main() -> None:
@@ -94,7 +99,7 @@ def main() -> None:
                 "id": identifier,
                 "parent_id": parent,
                 "source_record_ref": f"synthetic:{name}",
-                **attributes,
+                **{RENAMED.get(k, k): v for k, v in attributes.items()},
             }
         )
         values = namespace["lot_indicators"](attributes)

@@ -16,6 +16,8 @@ import yaml
 from reimagina_test_port.common.rules import LAND_USES
 
 FOLDER = Path(__file__).parent
+# Relative source paths are files of the package (its data/ folder ships with it).
+PACKAGE = FOLDER.parents[1]
 
 
 class CityConfigError(ValueError):
@@ -30,7 +32,10 @@ OSM_STREETS_URI = "osm://overpass"
 class NetworkParams:
     """``sources.streets.params`` of a city YAML."""
 
-    # Overpass filter of the ways kept; None: osmnx's walk network.
+    # osmnx network type: walk (every way two-way), drive (streets for cars, one-way
+    # where OSM says so), all, ...
+    network_type: str = "walk"
+    # Overpass filter of the ways kept; None: the network type's own.
     custom_filter: str | None = None
     # Keep pieces not connected to the rest (gated communities).
     retain_all: bool = True
@@ -49,6 +54,64 @@ class NetworkParams:
     connector_max_m: float = 5.0
     # merge_streets: line ends this close are one node.
     precision_m: float = 0.1
+    # reimagina_baseline_streets: fit the vehicular streets to the cadastre's lots
+    # (ingestion/street_fit.py). ``fit`` overrides street_fit.DEFAULTS.
+    refine: bool = False
+    fit: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class Source:
+    """A file: an ``az://`` URI or a local path, relative to the package
+    (``data/...``) unless absolute; ``member``, the file inside a .zip."""
+
+    uri: str
+    member: str | None = None
+
+
+@dataclass(frozen=True)
+class StreetLighting:
+    """Block faces with a lighting answer (``sources.street_lighting``), matched to
+    the streets within ``max_distance_m`` of their midpoint."""
+
+    source: Source
+    # The answer's column and its values meaning lit / not lit; others don't count.
+    column: str
+    lit: tuple[str, ...]
+    unlit: tuple[str, ...]
+    # Rows kept: column -> value (a national file's municipality, say).
+    where: dict[str, str] = field(default_factory=dict)
+    max_distance_m: float = 25.0
+    # A refined street's fronts are width/2 from its axis: faces within
+    # max(max_distance_m, width/2 + front_tolerance_m) count.
+    front_tolerance_m: float = 5.0
+
+
+@dataclass(frozen=True)
+class BikeLanes:
+    """The city's bike lane lines (``sources.bike_lanes``)."""
+
+    source: Source
+    type_column: str
+    # Lane types that are protected (segregated).
+    protected: tuple[str, ...]
+    # A street whose midpoint is this close to a lane has it.
+    max_distance_m: float = 15.0
+    # A refined street has a lane if at least this share (0-1] of its axis lies
+    # within max(max_distance_m, width/2) of one.
+    min_share: float = 0.5
+    # A refined street's protected lane takes this width (at most half its lanes').
+    protected_width_m: float = 2.0
+
+
+@dataclass(frozen=True)
+class TreeCanopy:
+    """The city's canopy height raster (``sources.tree_canopy``), with heights in
+    metres. ``scripts/canopy_raster.py`` cuts it from Meta's map. A pixel at least
+    ``min_height_m`` tall is canopy (ingestion/canopy.py)."""
+
+    uri: str
+    min_height_m: float = 2.0
 
 
 @dataclass(frozen=True)
@@ -105,6 +168,12 @@ class CityPreset:
     # sources.streets: OpenStreetMap's network (ingestion/network.py). None: the
     # city has no street network step.
     streets: NetworkParams | None = None
+    # right_of_way elements over that network (ingestion/streets.py): their
+    # streetlights and bike lanes. None: not loaded.
+    street_lighting: StreetLighting | None = None
+    bike_lanes: BikeLanes | None = None
+    # tree_coverage of lots and rights of way. None: not loaded.
+    tree_canopy: TreeCanopy | None = None
 
     @property
     def cve_code(self) -> str:
@@ -146,6 +215,19 @@ class _Section:
             raise CityConfigError(msg)
 
 
+def _fit_params(value: Any, name: str) -> dict[str, Any]:
+    """``sources.streets.params.fit``: overrides of ``street_fit.DEFAULTS``; an
+    unknown key is an error."""
+    fit = _mapping(value, f"{name}: sources.streets.params.fit")
+    # Imported here: street_fit needs geopandas, the presets do not.
+    from reimagina_test_port.ingestion.street_fit import DEFAULTS
+
+    if unknown := sorted(set(fit) - set(DEFAULTS)):
+        msg = f"{name}: sources.streets.params.fit: unknown keys {unknown}"
+        raise CityConfigError(msg)
+    return fit
+
+
 def from_yaml(path: Path) -> CityPreset:
     """The preset of one city YAML; missing or unknown keys raise ``CityConfigError``."""
     config = _Section(yaml.safe_load(path.read_text(encoding="utf-8")), path.name)
@@ -184,9 +266,12 @@ def from_yaml(path: Path) -> CityPreset:
         raise CityConfigError(msg)
     network = (
         NetworkParams(
+            network_type=str(streets.optional("network_type", "walk")),
             custom_filter=streets.optional("custom_filter", None),
             retain_all=bool(streets.optional("retain_all", True)),
             output_prefix=str(streets.required("output_prefix")).rstrip("/"),
+            refine=bool(streets.optional("refine", False)),
+            fit=_fit_params(streets.optional("fit", None), path.name),
             boundary_uri=streets.optional("boundary_uri", None),
             **{
                 name: float(
@@ -206,6 +291,60 @@ def from_yaml(path: Path) -> CityPreset:
         if streets_uri
         else None
     )
+
+    def file(name: str) -> tuple[Source, _Section] | None:
+        if name not in sources.values:
+            return None
+        uri, options = source(name)
+        member = options.optional("member", None)
+        if "://" not in uri and not Path(uri).is_absolute():
+            uri = str(PACKAGE / uri)
+        return Source(uri, None if member is None else str(member)), options
+
+    lighting = bike_lanes = None
+    if (entry := file("street_lighting")) is not None:
+        lighting_source, options = entry
+        lighting = StreetLighting(
+            lighting_source,
+            column=str(options.required("column")),
+            lit=tuple(map(str, options.required("lit"))),
+            unlit=tuple(map(str, options.required("unlit"))),
+            where={
+                str(k): str(v)
+                for k, v in _mapping(options.optional("where", None), "where").items()
+            },
+            max_distance_m=float(options.optional("max_distance_m", 25.0)),
+            front_tolerance_m=float(options.optional("front_tolerance_m", 5.0)),
+        )
+        options.done()
+    if (entry := file("bike_lanes")) is not None:
+        lanes_source, options = entry
+        bike_lanes = BikeLanes(
+            lanes_source,
+            type_column=str(options.required("type_column")),
+            protected=tuple(map(str, options.optional("protected", []))),
+            max_distance_m=float(options.optional("max_distance_m", 15.0)),
+            min_share=float(options.optional("min_share", 0.5)),
+            protected_width_m=float(options.optional("protected_width_m", 2.0)),
+        )
+        if not 0 < bike_lanes.min_share <= 1:
+            msg = f"{path.name}: sources.bike_lanes: min_share must be in (0, 1]"
+            raise CityConfigError(msg)
+        if bike_lanes.protected_width_m <= 0:
+            msg = f"{path.name}: sources.bike_lanes: protected_width_m must be > 0"
+            raise CityConfigError(msg)
+        options.done()
+    canopy = None
+    if (entry := file("tree_canopy")) is not None:
+        canopy_source, options = entry
+        canopy = TreeCanopy(
+            canopy_source.uri,
+            min_height_m=float(options.optional("min_height_m", 2.0)),
+        )
+        options.done()
+    if (lighting or bike_lanes) and network is None:
+        msg = f"{path.name}: street_lighting and bike_lanes need sources.streets"
+        raise CityConfigError(msg)
     lots, amenities, points, space_allocation = (
         params.section("lots"),
         params.section("amenities"),
@@ -266,6 +405,9 @@ def from_yaml(path: Path) -> CityPreset:
         ),
         floor_share_by_land_use=shares,
         streets=network,
+        street_lighting=lighting,
+        bike_lanes=bike_lanes,
+        tree_canopy=canopy,
         lot_max_distance_m=float(
             points.optional("lot_max_distance_m", default("lot_max_distance_m"))
         ),

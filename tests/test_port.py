@@ -118,7 +118,7 @@ def test_invalid_snapshots(tmp_path, monkeypatch, problem):
 def test_empty_and_absent_attributes(tmp_path, monkeypatch):
     folder = snapshot(tmp_path, monkeypatch)
     path = folder / "lot.parquet"
-    frame = gpd.read_parquet(path).drop(columns=schema.ATTRIBUTES)
+    frame = gpd.read_parquet(path).drop(columns=schema.ATTRIBUTES, errors="ignore")
     frame.to_parquet(path)
     results = run_snapshot("custom")
     assert results["reimagina_built_form_lots"].population.isna().all()

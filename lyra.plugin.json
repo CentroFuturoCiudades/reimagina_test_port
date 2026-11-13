@@ -483,7 +483,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's baseline elements from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights, the city's amenity layers (normalized into the amenities file) and the DENUE. Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE record is an amenity or an establishment by the SCIAN crosswalk; with the amenities file's, they go to the nearest lot within 50 m as a point at its center, and each lot's land use follows from what it holds.",
+      "description": "Build a city's baseline elements from the CFC data lake with exe_reimagina's rules: INEGI blocks and census, cadastral lots, normativa, Open Buildings heights, Meta's canopy height (each lot's tree_coverage), the city's amenity layers (normalized into the amenities file) and the DENUE. Blocks are keyed by CVEGEO; lots by their cadastral key. Each DENUE record is an amenity or an establishment by the SCIAN crosswalk; with the amenities file's, they go to the nearest lot within 50 m as a point at its center, and each lot's land use follows from what it holds.",
       "inputs": {},
       "name": "reimagina_baseline",
       "outputs": {
@@ -588,7 +588,7 @@
             },
             {
               "description": "Census average occupants per inhabited dwelling.",
-              "name": "people_per_household",
+              "name": "housing.people_per_household",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -725,15 +725,15 @@
               "unit": "m2"
             },
             {
-              "description": "unit size m2",
-              "name": "unit_size_m2",
+              "description": "housing.unit size m2",
+              "name": "housing.unit_size_m2",
               "nullable": true,
               "type": "number",
               "unit": "m2"
             },
             {
-              "description": "people per household",
-              "name": "people_per_household",
+              "description": "housing.people per household",
+              "name": "housing.people_per_household",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -755,6 +755,13 @@
             {
               "description": "housing.floor share",
               "name": "housing.floor_share",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
+            },
+            {
+              "description": "tree coverage",
+              "name": "tree_coverage",
               "nullable": true,
               "type": "number",
               "unit": "percent"
@@ -801,7 +808,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Return a city's baseline lots, blocks, amenities and establishments as built from the data lake (reimagina_baseline). Nothing is written to Reimagina's database.",
+      "description": "Return a city's baseline lots, blocks, amenities, establishments and streets as built from the data lake (reimagina_baseline, reimagina_baseline_streets). Nothing is written to Reimagina's database.",
       "inputs": {
         "amenities": {
           "arguments": {},
@@ -818,6 +825,10 @@
         "lots": {
           "arguments": {},
           "output": "reimagina_baseline_lots"
+        },
+        "right_of_way": {
+          "arguments": {},
+          "output": "reimagina_baseline_right_of_way"
         }
       },
       "name": "reimagina_baseline_elements",
@@ -923,7 +934,7 @@
             },
             {
               "description": "Census average occupants per inhabited dwelling.",
-              "name": "people_per_household",
+              "name": "housing.people_per_household",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -1060,15 +1071,15 @@
               "unit": "m2"
             },
             {
-              "description": "unit size m2",
-              "name": "unit_size_m2",
+              "description": "housing.unit size m2",
+              "name": "housing.unit_size_m2",
               "nullable": true,
               "type": "number",
               "unit": "m2"
             },
             {
-              "description": "people per household",
-              "name": "people_per_household",
+              "description": "housing.people per household",
+              "name": "housing.people_per_household",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -1090,6 +1101,68 @@
             {
               "description": "housing.floor share",
               "name": "housing.floor_share",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
+            },
+            {
+              "description": "tree coverage",
+              "name": "tree_coverage",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        },
+        "reimagina_baseline_elements_right_of_way": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "The street's bands, left to right, as a JSON list: sidewalk, lanes (all traffic lanes), shared_lanes (the lanes, shared with bikes), protected_bike_lane (its own band), median.",
+              "name": "bands.use",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Each band's share (0-100) of the width, as a JSON list.",
+              "name": "bands.share",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Share of its block faces with street lighting.",
+              "name": "streetlights",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
+            },
+            {
+              "description": "Share of its area under tree canopy (Meta's canopy height); only a street drawn as a polygon has one.",
+              "name": "tree_coverage",
               "nullable": true,
               "type": "number",
               "unit": "percent"
@@ -1136,7 +1209,113 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's baseline from the data lake (reimagina_baseline) and write it into an existing baseline scenario of a project: elements, state and attribute values of blocks, lots, amenities and establishments, in one transaction. Existing elements are reused unchanged; running it again replaces the scenario's rows. Missing attribute_catalog and indicator_catalog rows are added first; existing ones are left as they are and must be active. Compute indicators afterwards with reimagina_scenario_write.",
+      "description": "A city's streets as right_of_way elements, one per street of its street network (reimagina_street_network), with streetlights from the block faces near each street and a bike lane band where the street's midpoint lies near one of the city's bike lanes (sources.street_lighting, sources.bike_lanes). With sources.streets.params.refine, the vehicular streets are fitted to the cadastre's lots instead: one right of way per stretch from intersection to intersection, centred between the lot fronts, with bands of the measured width and the lighting and bike lane matches scaled to it; pedestrian streets stay as above.",
+      "inputs": {
+        "edges": {
+          "arguments": {},
+          "output": "reimagina_street_network_edges"
+        },
+        "nodes": {
+          "arguments": {},
+          "output": "reimagina_street_network_nodes"
+        }
+      },
+      "name": "reimagina_baseline_streets",
+      "outputs": {
+        "reimagina_baseline_right_of_way": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "The street's bands, left to right, as a JSON list: sidewalk, lanes (all traffic lanes), shared_lanes (the lanes, shared with bikes), protected_bike_lane (its own band), median.",
+              "name": "bands.use",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Each band's share (0-100) of the width, as a JSON list.",
+              "name": "bands.share",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Share of its block faces with street lighting.",
+              "name": "streetlights",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
+            },
+            {
+              "description": "Share of its area under tree canopy (Meta's canopy height); only a street drawn as a polygon has one.",
+              "name": "tree_coverage",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "BaselineParameters": {
+            "additionalProperties": false,
+            "description": "City whose baseline is built from the data lake.",
+            "properties": {
+              "city": {
+                "const": "mexicali",
+                "description": "City preset (ingestion/cities/<city>.yaml).",
+                "title": "City",
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "title": "BaselineParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/BaselineParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_baseline_streets_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "Build a city's baseline from the data lake (reimagina_baseline) and write it into an existing baseline scenario of a project: elements, state and attribute values of blocks, lots, amenities, establishments and streets (right_of_way, from reimagina_baseline_streets; left out when the city has none), in one transaction. Existing elements are reused unchanged; running it again replaces the scenario's rows. Missing attribute_catalog and indicator_catalog rows are added first; existing ones are left as they are and must be active. Compute indicators afterwards with reimagina_scenario_write.",
       "inputs": {
         "amenities": {
           "arguments": {},
@@ -1153,6 +1332,10 @@
         "lots": {
           "arguments": {},
           "output": "reimagina_baseline_lots"
+        },
+        "right_of_way": {
+          "arguments": {},
+          "output": "reimagina_baseline_right_of_way"
         }
       },
       "name": "reimagina_baseline_write",
@@ -1160,7 +1343,7 @@
         "reimagina_baseline_write": {
           "columns": [
             {
-              "description": "Blocks, lots, amenities and establishments written.",
+              "description": "Blocks, lots, amenities, establishments and streets written.",
               "name": "elements",
               "nullable": false,
               "type": "integer",
@@ -1225,6 +1408,13 @@
             {
               "description": "Establishments in the scenario after the write.",
               "name": "establishments",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Rights_of_way in the scenario after the write.",
+              "name": "rights_of_way",
               "nullable": false,
               "type": "integer",
               "unit": "count"
@@ -3024,6 +3214,109 @@
       "spatial_inputs": {}
     },
     {
+      "description": "Walkability components per block from what its lots are (ULI 'Net residential density', 'Commercial land use proportion' and 'Land use mix'): homes per hectare of the lots that hold homes (built form's num_housing_units, as density and population), the share of lot area in commerce or office, and the normalised entropy of land uses by area.",
+      "inputs": {
+        "blocks": {
+          "arguments": {},
+          "output": "reimagina_built_form_blocks"
+        },
+        "homes": {
+          "arguments": {},
+          "output": "reimagina_built_form_lots"
+        },
+        "lots": {
+          "arguments": {},
+          "output": "reimagina_scenario_lots"
+        }
+      },
+      "name": "reimagina_land_use",
+      "outputs": {
+        "reimagina_land_use_blocks": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Homes per hectare of the lots that hold homes (viv/ha), with built form's num_housing_units. Null without residential land.",
+              "name": "net_residential_density",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Share (0-1) of the block's lot area in commerce or office lots.",
+              "name": "commercial_land_share",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Entropy of the lots' land uses by area over the log of the uses present (0-1). Null without lots with a land use.",
+              "name": "land_use_mix",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "ScenarioParameters": {
+            "additionalProperties": false,
+            "description": "Select a Reimagina scenario; forks fall back to their baseline.",
+            "properties": {
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id"
+            ],
+            "title": "ScenarioParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/ScenarioParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_land_use_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
       "description": "Calculate built-form indicators for every lot.",
       "inputs": {
         "lots": {
@@ -4314,25 +4607,32 @@
               "unit": null
             },
             {
-              "description": "unit size m2",
-              "name": "unit_size_m2",
-              "nullable": true,
-              "type": "number",
-              "unit": "m2"
-            },
-            {
-              "description": "people per household",
-              "name": "people_per_household",
-              "nullable": true,
-              "type": "number",
-              "unit": "count"
-            },
-            {
               "description": "occupancy rate",
               "name": "occupancy_rate",
               "nullable": true,
               "type": "number",
               "unit": "ratio"
+            },
+            {
+              "description": "housing.floor share",
+              "name": "housing.floor_share",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
+            },
+            {
+              "description": "housing.unit size m2",
+              "name": "housing.unit_size_m2",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "housing.people per household",
+              "name": "housing.people_per_household",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
             }
           ],
           "geometry": "geometry",
@@ -4376,7 +4676,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Compute a scenario's accessibility and write it to Reimagina's element_state_indicator_value, under the same rules as reimagina_scenario_indicators. Only blocks are written: a lot's accessibility is its block's. Built-form values are not touched.",
+      "description": "Compute a scenario's accessibility and write it to Reimagina's element_state_indicator_value, under the same rules as reimagina_scenario_indicators. Only blocks are written: a lot's accessibility is its block's. A fork keeps the baseline's accessibility_<type> where its own differs by less than 0.001. Built-form values are not touched.",
       "inputs": {
         "blocks": {
           "arguments": {},
@@ -4742,6 +5042,112 @@
       "spatial_inputs": {}
     },
     {
+      "description": "Compute a scenario's net residential density, commercial land share and land use mix and write it to Reimagina's element_state_indicator_value, under the same rules as reimagina_scenario_indicators. Only blocks are written; other indicators are not touched.",
+      "inputs": {
+        "blocks": {
+          "arguments": {},
+          "output": "reimagina_land_use_blocks"
+        }
+      },
+      "name": "reimagina_scenario_land_use",
+      "outputs": {
+        "reimagina_scenario_land_use": {
+          "columns": [
+            {
+              "description": "Blocks and lots of the scenario.",
+              "name": "elements",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Values inserted or changed; unchanged values are not rewritten.",
+              "name": "values_written",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Scenario values removed because they match the baseline, are empty in a baseline scenario, or belong to an absent element.",
+              "name": "values_cleared",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Whether the changes were rolled back.",
+              "name": "dry_run",
+              "nullable": false,
+              "type": "boolean",
+              "unit": null
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "WriteParameters": {
+            "additionalProperties": false,
+            "description": "Scenario to write, with exe_reimagina's job options.",
+            "properties": {
+              "dry_run": {
+                "default": false,
+                "description": "Compute and count the changes, then roll them back.",
+                "title": "Dry Run",
+                "type": "boolean"
+              },
+              "full": {
+                "default": false,
+                "description": "Send every value instead of only those a fork may have changed. Slower; for after the baseline's values were computed another way.",
+                "title": "Full",
+                "type": "boolean"
+              },
+              "job_run_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "UUID of the Reimagina job_run that requested this run; recorded on written values when that job_run exists.",
+                "title": "Job Run Id"
+              },
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id"
+            ],
+            "title": "WriteParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/WriteParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_scenario_land_use_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
       "description": "Compute a scenario's diversity of each set of destinations and write it to Reimagina's element_state_indicator_value as diversity_<set>, under the same rules as reimagina_scenario_indicators. Only blocks are written.",
       "inputs": {
         "blocks": {
@@ -5060,7 +5466,189 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Compute and write a scenario's built-form indicators, accessibility, population access, POI diversity and composites: reimagina_scenario_indicators, reimagina_scenario_accessibility, reimagina_scenario_population_access, reimagina_scenario_poi_diversity and reimagina_scenario_composites, each in its own transaction. The result adds up all five.",
+      "description": "Acquire a scenario's present streets (right_of_way): whether their bands.use has a bike lane and a protected one, and their streetlights.",
+      "inputs": {},
+      "name": "reimagina_scenario_rights_of_way",
+      "outputs": {
+        "reimagina_scenario_rights_of_way": {
+          "columns": [
+            {
+              "description": "Element ID.",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Whether the right_of_way's bands.use has shared_lanes or a protected_bike_lane.",
+              "name": "bike_lane",
+              "nullable": true,
+              "type": "boolean",
+              "unit": null
+            },
+            {
+              "description": "Whether the right_of_way's bands.use has a protected_bike_lane.",
+              "name": "protected_bike_lane",
+              "nullable": true,
+              "type": "boolean",
+              "unit": null
+            },
+            {
+              "description": "Share (0-100) of the right_of_way's length with street lighting.",
+              "name": "streetlights",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "ScenarioParameters": {
+            "additionalProperties": false,
+            "description": "Select a Reimagina scenario; forks fall back to their baseline.",
+            "properties": {
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id"
+            ],
+            "title": "ScenarioParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/ScenarioParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_scenario_rights_of_way_request",
+        "type": "object"
+      },
+      "role": "dataset",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "Compute a scenario's bike lane and street lighting coverage and street connectivity and write it to Reimagina's element_state_indicator_value, under the same rules as reimagina_scenario_indicators. Only blocks are written; other indicators are not touched.",
+      "inputs": {
+        "blocks": {
+          "arguments": {},
+          "output": "reimagina_streets_blocks"
+        }
+      },
+      "name": "reimagina_scenario_streets",
+      "outputs": {
+        "reimagina_scenario_streets": {
+          "columns": [
+            {
+              "description": "Blocks and lots of the scenario.",
+              "name": "elements",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Values inserted or changed; unchanged values are not rewritten.",
+              "name": "values_written",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Scenario values removed because they match the baseline, are empty in a baseline scenario, or belong to an absent element.",
+              "name": "values_cleared",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Whether the changes were rolled back.",
+              "name": "dry_run",
+              "nullable": false,
+              "type": "boolean",
+              "unit": null
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "WriteParameters": {
+            "additionalProperties": false,
+            "description": "Scenario to write, with exe_reimagina's job options.",
+            "properties": {
+              "dry_run": {
+                "default": false,
+                "description": "Compute and count the changes, then roll them back.",
+                "title": "Dry Run",
+                "type": "boolean"
+              },
+              "full": {
+                "default": false,
+                "description": "Send every value instead of only those a fork may have changed. Slower; for after the baseline's values were computed another way.",
+                "title": "Full",
+                "type": "boolean"
+              },
+              "job_run_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "UUID of the Reimagina job_run that requested this run; recorded on written values when that job_run exists.",
+                "title": "Job Run Id"
+              },
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id"
+            ],
+            "title": "WriteParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/WriteParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_scenario_streets_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "Compute and write a scenario's built-form indicators, accessibility, population access, POI diversity, land use, streets and composites: reimagina_scenario_indicators, reimagina_scenario_accessibility, reimagina_scenario_population_access, reimagina_scenario_poi_diversity, reimagina_scenario_land_use, reimagina_scenario_streets and reimagina_scenario_composites, each in its own transaction. The result adds up all of them.",
       "inputs": {
         "accessibility": {
           "arguments": {},
@@ -5074,6 +5662,10 @@
           "arguments": {},
           "output": "reimagina_scenario_indicators"
         },
+        "land_use": {
+          "arguments": {},
+          "output": "reimagina_scenario_land_use"
+        },
         "poi_diversity": {
           "arguments": {},
           "output": "reimagina_scenario_poi_diversity"
@@ -5081,6 +5673,10 @@
         "population_access": {
           "arguments": {},
           "output": "reimagina_scenario_population_access"
+        },
+        "streets": {
+          "arguments": {},
+          "output": "reimagina_scenario_streets"
         }
       },
       "name": "reimagina_scenario_write",
@@ -5182,7 +5778,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's street network from scratch: OpenStreetMap's ways over the convex hull of the city's blocks plus a margin, within its municipality (sources.streets.boundary_uri), with the city's filter (Mexicali: the ULI's pedestrian network), in its metric CRS. With streets_uri, those streets replace the network inside their zone (zone_uri, or their convex hull) and are sewn to it, as exe_reimagina's Condesa network.",
+      "description": "Build a city's street network from scratch: OpenStreetMap's ways over the convex hull of the city's blocks plus a margin, within its municipality (sources.streets.boundary_uri), with the city's filter (Mexicali: the ULI's pedestrian network), in its metric CRS. With streets_uri, those streets replace the network inside their zone (zone_uri, or their convex hull) and are sewn to it, as exe_reimagina's Condesa network. The OpenStreetMap download is saved in the lake beside the H5s and read from there by later runs (refresh_osm downloads it again).",
       "inputs": {},
       "name": "reimagina_street_network",
       "outputs": {
@@ -5215,9 +5811,30 @@
               "nullable": false,
               "type": "boolean",
               "unit": null
+            },
+            {
+              "description": "OpenStreetMap's highway tag (its first, if several).",
+              "name": "highway",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "OpenStreetMap's street name.",
+              "name": "name",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "OpenStreetMap's lanes tag, as text (both directions).",
+              "name": "lanes",
+              "nullable": false,
+              "type": "string",
+              "unit": null
             }
           ],
-          "geometry": null,
+          "geometry": "geometry",
           "kind": "table"
         },
         "reimagina_street_network_nodes": {
@@ -5259,6 +5876,12 @@
                 "description": "City preset (ingestion/cities/<city>.yaml).",
                 "title": "City",
                 "type": "string"
+              },
+              "refresh_osm": {
+                "default": false,
+                "description": "Download OpenStreetMap again instead of reading the copy saved in the lake by an earlier run, and replace that copy.",
+                "title": "Refresh Osm",
+                "type": "boolean"
               },
               "streets_uri": {
                 "anyOf": [
@@ -5353,9 +5976,30 @@
               "nullable": false,
               "type": "boolean",
               "unit": null
+            },
+            {
+              "description": "OpenStreetMap's highway tag (its first, if several).",
+              "name": "highway",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "OpenStreetMap's street name.",
+              "name": "name",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "OpenStreetMap's lanes tag, as text (both directions).",
+              "name": "lanes",
+              "nullable": false,
+              "type": "string",
+              "unit": null
             }
           ],
-          "geometry": null,
+          "geometry": "geometry",
           "kind": "table"
         },
         "reimagina_street_network_tables_nodes": {
@@ -5397,6 +6041,12 @@
                 "description": "City preset (ingestion/cities/<city>.yaml).",
                 "title": "City",
                 "type": "string"
+              },
+              "refresh_osm": {
+                "default": false,
+                "description": "Download OpenStreetMap again instead of reading the copy saved in the lake by an earlier run, and replace that copy.",
+                "title": "Refresh Osm",
+                "type": "boolean"
               },
               "streets_uri": {
                 "anyOf": [
@@ -5528,6 +6178,12 @@
                 "title": "Project Id",
                 "type": "string"
               },
+              "refresh_osm": {
+                "default": false,
+                "description": "Download OpenStreetMap again instead of reading the copy saved in the lake by an earlier run, and replace that copy.",
+                "title": "Refresh Osm",
+                "type": "boolean"
+              },
               "streets_uri": {
                 "anyOf": [
                   {
@@ -5574,6 +6230,120 @@
           "parameters"
         ],
         "title": "reimagina_street_network_write_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "What the streets around each block are like (ULI 'Bicycle lanes coverage', 'Protected bicycle lanes coverage' and 'Presence of street lighting'): of the length of the streets (right_of_way) within 500 m of the block, the share whose bands include a bike lane, of any kind and protected only, and the share that is lit; and how connected they are ('Street connectivity'): intersections per km\u00b2 within 1 km over the road network, from the node nearest the block.",
+      "inputs": {
+        "blocks": {
+          "arguments": {},
+          "output": "reimagina_built_form_blocks"
+        },
+        "edges": {
+          "arguments": {},
+          "output": "reimagina_road_network_edges"
+        },
+        "nodes": {
+          "arguments": {},
+          "output": "reimagina_road_network_nodes"
+        },
+        "streets": {
+          "arguments": {},
+          "output": "reimagina_scenario_rights_of_way"
+        }
+      },
+      "name": "reimagina_streets",
+      "outputs": {
+        "reimagina_streets_blocks": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Share (0-1) of the street length within 500 m of the block with a bike lane band. Null without streets.",
+              "name": "bike_lane_coverage",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "As bike_lane_coverage, counting only protected bike lanes.",
+              "name": "protected_bike_lane_coverage",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Share (0-1) of the street length within 500 m of the block that is lit (streetlights weighted by length). Null without streets with a value.",
+              "name": "street_lighting_coverage",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Intersections (nodes of three or more streets) within 1 km over the road network, per km\u00b2 of a 1 km circle.",
+              "name": "intersection_density",
+              "nullable": true,
+              "type": "number",
+              "unit": "count/km2"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "ScenarioParameters": {
+            "additionalProperties": false,
+            "description": "Select a Reimagina scenario; forks fall back to their baseline.",
+            "properties": {
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id"
+            ],
+            "title": "ScenarioParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/ScenarioParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_streets_request",
         "type": "object"
       },
       "role": "metric",

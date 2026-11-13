@@ -1,8 +1,9 @@
 """Write a scenario's indicators to Reimagina's database (EAV schema).
 
 Ported from reimagina-lyra ``store.write_indicators``. A fork stores only values
-that differ from its baseline; rows whose stored value is unchanged are not
-rewritten, so running it again for the same scenario changes nothing.
+that differ from its baseline (by at least the key's tolerance, when it has one);
+rows whose stored value is unchanged are not rewritten, so running it again for
+the same scenario changes nothing.
 
 For a fork, lot values that cannot have changed are not sent at all: a lot the
 fork did not edit and has no stored value for has its baseline value, which is
@@ -75,13 +76,31 @@ def _same_value(a: str, b: str) -> sql.Composed:
     return _SAME_VALUE.format(a=sql.Identifier(a), b=sql.Identifier(b))
 
 
+# A key with a write tolerance treats a fork value closer than it to the baseline
+# as the baseline's (1e-9 absorbs float error: values are multiples of 0.0001).
+_WITHIN_TOLERANCE = sql.SQL(
+    """
+    (p.value_text IS NOT DISTINCT FROM b.value_text
+     AND abs(p.value_num - b.value_num) < t.tolerance - 1e-9) IS TRUE
+    """
+)
+
 # Changes to the scenario's own rows:
 # - remove: stored rows equal to the baseline again (or empty in a baseline
 #   scenario), or of an element no longer present;
 # - write: values that differ from the baseline and are new or changed.
+# The baseline's values of these keys are read once (MATERIALIZED) and hashed:
+# joined directly, the planner may look each payload row up by element_id instead,
+# 13 s against 0.4 s for a group of 300,000 values.
 _CHANGES_QUERY = sql.SQL(
     """
     CREATE TEMP TABLE indicator_change ON COMMIT DROP AS
+    WITH baseline AS MATERIALIZED (
+        SELECT element_id, indicator_id, value_num, value_text
+        FROM {element_state_indicator_value}
+        WHERE scenario_id = %(baseline)s::uuid
+          AND indicator_id = ANY(%(indicator_ids)s)
+    )
     SELECT
         coalesce(p.element_id, s.element_id) AS element_id,
         coalesce(p.indicator_id, s.indicator_id) AS indicator_id,
@@ -89,10 +108,8 @@ _CHANGES_QUERY = sql.SQL(
         p.value_text,
         p.element_id IS NULL OR {same_as_baseline} AS remove
     FROM indicator_payload p
-    LEFT JOIN {element_state_indicator_value} b
-      ON b.scenario_id = %(baseline)s::uuid
-     AND b.indicator_id = ANY(%(indicator_ids)s)
-     AND b.element_id = p.element_id
+    LEFT JOIN baseline b
+      ON b.element_id = p.element_id
      AND b.indicator_id = p.indicator_id
     FULL JOIN (
         SELECT element_id, indicator_id, value_num, value_text
@@ -100,6 +117,9 @@ _CHANGES_QUERY = sql.SQL(
         WHERE scenario_id = %(scenario)s::uuid
           AND indicator_id = ANY(%(indicator_ids)s)
     ) s ON s.element_id = p.element_id AND s.indicator_id = p.indicator_id
+    LEFT JOIN unnest(%(tolerance_ids)s::integer[], %(tolerances)s::float8[])
+        AS t (indicator_id, tolerance)
+      ON t.indicator_id = p.indicator_id
     WHERE CASE
         WHEN p.element_id IS NULL THEN TRUE
         WHEN {same_as_baseline} THEN s.element_id IS NOT NULL
@@ -107,7 +127,9 @@ _CHANGES_QUERY = sql.SQL(
     END
     """
 ).format(
-    same_as_baseline=_same_value("p", "b"),
+    same_as_baseline=sql.SQL("({} OR {})").format(
+        _same_value("p", "b"), _WITHIN_TOLERANCE
+    ),
     same_as_stored=_same_value("p", "s"),
     **_TABLES,
 )
@@ -233,6 +255,7 @@ def write_indicators(
     values: pd.DataFrame,
     keys: Mapping[str, str],
     *,
+    tolerances: Mapping[str, float] | None = None,
     full: bool = False,
     job_run_id: str | None = None,
     dry_run: bool = False,
@@ -244,13 +267,23 @@ def write_indicators(
     ``values`` comes from ``long_values``. Every key must be active in
     ``indicator_catalog`` for each element type written (``contract.check``);
     ``prepare``, when given, runs first on the same transaction (the composites
-    register their keys there).
-    ``job_run_id`` is recorded only when that job_run exists. A dry run computes
-    the changes and rolls them back.
+    register their keys there). ``tolerances`` (``{key: tolerance}``, numeric
+    keys only) makes a fork keep its baseline's value where the computed one
+    differs from it by less than the tolerance. ``job_run_id`` is recorded only
+    when that job_run exists. A dry run computes the changes and rolls them back.
 
     Returns:
         ``(values_written, values_cleared)``.
     """
+    tolerances = dict(tolerances or {})
+    invalid = sorted(
+        key
+        for key, tolerance in tolerances.items()
+        if keys.get(key) != "number" or not 0 <= tolerance < math.inf
+    )
+    if invalid:
+        msg = f"Tolerances must be finite, >= 0 and for numeric keys: {invalid}"
+        raise ValueError(msg)
     timer = _Timer(f"write_indicators {scenario_id} {sorted(keys)[:2]}…", log)
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
         cur.execute(
@@ -340,10 +373,17 @@ def write_indicators(
         timer("copy")
         # Without stats the planner may pick a nested loop over the value table.
         cur.execute("ANALYZE indicator_payload")
+        tolerance_by_id = {
+            indicator_id: float(tolerances[key])
+            for (_, key), indicator_id in indicator_ids.items()
+            if key in tolerances
+        }
         params = {
             "scenario": scenario_id,
             "baseline": baseline_id,
             "indicator_ids": sorted(indicator_ids.values()),
+            "tolerance_ids": list(tolerance_by_id),
+            "tolerances": list(tolerance_by_id.values()),
             "job_run": job_run_id,
         }
         timer("analyze")
@@ -362,5 +402,31 @@ def write_indicators(
         else:
             conn.commit()
         timer("commit")
+        if not dry_run and (written or cleared):
+            _refresh_statistics(conn, log)
+            timer("statistics")
     timer.done(payload=payload, written=written, cleared=cleared)
     return written, cleared
+
+
+# The API reads a fork as "its rows, else the baseline's" (NOT EXISTS). If the
+# table's statistics do not know the fork yet, the planner takes it for ~1 row and
+# picks a nested loop that compares every baseline row with every fork row: the
+# map of a 17k-row fork took 4 min instead of 0.6 s. ANALYZE samples the table
+# (~0.3 s on dev with 8M rows), so the scenario just written is planned right.
+_ANALYZE_LOCK_TIMEOUT = "5s"
+
+
+def _refresh_statistics(conn: psycopg.Connection, log: Any) -> None:
+    try:
+        with conn.transaction(), conn.cursor() as cur:
+            cur.execute(
+                sql.SQL("SET LOCAL lock_timeout = {}").format(
+                    sql.Literal(_ANALYZE_LOCK_TIMEOUT)
+                )
+            )
+            cur.execute(
+                sql.SQL("ANALYZE {element_state_indicator_value}").format(**_TABLES)
+            )
+    except psycopg.Error as error:
+        log.warning("ANALYZE of the indicator values failed: %s", error)

@@ -222,3 +222,5 @@ __marimo__/
 *.ipynb
 # osmnx Overpass cache
 cache/
+# Rasters prepared locally (scripts/canopy_raster.py)
+src/reimagina_test_port/data/**/*.tif

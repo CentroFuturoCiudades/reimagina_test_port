@@ -4,7 +4,8 @@
 - ``snapshot``: prepared GeoParquet snapshots, the offline sources.
 - ``ingestion``: build a city's baseline from the data lake (data, not indicators).
 - ``indicators``: one subpackage per indicator type (``built_form``,
-  ``accessibility``, ``population_access``, ``composites``).
+  ``accessibility``, ``population_access``, ``land_use``,
+  ``streets``, ``composites``).
 - ``common``: what ingestion and indicators share.
 
 Production (``create_plugin``) runs over Reimagina scenarios; the snapshot graph
@@ -18,10 +19,12 @@ from reimagina_test_port.common.vocabulary import DESTINATION_COVERAGE_M
 from reimagina_test_port.indicators.accessibility.nodes import accessibility_metric
 from reimagina_test_port.indicators.built_form import nodes as built_form_nodes
 from reimagina_test_port.indicators.composites.composite_metric import composite_metrics
+from reimagina_test_port.indicators.land_use import nodes as land_use_nodes
 from reimagina_test_port.indicators.population_access.nodes import (
     poi_diversity_metric,
     population_access_metrics,
 )
+from reimagina_test_port.indicators.streets import nodes as streets_nodes
 from reimagina_test_port.ingestion import nodes as ingestion_nodes
 from reimagina_test_port.scenario import nodes as scenario_nodes
 from reimagina_test_port.scenario import source as scenario_source
@@ -34,6 +37,7 @@ def create_plugin() -> PluginDefinition:
             scenario_nodes.scenario_dataset,
             scenario_nodes.scenario_pois,
             scenario_nodes.road_network,
+            scenario_nodes.scenario_rights_of_way,
             *built_form_nodes.built_form_metrics(
                 scenario_nodes.ScenarioParameters,
                 "reimagina_scenario_lots",
@@ -59,14 +63,19 @@ def create_plugin() -> PluginDefinition:
                 "reimagina_road_network_nodes",
                 "reimagina_road_network_edges",
             ),
+            land_use_nodes.land_use,
+            streets_nodes.streets,
             *composite_metrics(scenario_nodes.ScenarioParameters),
             scenario_nodes.scenario_indicators,
             scenario_nodes.scenario_accessibility,
             scenario_nodes.scenario_population_access,
             scenario_nodes.scenario_poi_diversity,
+            scenario_nodes.scenario_land_use,
+            scenario_nodes.scenario_streets,
             scenario_nodes.composites_write(),
             scenario_nodes.scenario_write,
             ingestion_nodes.baseline_dataset,
+            ingestion_nodes.baseline_streets,
             ingestion_nodes.baseline_elements,
             ingestion_nodes.baseline_write,
             ingestion_nodes.street_network,
