@@ -743,7 +743,8 @@ def test_refined_keeps_pedestrian(refined_city, tmp_path):
 
 
 def test_unrefined_streets_unchanged(city, tmp_path):
-    # Refine off: the network's tags change nothing.
+    # Refine off (Mexicali's YAML turns it on): the network's tags change nothing.
+    city = replace(city, streets=replace(city.streets, refine=False))
     nodes, edges = refined_network()
     plain = streets.build(city, nodes, edges, tmp_path / "a")
     untagged = streets.build(
@@ -878,8 +879,9 @@ def test_refined_streets_in_the_yaml(tmp_path):
         2.0,
     )
     assert defaults.street_lighting.front_tolerance_m == 5
-    # Off unless the YAML says so.
-    assert not defaults.streets.refine and defaults.streets.fit == {}
+    # Off unless the YAML says so; Mexicali's does.
+    assert not cities.NetworkParams().refine
+    assert defaults.streets.refine and defaults.streets.fit == {}
 
 
 @pytest.mark.parametrize(
@@ -948,7 +950,8 @@ def test_mexicali_yaml():
     )
     assert city.existing_land_use_column == "USOSUELO24"
     assert city.streets is not None
-    assert city.streets.custom_filter.startswith('["highway"]["area"!~"yes"]')
+    assert city.streets.network_type == "drive"
+    assert city.streets.custom_filter is None
     assert city.streets.retain_all
     assert city.streets.output_prefix.endswith("cleaned/vialidades")
 

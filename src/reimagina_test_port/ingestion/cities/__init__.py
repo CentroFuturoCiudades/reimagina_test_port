@@ -32,7 +32,10 @@ OSM_STREETS_URI = "osm://overpass"
 class NetworkParams:
     """``sources.streets.params`` of a city YAML."""
 
-    # Overpass filter of the ways kept; None: osmnx's walk network.
+    # osmnx network type: walk (every way two-way), drive (streets for cars, one-way
+    # where OSM says so), all, ...
+    network_type: str = "walk"
+    # Overpass filter of the ways kept; None: the network type's own.
     custom_filter: str | None = None
     # Keep pieces not connected to the rest (gated communities).
     retain_all: bool = True
@@ -263,6 +266,7 @@ def from_yaml(path: Path) -> CityPreset:
         raise CityConfigError(msg)
     network = (
         NetworkParams(
+            network_type=str(streets.optional("network_type", "walk")),
             custom_filter=streets.optional("custom_filter", None),
             retain_all=bool(streets.optional("retain_all", True)),
             output_prefix=str(streets.required("output_prefix")).rstrip("/"),

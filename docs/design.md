@@ -432,12 +432,14 @@ network). The city YAML's `sources.streets` (`uri: osm://overpass`) sets it up.
    blocks plus `margin_m` (so the roads between the city and its outlying
    localities are in, as in exe_reimagina's `roads.py`), within the municipality
    (`boundary_uri`: OSM joins Calexico's streets to Mexicali's at the border
-   crossings, the ULI's issue #610), through Overpass (osmnx), with the city's `custom_filter`, two-way,
-   in the city's CRS (the blocks' UTM zone, which the indicators expect).
-   Mexicali's filter is the pedestrian network of `MX_Mexicali_2025_ULI.yml`
-   (`network.pedestrian`): unlike osmnx's `walk` it keeps private and gated
-   streets (Condesa, gated communities), and `retain_all` keeps pieces apart
-   from the rest. exe_reimagina's H5 was the `drive` network.
+   crossings, the ULI's issue #610), through Overpass (osmnx), of the city's
+   `network_type` (`walk` by default) and its `custom_filter` when it has one, in
+   the city's CRS (the blocks' UTM zone, which the indicators expect). The H5 is
+   two-way whatever the type. Mexicali takes osmnx's `drive` network, as
+   exe_reimagina's H5, without a filter of its own; it used the pedestrian
+   network of `MX_Mexicali_2025_ULI.yml` (`network.pedestrian`) before. `retain_all`
+   keeps pieces apart from the rest. The OSM copy is keyed by the type too, so
+   changing it downloads again.
 2. Optionally, `streets_uri`: a (Geo)Parquet or vector file of street lines that
    replaces the network inside its zone (`zone_uri`, or the lines' convex hull).
    Edges whose midpoint is in the zone go (an avenue that only grazes it stays);
