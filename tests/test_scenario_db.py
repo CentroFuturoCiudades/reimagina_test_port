@@ -743,6 +743,38 @@ def test_dry_run_and_job_run(dsn):
     assert values[(SHOP, "num_levels")][2] == job
 
 
+def scenario_statistics(dsn: str) -> list[str]:
+    """The scenario ids the planner's statistics know in the value table."""
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT most_common_vals::text::text[] FROM pg_stats "
+            "WHERE schemaname = 'reimagina_urbano' "
+            "AND tablename = 'element_state_indicator_value' "
+            "AND attname = 'scenario_id'"
+        ).fetchone()
+    return list(row[0] or []) if row else []
+
+
+def test_write_refreshes_the_statistics(dsn):
+    # Without them the API plans a fork as ~1 row (a nested loop over the baseline).
+    write(BASELINE, dry_run=True)
+    assert scenario_statistics(dsn) == []
+    write(BASELINE)
+    assert scenario_statistics(dsn) == [BASELINE]
+    write(FORK)
+    assert sorted(scenario_statistics(dsn)) == sorted([BASELINE, FORK])
+
+
+def test_failed_statistics_refresh_only_warns(caplog):
+    class Failing:
+        def transaction(self):
+            raise psycopg.errors.LockNotAvailable("lock timeout")
+
+    with caplog.at_level(logging.WARNING):
+        writer._refresh_statistics(Failing(), logging.getLogger("test"))
+    assert "ANALYZE of the indicator values failed" in caplog.text
+
+
 def test_composites_register_their_catalog_rows(dsn):
     # No composite key is seeded: the composites' write registers them.
     run_metric("reimagina_scenario_composites", BASELINE, dry_run=True)

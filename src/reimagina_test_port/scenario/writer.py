@@ -402,5 +402,31 @@ def write_indicators(
         else:
             conn.commit()
         timer("commit")
+        if not dry_run and (written or cleared):
+            _refresh_statistics(conn, log)
+            timer("statistics")
     timer.done(payload=payload, written=written, cleared=cleared)
     return written, cleared
+
+
+# The API reads a fork as "its rows, else the baseline's" (NOT EXISTS). If the
+# table's statistics do not know the fork yet, the planner takes it for ~1 row and
+# picks a nested loop that compares every baseline row with every fork row: the
+# map of a 17k-row fork took 4 min instead of 0.6 s. ANALYZE samples the table
+# (~0.3 s on dev with 8M rows), so the scenario just written is planned right.
+_ANALYZE_LOCK_TIMEOUT = "5s"
+
+
+def _refresh_statistics(conn: psycopg.Connection, log: Any) -> None:
+    try:
+        with conn.transaction(), conn.cursor() as cur:
+            cur.execute(
+                sql.SQL("SET LOCAL lock_timeout = {}").format(
+                    sql.Literal(_ANALYZE_LOCK_TIMEOUT)
+                )
+            )
+            cur.execute(
+                sql.SQL("ANALYZE {element_state_indicator_value}").format(**_TABLES)
+            )
+    except psycopg.Error as error:
+        log.warning("ANALYZE of the indicator values failed: %s", error)
