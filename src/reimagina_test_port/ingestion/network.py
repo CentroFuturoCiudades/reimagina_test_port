@@ -83,16 +83,16 @@ def study_area(
 
 
 def osm_graph(area: shapely.Geometry, params: NetworkParams):
-    """OpenStreetMap's ways in ``area`` (EPSG:4326) as an osmnx graph.
-
-    ``network_type="walk"`` keeps every way two-way; ``custom_filter`` replaces
-    the walk filter when given.
+    """OpenStreetMap's ways in ``area`` (EPSG:4326) as an osmnx graph, of the city's
+    ``network_type``: ``walk`` keeps every way two-way, ``drive`` keeps one-way
+    streets one-way (the H5 is two-way all the same). ``custom_filter`` replaces
+    the type's filter when given.
     """
     import osmnx as ox  # only where the network is built
 
     return ox.graph_from_polygon(
         area,
-        network_type="walk",
+        network_type=params.network_type,
         retain_all=params.retain_all,
         custom_filter=params.custom_filter,
     )
@@ -172,7 +172,7 @@ def osm_cache_uris(
 ) -> tuple[str, str]:
     """Nodes' and edges' parquet of the OSM download for ``area`` and the city's
     filter, under ``prefix``: ``osm_<cve>_<hash>_{nodes,edges}.parquet``. Another
-    area, filter or ``retain_all`` is another file."""
+    area, network type, filter or ``retain_all`` is another file."""
     # v2: edges carry OSM_TAGS
     return _cache_uris(prefix, cve_code, area, params, b"v2")
 
@@ -198,6 +198,8 @@ def _cache_uris(
         shapely.to_wkb(area),
         str(params.custom_filter).encode(),
         str(params.retain_all).encode(),
+        # walk, the first type, adds nothing: its copies keep their names.
+        *(() if params.network_type == "walk" else (params.network_type.encode(),)),
         *(() if version is None else (version,)),
     ):
         digest.update(part)

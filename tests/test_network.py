@@ -173,6 +173,38 @@ def test_an_old_cache_is_another_file():
     assert old == f"lake/osm_02002_{digest.hexdigest()[:10]}_edges.parquet"
 
 
+def test_the_network_type_is_another_cache():
+    # walk, the first type, keeps its copies' names; another type is another file.
+    params = dataclasses.replace(PARAMS, output_prefix="lake")
+    area = box(-115.451, 32.619, -115.448, 32.622)
+    walk = network.osm_cache_uris("lake", "02002", area, params)
+    digest = hashlib.sha256()
+    for part in (
+        shapely.to_wkb(area),
+        str(params.custom_filter).encode(),
+        str(params.retain_all).encode(),
+        b"v2",
+    ):
+        digest.update(part)
+    assert walk[1] == f"lake/osm_02002_{digest.hexdigest()[:10]}_edges.parquet"
+    drive = dataclasses.replace(params, network_type="drive")
+    assert network.osm_cache_uris("lake", "02002", area, drive) != walk
+
+
+def test_the_network_type_reaches_osmnx(monkeypatch):
+    calls = {}
+    import osmnx as ox
+
+    monkeypatch.setattr(
+        ox, "graph_from_polygon", lambda area, **kwargs: calls.update(kwargs)
+    )
+    network.osm_graph(
+        box(0, 0, 1, 1), dataclasses.replace(PARAMS, network_type="drive")
+    )
+    assert calls["network_type"] == "drive"
+    assert calls["custom_filter"] is None
+
+
 def test_an_old_cache_is_read_without_tags(monkeypatch, tmp_path, caplog):
     # Saved before the edges had highway/name/lanes: read instead of downloading.
     monkeypatch.setattr(

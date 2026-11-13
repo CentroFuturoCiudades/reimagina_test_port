@@ -58,20 +58,16 @@ sources:
     params: {municipio: Mexicali, encoding: latin-1}
   # Street network (ingestion/network.py, reimagina_street_network): OpenStreetMap
   # over the blocks' convex hull plus margin_m, within the municipality
-  # (boundary_uri: keeps Calexico out), through Overpass. The filter is the pedestrian
-  # network of MX_Mexicali_2025_ULI.yml (`network.pedestrian`): it keeps private
-  # and gated streets, which osmnx's walk filter drops (Condesa and the gated
-  # communities), and retain_all keeps pieces apart from the rest. The H5 goes to
+  # (boundary_uri: keeps Calexico out), through Overpass. osmnx's drive network:
+  # the streets for cars, as exe_reimagina's H5, without the ULI's pedestrian
+  # filter (`network.pedestrian` of MX_Mexicali_2025_ULI.yml, used before).
+  # retain_all keeps pieces apart from the rest. The H5 goes to
   # output_prefix, named by its contents, and becomes the project's
   # road_network_uri.
   streets:
     uri: osm://overpass
     params:
-      custom_filter: >-
-        ["highway"]["area"!~"yes"]
-        ["highway"!~"motorway|proposed|construction|abandoned|platform|raceway|emergency_bay"]
-        ["service"!~"slipway|emergency_access|parking_aisle|driveway|drive-through"]
-        ["access"!~"no|forestry|emergency|delivery|agricultural|customers|military|permit|unknown"]
+      network_type: drive
       retain_all: true
       margin_m: 500
       boundary_uri: az://cleaned/inegi/marco_geostadistico/2024/areas_municipales.parquet/CVE_ENT=02/CVE_MUN=002
@@ -82,9 +78,10 @@ sources:
       split_max_m: 60
       connector_max_m: 5
       # reimagina_baseline_streets: fit the vehicular streets to the cadastre's lots
-      # (ingestion/street_fit.py; `fit` overrides its DEFAULTS). Off until validated
-      # on the whole city; turning it on changes the vehicular right_of_way keys.
-      refine: false
+      # (ingestion/street_fit.py; `fit` overrides its DEFAULTS). On: the whole city
+      # took ~10 min (2026-11-13). Turning it off changes the vehicular
+      # right_of_way keys.
+      refine: true
   # right_of_way elements over that network (ingestion/streets.py):
   # streetlights from INEGI's 2020 housing inventory block faces (national, one file
   # per state): a street takes the faces within max_distance_m; ALUMPUB 1 lit, 3 not.
