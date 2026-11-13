@@ -9,7 +9,7 @@ from lyra.sdk import LocalRunner
 from shapely.geometry import Point, box
 
 from reimagina_test_port.common import vocabulary
-from reimagina_test_port.indicators.population_access.calculation import (
+from reimagina_test_port.indicators.population_access.access_calculation import (
     nearest_distances,
     street_network,
 )

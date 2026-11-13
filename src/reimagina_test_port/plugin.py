@@ -21,6 +21,7 @@ from reimagina_test_port.indicators.built_form import nodes as built_form_nodes
 from reimagina_test_port.indicators.composites.composite_metric import composite_metrics
 from reimagina_test_port.indicators.land_use import nodes as land_use_nodes
 from reimagina_test_port.indicators.population_access.nodes import (
+    poi_diversity_metric,
     population_access_metrics,
 )
 from reimagina_test_port.indicators.streets import nodes as streets_nodes
@@ -56,12 +57,19 @@ def create_plugin() -> PluginDefinition:
                 "reimagina_road_network_edges",
                 scenario_source.read_coverage_m,
             ),
+            poi_diversity_metric(
+                scenario_nodes.ScenarioParameters,
+                "reimagina_scenario_pois",
+                "reimagina_road_network_nodes",
+                "reimagina_road_network_edges",
+            ),
             land_use_nodes.land_use,
             streets_nodes.streets,
             *composite_metrics(scenario_nodes.ScenarioParameters),
             scenario_nodes.scenario_indicators,
             scenario_nodes.scenario_accessibility,
             scenario_nodes.scenario_population_access,
+            scenario_nodes.scenario_poi_diversity,
             scenario_nodes.scenario_land_use,
             scenario_nodes.scenario_streets,
             scenario_nodes.composites_write(),
@@ -101,6 +109,12 @@ def create_snapshot_plugin() -> PluginDefinition:
                 "reimagina_prepared_network_nodes",
                 "reimagina_prepared_network_edges",
                 lambda: DESTINATION_COVERAGE_M,
+            ),
+            poi_diversity_metric(
+                snapshot.SnapshotParameters,
+                "reimagina_prepared_pois",
+                "reimagina_prepared_network_nodes",
+                "reimagina_prepared_network_edges",
             ),
             *composite_metrics(snapshot.SnapshotParameters),
         ]

@@ -4,6 +4,8 @@
 - reimagina_population_access: residents within each type's coverage distance, their
   share of the residents, and the average distance to its nearest POI, per lot and
   per block.
+- reimagina_poi_diversity: entropy of the subcategories of each diversity set among
+  the POIs within walking distance, per lot and per block.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -29,10 +31,14 @@ from reimagina_test_port.common.vocabulary import (
     DESTINATION_TYPES,
 )
 from reimagina_test_port.indicators.accessibility.model import resolve_access_crs
-from reimagina_test_port.indicators.population_access.calculation import (
+from reimagina_test_port.indicators.population_access.access_calculation import (
     nearest_distances,
     population_access,
     street_network,
+)
+from reimagina_test_port.indicators.population_access.diversity_calculation import (
+    diversity,
+    poi_diversity,
 )
 
 POI_TYPE_COLUMN = "poi_type"
@@ -219,3 +225,113 @@ def population_access_metrics(
             },
         )(access_handler),
     ]
+
+
+SCIAN_COLUMN = "scian_code"
+DIVERSITY_M = 500
+# Each diversity set: its subcategories by scian_code; k is how many it has.
+# Tentative (2026-11-11): fresh food as GHSCI's seven; education, health, care and
+# community, culture and recreation come with their keys in indicator_catalog.
+DIVERSITY_SETS = {
+    "fresh_food": {
+        "meat": ("461121", "461122", "461123"),
+        "produce": ("461130",),
+        "grains_and_spices": ("461140",),
+        "dairy": ("461150",),
+        "supermarket": ("462111",),
+        "minisuper": ("462112",),
+        "bakery_tortilleria": ("311811", "311812", "311830"),
+    },
+}
+DIVERSITY_KEYS = [f"diversity_{name}" for name in DIVERSITY_SETS]
+DIVERSITY_COLUMNS = [
+    column(
+        key,
+        "number",
+        Unit.RATIO,
+        "Shannon entropy of the set's subcategories (by scian_code) among the POIs "
+        "within 500 m over the road network, over ln k, k being how many "
+        "subcategories the set has (0 = one or none, 1 = all k equally); for a "
+        "block, its lots' average weighted by population. Null without geometry "
+        "or residents.",
+    )
+    for key in DIVERSITY_KEYS
+]
+
+
+def poi_diversity_metric(
+    parameters_type: type[MetricParameters],
+    pois_output: str,
+    nodes_output: str,
+    edges_output: str,
+):
+    """The diversity node over one source's POIs and road network."""
+
+    def diversity_handler(
+        parameters,
+        lots: gpd.GeoDataFrame,
+        blocks: gpd.GeoDataFrame,
+        pois: gpd.GeoDataFrame,
+        nodes: pd.DataFrame,
+        edges: pd.DataFrame,
+        context: RunContext,
+    ) -> dict[str, gpd.GeoDataFrame]:
+        crs = resolve_access_crs(lots)
+        with timed("road network", context.logger):
+            network = street_network(nodes, edges)
+        # One row per POI, whatever its poi_types: its scian_code is its subcategory.
+        places = pois.drop_duplicates("id")
+        codes = places.get(SCIAN_COLUMN, pd.Series(None, index=places.index))
+        values = {}
+        for name, subcategories in DIVERSITY_SETS.items():
+            subcategory = codes.map(
+                {code: sub for sub, group in subcategories.items() for code in group}
+            )
+            found = subcategory.notna()
+            with timed(f"{name} diversity", context.logger):
+                values[f"diversity_{name}"] = diversity(
+                    lots,
+                    blocks,
+                    poi_diversity(
+                        lots,
+                        places.geometry[found],
+                        subcategory[found],
+                        network,
+                        crs,
+                        DIVERSITY_M,
+                        len(subcategories),
+                    ),
+                )
+        return {
+            f"reimagina_poi_diversity_{name}": source[IDENTITY + ["geometry"]].assign(
+                **{key: value[name] for key, value in values.items()}
+            )
+            for name, source in (("lots", lots), ("blocks", blocks))
+        }
+
+    diversity_handler.__annotations__["parameters"] = parameters_type
+    output = TableOutput(
+        columns=[*identity_columns(), *DIVERSITY_COLUMNS], geometry="geometry"
+    )
+    return metric(
+        name="reimagina_poi_diversity",
+        description=(
+            "Diversity of each set of destinations within walking distance: the "
+            "Shannon entropy of its subcategories, by scian_code, among the POIs "
+            "within 500 m over the road network, over ln k, k being how many "
+            "subcategories the set has. Lots count the POIs their entries reach, "
+            "walked as in reimagina_nearest_poi_distance; blocks average their "
+            "lots weighted by population."
+        ),
+        inputs={
+            "lots": Dependency("reimagina_built_form_lots"),
+            "blocks": Dependency("reimagina_built_form_blocks"),
+            "pois": Dependency(pois_output),
+            "nodes": Dependency(nodes_output),
+            "edges": Dependency(edges_output),
+        },
+        outputs={
+            "reimagina_poi_diversity_lots": output,
+            "reimagina_poi_diversity_blocks": output,
+        },
+    )(diversity_handler)

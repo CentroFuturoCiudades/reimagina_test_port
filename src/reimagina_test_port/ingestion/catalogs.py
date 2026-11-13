@@ -25,6 +25,7 @@ from reimagina_test_port.indicators.composites import catalog as composite_catal
 from reimagina_test_port.indicators.population_access.nodes import (
     ACCESS_KEYS,
     DISTANCE_KEYS,
+    DIVERSITY_KEYS,
 )
 from reimagina_test_port.ingestion.crosswalk import (
     AMENITY_CATEGORIES,
@@ -84,6 +85,10 @@ INDICATORS = {
     **{
         key: (f"Poblacion con acceso a {key[23:]}", None, "number", "population_access")
         for key in ACCESS_KEYS
+    },
+    **{
+        key: (f"Diversidad de {key[10:]} a 500 m", None, "number", "diversity")
+        for key in DIVERSITY_KEYS
     },
     "net_residential_density": (
         "Densidad residencial neta",

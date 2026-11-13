@@ -2,7 +2,8 @@
 reimagina_scenario_pois and reimagina_road_network (accessibility inputs),
 reimagina_scenario_rights_of_way (streets input), and the writes
 reimagina_scenario_indicators, reimagina_scenario_accessibility,
-reimagina_scenario_population_access, reimagina_scenario_land_use,
+reimagina_scenario_population_access, reimagina_scenario_poi_diversity,
+reimagina_scenario_land_use,
 reimagina_scenario_streets, reimagina_scenario_composites and
 reimagina_scenario_write."""
 
@@ -44,12 +45,29 @@ from reimagina_test_port.indicators.accessibility.nodes import (
     SCORE_KEYS,
 )
 from reimagina_test_port.indicators.land_use.calculation import KEYS as LAND_USE_KEYS
-from reimagina_test_port.indicators.population_access.nodes import PoiType
+from reimagina_test_port.indicators.population_access.nodes import (
+    DIVERSITY_KEYS,
+    PoiType,
+)
 from reimagina_test_port.indicators.streets.calculation import KEYS as STREETS_KEYS
 from reimagina_test_port.indicators.streets.calculation import lane_flags
 from reimagina_test_port.scenario import source, writer
 
 logger = logging.getLogger(__name__)
+
+# The destinations, plus the scian_code that gives their diversity subcategory.
+SCENARIO_POIS_DECLARATION = TableOutput(
+    columns=[
+        *POIS_DECLARATION.columns,
+        TableColumn(
+            name="scian_code",
+            type="string",
+            unit=None,
+            description="The element's scian_code; missing without one.",
+        ),
+    ],
+    geometry="geometry",
+)
 
 
 class ScenarioParameters(MetricParameters):
@@ -104,7 +122,7 @@ def scenario_dataset(
         "Acquire a scenario's present amenities and establishments, one row per "
         "active poi_catalog type whose rule they meet."
     ),
-    outputs={"reimagina_scenario_pois": POIS_DECLARATION},
+    outputs={"reimagina_scenario_pois": SCENARIO_POIS_DECLARATION},
 )
 def scenario_pois(
     parameters: ScenarioParameters, context: DatasetContext
@@ -555,13 +573,38 @@ def composites_write():
 
 
 @metric(
+    name="reimagina_scenario_poi_diversity",
+    description=(
+        "Compute a scenario's diversity of each set of destinations and write it "
+        "to Reimagina's element_state_indicator_value as diversity_<set>, under "
+        "the same rules as reimagina_scenario_indicators. Only blocks are written."
+    ),
+    inputs={"blocks": Dependency("reimagina_poi_diversity_blocks")},
+    outputs={"reimagina_scenario_poi_diversity": WRITE_DECLARATION},
+)
+def scenario_poi_diversity(
+    parameters: WriteParameters,
+    blocks: gpd.GeoDataFrame,
+    context: RunContext,
+) -> pd.DataFrame:
+    """Block values, in their own transaction."""
+    return write_group(
+        parameters,
+        {"block": blocks},
+        dict.fromkeys(DIVERSITY_KEYS, "number"),
+        node="reimagina_scenario_poi_diversity",
+        log=context.logger,
+    )
+
+
+@metric(
     name="reimagina_scenario_write",
     description=(
         "Compute and write a scenario's built-form indicators, accessibility, "
-        "population access, land use, streets and composites: "
+        "population access, POI diversity, land use, streets and composites: "
         "reimagina_scenario_indicators, reimagina_scenario_accessibility, "
-        "reimagina_scenario_population_access, reimagina_scenario_land_use, "
-        "reimagina_scenario_streets and "
+        "reimagina_scenario_population_access, reimagina_scenario_poi_diversity, "
+        "reimagina_scenario_land_use, reimagina_scenario_streets and "
         "reimagina_scenario_composites, each in its own transaction. The result "
         "adds up all of them."
     ),
@@ -569,6 +612,7 @@ def composites_write():
         "indicators": Dependency("reimagina_scenario_indicators"),
         "accessibility": Dependency("reimagina_scenario_accessibility"),
         "population_access": Dependency("reimagina_scenario_population_access"),
+        "poi_diversity": Dependency("reimagina_scenario_poi_diversity"),
         "land_use": Dependency("reimagina_scenario_land_use"),
         "streets": Dependency("reimagina_scenario_streets"),
         "composites": Dependency("reimagina_scenario_composites"),
@@ -580,6 +624,7 @@ def scenario_write(
     indicators: pd.DataFrame,
     accessibility: pd.DataFrame,
     population_access: pd.DataFrame,
+    poi_diversity: pd.DataFrame,
     land_use: pd.DataFrame,
     streets: pd.DataFrame,
     composites: pd.DataFrame,
@@ -590,6 +635,7 @@ def scenario_write(
             indicators,
             accessibility,
             population_access,
+            poi_diversity,
             land_use,
             streets,
             composites,
