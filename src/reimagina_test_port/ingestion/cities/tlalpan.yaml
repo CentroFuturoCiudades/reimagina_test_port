@@ -1,0 +1,71 @@
+# Tlalpan (09012): exe_reimagina's sources (src/pipeline/cities/tlalpan.toml), laid
+# out as mexicali.yaml. Read from the CFC data lake (account cfcetlsadls).
+#
+# Not in the lake for Tlalpan, so not loaded: an equipment file (every amenity
+# comes from the DENUE), an existing land use, INEGI's block faces for street
+# lighting, bike lanes and the canopy raster (scripts/canopy_raster.py).
+city: tlalpan
+name: Tlalpan
+ent_code: "09"
+muni_code: "012"
+# Metric CRS used for areas, distances and the height rasters.
+crs: EPSG:32614
+
+sources:
+  blocks:
+    uri: az://cleaned/inegi/marco_geostadistico/2024/manzanas_urbanas.parquet/CVE_ENT=09/CVE_MUN=012
+  census:
+    uri: az://cleaned/inegi/censo/manzanas_2020.parquet/entidad=9/mun=12
+  parcels:   # CDMX's cadastre for Tlalpan, as exe_reimagina used it
+    uri: az://raw/por_estado/09_ciudad_de_mexico/012_tlalpan/lots_09012.fgb
+    params:
+      # The cadastre's own feature id: unique and stable.
+      key_columns: [fid]
+  zoning:
+    uri: az://sandbox/projects/EXE/raw/normativa/Tlalpan Normativa urbana general.geojson
+    # Only the zoning: this normativa has levels (niveles), open area (area_libre)
+    # and density as text (densidad_d) instead of max_cos, max_cus and
+    # max_density, which exe_reimagina derived from them; here they stay missing.
+    params:
+      columns: {uso_descri: zoning}
+      max_distance_m: 3.0
+  heights:   # Open Buildings 2.5D temporal tiles and their manifests
+    uri: az://sandbox/projects/EXE/cleaned/open_buildings_temporal_data_v1_mx
+    params:
+      year: "2023"
+      manifests_uri: az://sandbox/projects/EXE/raw/open_buildings_temporal_data_v1_mx
+  denue:   # INEGI DENUE 05_2025 as published: amenities and establishments by the SCIAN crosswalk
+    uri: az://raw/inegi/denue/09_ciudad_de_mexico/denue_09_0525_csv/conjunto_de_datos/denue_inegi_09_.csv
+    params: {municipio: Tlalpan, encoding: latin-1}
+  # Street network: as Mexicali's (OpenStreetMap's drive network over the blocks'
+  # hull, within the municipality), fitted to the cadastre's lots.
+  streets:
+    uri: osm://overpass
+    params:
+      network_type: drive
+      retain_all: true
+      margin_m: 500
+      boundary_uri: az://cleaned/inegi/marco_geostadistico/2024/areas_municipales.parquet/CVE_ENT=09/CVE_MUN=012
+      output_prefix: az://sandbox/projects/EXE/cleaned/vialidades
+      refine: true
+
+params:
+  lots:   # exe_reimagina cities/tlalpan.toml values
+    presence_threshold: 0.5
+    height_percentile: 95.0
+    average_level_height: 2.7
+    gsd_pixel: 0.5
+    mf_min_units: 1.5
+  amenities: {default_capacity: 1}
+  # As mexicali.yaml (urban_fabric.md's placement distance).
+  points: {lot_max_distance_m: 50.0}
+  # As mexicali.yaml, until space allocation is computed per lot.
+  space_allocation:
+    housing.floor_share:
+      single_family: 100
+      multifamily: 100
+      mixed_use: 80
+      commerce: 0
+      office: 0
+      industrial: 0
+      amenity: 0
