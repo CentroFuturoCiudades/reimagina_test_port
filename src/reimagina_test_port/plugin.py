@@ -116,6 +116,9 @@ def create_snapshot_plugin() -> PluginDefinition:
                 "reimagina_prepared_network_nodes",
                 "reimagina_prepared_network_edges",
             ),
-            *composite_metrics(snapshot.SnapshotParameters),
+            # Land use and streets read the scenario from the database.
+            *composite_metrics(
+                snapshot.SnapshotParameters, missing=("land_use", "streets")
+            ),
         ]
     )

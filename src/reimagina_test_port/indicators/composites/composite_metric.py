@@ -5,8 +5,10 @@ bottom-up: a composite runs once its children have. With a ``boundary`` (a
 GeoParquet URL) in the config, every composite also depends on
 reimagina_composite_boundary and keeps only the elements inside it."""
 
+import copy
 import inspect
 import re
+from collections.abc import Collection
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +38,7 @@ from reimagina_test_port.indicators.land_use import calculation as land_use
 from reimagina_test_port.indicators.population_access.nodes import (
     ACCESS_KEYS,
     DISTANCE_KEYS,
+    DIVERSITY_KEYS,
     SHARE_KEYS,
 )
 from reimagina_test_port.indicators.streets import calculation as streets
@@ -52,6 +55,7 @@ SOURCES = {
     ),
     "land_use": ("reimagina_land_use", land_use.KEYS),
     "streets": ("reimagina_streets", streets.KEYS),
+    "diversity": ("reimagina_poi_diversity", DIVERSITY_KEYS),
 }
 ELEMENTS = ("blocks", "lots")
 LEAF_KEYS = {
@@ -393,13 +397,47 @@ def boundary_dataset(uri: str, parameters_type: type[MetricParameters]):
     )(handler)  # fmt: skip
 
 
+def without_sources(config: dict, missing: Collection[str]) -> dict:
+    """``config`` without the leaves that read a source in ``missing``: a
+    composite left without children goes too, and so do the refs to it; a
+    ``min_valid`` above its remaining children drops to them."""
+    if not missing:
+        return config
+    config = copy.deepcopy(config)
+    gone: set[str] = set()
+
+    def prune(node: dict) -> bool:
+        """Whether ``node`` stays; prunes its children in place."""
+        if is_ref(node):
+            return node["ref"] not in gone
+        if not is_composite(node):
+            return node.get("source") not in missing
+        node["children"] = [child for child in node["children"] if prune(child)]
+        if not node["children"]:
+            gone.add(node["name"])
+            return False
+        if (required := min_valid(node)) is not None:
+            node["min_valid"] = min(required, len(node["children"]))
+        return True
+
+    # A ref may come before the composite it reuses: prune until nothing changes.
+    while True:
+        before = len(gone)
+        config["trees"] = [tree for tree in config["trees"] if prune(tree)]
+        if len(gone) == before:
+            return config
+
+
 def composite_metrics(
-    parameters_type: type[MetricParameters], config: dict | None = None
+    parameters_type: type[MetricParameters],
+    config: dict | None = None,
+    missing: Collection[str] = (),
 ) -> list:
     """One metric per composite of ``config`` (by default composite_config.yaml),
-    and the boundary dataset when it names one."""
+    and the boundary dataset when it names one. ``missing`` names the sources
+    this graph lacks: their leaves are left out (``without_sources``)."""
     element, composites, boundary = check_tree(
-        load_config() if config is None else config
+        without_sources(load_config() if config is None else config, missing)
     )
     nodes = [boundary_dataset(boundary, parameters_type)] if boundary else []
     return nodes + [

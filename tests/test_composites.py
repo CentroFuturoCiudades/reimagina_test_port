@@ -120,8 +120,44 @@ def test_one_node_per_composite_wired_as_the_tree():
 def test_the_bundled_tree_is_in_both_graphs():
     _, names = nodes.composite_outputs()
     expected = {f"reimagina_composite_{name}" for name in names}
-    for definition in (plugin.create_plugin(), plugin.create_snapshot_plugin()):
-        assert expected <= {m.name for m in definition.node_manifests}
+    assert expected <= {m.name for m in plugin.create_plugin().node_manifests}
+    # The snapshot has no land use or streets: the composites of only those go.
+    _, kept = nodes.composite_outputs(
+        nodes.without_sources(nodes.load_config(), ("land_use", "streets"))
+    )
+    snapshot_names = {m.name for m in plugin.create_snapshot_plugin().node_manifests}
+    assert {f"reimagina_composite_{name}" for name in kept} <= snapshot_names
+    assert "reimagina_composite_safety" not in snapshot_names
+    assert "reimagina_composite_index" in snapshot_names
+
+
+def test_without_sources_prunes_leaves_composites_and_refs():
+    config = {
+        "element": "blocks",
+        "trees": [{
+            "name": "index", "min_valid": 2,
+            "children": [
+                # The ref comes before the composite it reuses.
+                {"ref": "streets_only"},
+                {"name": "mixed", "min_valid": 2, "children": [
+                    leaf("density", "built_form"), leaf("mix", "land_use"),
+                ]},
+                {"name": "streets_only", "children": [leaf("lit", "streets")]},
+            ],
+        }],
+    }  # fmt: skip
+    pruned = nodes.without_sources(config, ("land_use", "streets"))
+    index = pruned["trees"][0]
+    assert [nodes.child_name(c) for c in index["children"]] == ["mixed"]
+    assert index["min_valid"] == 1
+    assert index["children"][0]["min_valid"] == 1
+    assert [c["name"] for c in index["children"][0]["children"]] == ["density"]
+    # The config itself is untouched.
+    assert len(config["trees"][0]["children"]) == 3
+
+
+def leaf(name: str, source: str) -> dict:
+    return {"name": name, "source": source}
 
 
 def test_the_bundled_tree_over_the_synthetic_indicators():
