@@ -246,9 +246,9 @@ DIVERSITY_SETS = {
     },
     "education": {
         "preschool": ("preschool",),
-        "primary": ("primary_school",),
-        "secondary": ("secondary_school",),
-        "tertiary": ("high_school", "university"),
+        "primary": ("primary_education",),
+        "secondary": ("secondary_education",),
+        "tertiary": ("tertiary_education",),
     },
     "health": {
         "health_center": ("health_center",),

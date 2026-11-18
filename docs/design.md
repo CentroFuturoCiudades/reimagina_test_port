@@ -351,19 +351,29 @@ A category is the finest kind of place the platform tells apart (a bakery, a
 daycare, a library), and the only attribute that says what a place is: there is
 no separate subcategory. `poi_catalog` rules and the diversity sets
 (`population_access/nodes.py`) group categories, and a place counts in every
-group that lists its category: a preschool is both education and care. Food
-splits into `supermarket` (462111), `mini_supermarket` (462112, the convenience
-stores), `grocery` (46111), `butcher`, `poultry`, `fishmonger` (46112x),
-`greengrocer`, `grains_spices`, `dairy` (46113–46115), `bakery` (311812, traditional
-bakeries; the industrial 311811 stays `manufacturing`), `tortilleria` (311830) and
-`other_food` (the rest of 4611). Education is one category per level, `preschool`
-to `university` (6113, added for the sheet's tertiary education; the workbook
-leaves universities out); care is `special_education` (61118), `daycare` (6244),
-`community_food` (62421) and `residence` (623); health is `health_center` (the
-consultorios), `clinic`, `hospital` and the establishments' `pharmacy`. Public
-sports clubs and gyms, museums and libraries (51912, 51921; the API's rules
-already read them) are amenities; private sports clubs and gyms, and cinemas,
-establishments. `police_station` and `fire_station` have no source yet.
+group that lists its category: a preschool is both education and care.
+
+Each name comes from a source: the workbook's functional categories where one is
+a single kind of place (`primary_education`, `secondary_education`,
+`tertiary_education`, `hospital`, `basic_household_goods`, `financial`,
+`manufacturing`), else the kinds the indicators sheet lists («Subvariables»,
+column H): `supermarket`, `grocery` (abarroterías), `butcher`, `poultry`,
+`fishmonger`, `greengrocer` (fruterías and verdulerías, both 461130), `bakery`,
+`tortilleria`, `convenience_store`, `petrol_station`, `preschool`, `health_center`,
+`clinic`, `pharmacy`, `cultural_center`, `library`, `museum`, `religious`,
+`sports`, `community_center`, `park`, `police_station`, `fire_station`; or the
+kinds the workbook's descriptions name: `special_education`, `daycare`,
+`community_food`, `residence` (its *Care/community support*), `grains_spices` and
+`dairy` (46114, 46115, in its fresh food) and `cinema` (512130, in its cultural
+facilities). `other_food` is the rest of its food retail (4611).
+
+Media superior (61115–61116) is `tertiary_education`, the workbook's
+*Tertiary/vocational education*; neither it nor the sheet counts universities.
+Only traditional bakeries (311812) are `bakery`; the industrial 311811 stays
+`manufacturing`. Public sports clubs and gyms, museums and libraries (51912,
+51921, codes the workbook does not list; the API's rules already read them) are
+amenities; private sports clubs and gyms, and cinemas, establishments.
+`police_station` and `fire_station` have no source yet.
 
 The other amenities come from each city's own layers, in two steps. The
 `raw_amenities` step (`ingestion/raw_amenities.py`) reads the raw layers of
@@ -385,10 +395,11 @@ the same level nearby, and about 40 DENUE sports and culture places no IMIP one.
 
 Mexicali's normalizer, `imip`, reads IMIP's equipment layers
 (`az://cleaned/por_estado/02_baja_california/002_mexicali/imip/equipamiento/`)
-with exe_reimagina's `2_equip_for_exe.ipynb` rules: six of its 15 layers,
-`edu_basica` split by `TIPO` (primary `primary_school`, preschool `preschool`,
-general and technical secondary `secondary_school`; CENDI and telesecundaria
-left out), `med_sup` `high_school`, `edu_sup` `university`, `deporte`
+with exe_reimagina's `2_equip_for_exe.ipynb` rules: five of its 15 layers,
+`edu_basica` split by `TIPO` (primary `primary_education`, preschool `preschool`,
+general and technical secondary `secondary_education`; CENDI and telesecundaria
+left out), `med_sup` `tertiary_education` (`edu_sup`, universities, is left out),
+`deporte`
 `sports`, `cult_rec` `cultural_center`, and `esp_pub` filtered to
 neighbourhood gardens and parks (`park`) and sports spaces
 (`sports`; exe counted them as parks). Names come from `NOM_ESC` or `NOMBRE` (`esp_pub` has none); `area_m2`,

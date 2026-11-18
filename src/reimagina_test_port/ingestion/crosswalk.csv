@@ -1,12 +1,11 @@
 scian_prefix,element,category,note
 61111,amenity,preschool,Preescolar y estimulación temprana
-61112,amenity,primary_school,Primaria
-61113,amenity,secondary_school,Secundaria general
-61114,amenity,secondary_school,Secundaria técnica
-61115,amenity,high_school,Media técnica terminal
-61116,amenity,high_school,Media superior
+61112,amenity,primary_education,Primaria
+61113,amenity,secondary_education,Secundaria general
+61114,amenity,secondary_education,Secundaria técnica
+61115,amenity,tertiary_education,Media técnica terminal (the workbook's Tertiary/vocational education)
+61116,amenity,tertiary_education,Media superior (the workbook's Tertiary/vocational education)
 61118,amenity,special_education,Educación para necesidades especiales
-6113,amenity,university,Educación superior (the sheet's tertiary education; not in the workbook)
 621111,amenity,health_center,Consultorios de medicina general privados
 621112,amenity,health_center,Consultorios de medicina general públicos
 62121,amenity,health_center,Consultorios dentales
@@ -36,15 +35,15 @@ scian_prefix,element,category,note
 46114,establishment,grains_spices,"Semillas y granos alimenticios, especias y chiles secos"
 46115,establishment,dairy,"Leche, otros productos lácteos y embutidos"
 462111,establishment,supermarket,Supermercados
-462112,establishment,mini_supermarket,Minisupers
+462112,establishment,convenience_store,Minisupers (the sheet's convenience stores and minimarts)
 311812,establishment,bakery,Panificación tradicional (panaderías; the industrial 311811 stays manufacturing)
 311830,establishment,tortilleria,Tortillas de maíz y molienda de nixtamal
 468411,establishment,petrol_station,Gasolina y diésel
-466111,establishment,household_goods,Muebles para el hogar
-466112,establishment,household_goods,Electrodomésticos menores y aparatos de línea blanca
-466114,establishment,household_goods,"Cristalería, loza y utensilios de cocina"
+466111,establishment,basic_household_goods,Muebles para el hogar
+466112,establishment,basic_household_goods,Electrodomésticos menores y aparatos de línea blanca
+466114,establishment,basic_household_goods,"Cristalería, loza y utensilios de cocina"
 46411,establishment,pharmacy,Farmacias con y sin minisúper
-522110,establishment,bank,Banca múltiple
+522110,establishment,financial,Banca múltiple
 512130,establishment,cinema,Exhibición de películas y otros materiales audiovisuales
 713941,establishment,sports,Clubes deportivos privados
 713943,establishment,sports,Centros de acondicionamiento físico privados

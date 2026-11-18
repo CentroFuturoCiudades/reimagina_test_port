@@ -169,7 +169,7 @@ INSERT INTO poi_catalog (poi_type, rule_criteria, status) VALUES
     ('establishment', '{"type": "establishment"}', 'active'),
     ('public_space', '{"type": "amenity", "category": "park"}', 'active'),
     ('convenience_store', '{"type": "establishment", "category":
-        "mini_supermarket"}', 'active'),
+        "convenience_store"}', 'active'),
     ('park', '{"type": "amenity", "category": "park"}', 'active'),
     ('care', '{"type": "amenity", "category": "daycare"}', 'inactive');
 UPDATE attribute_catalog SET enum_values = ARRAY[
@@ -642,7 +642,7 @@ def test_write_diversity(dsn, monkeypatch):
     subcategories = {
         "clinic": ("health_center",),
         "pharmacy": ("pharmacy",),
-        "other": ("bank",),
+        "other": ("financial",),
     }
     monkeypatch.setitem(
         population_access_nodes.DIVERSITY_SETS, "fresh_food", subcategories
@@ -931,7 +931,7 @@ def new_tables(count: int = 4):
             "id": [NEW_ESTABLISHMENT],
             "parent_id": [NEW_LOTS[0]],
             "source_record_ref": ["denue:101"],
-            "category": ["mini_supermarket"],
+            "category": ["convenience_store"],
             "scian_code": ["461110"],
             "scian_sector": ["46"],
             "num_workers": [None],

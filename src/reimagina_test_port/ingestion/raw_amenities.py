@@ -55,24 +55,24 @@ class Layer:
 
 PUBLIC_SPACES = ("JARDIN VECINAL", "PARQUE DE BARRIO", "PARQUE URBANO")
 # exe_reimagina ``cleaning/equipamientos/mexicali/2_equip_for_exe.ipynb``
-# (CATEGORY_CONFIG): the same six layers and TIPO filters, with the categories of
-# crosswalk.AMENITY_CATEGORIES. One change: esp_pub's sports spaces are sports (exe
-# counted them as parks). Rows no rule matches are left out (edu_basica's CENDI
+# (CATEGORY_CONFIG): its layers and TIPO filters, with the categories of
+# crosswalk.AMENITY_CATEGORIES. Two changes: esp_pub's sports spaces are sports (exe
+# counted them as parks), and edu_sup's universities are left out (neither the
+# indicators sheet nor denue_crosswalk.xlsx counts them). Rows no rule matches are left out (edu_basica's CENDI
 # and telesecundarias; esp_pub's medians, roundabouts...).
 IMIP_LAYERS = {
     "edu_basica": Layer(
         rules=(
-            Rule("primary_school", ("primaria",), "contains"),
+            Rule("primary_education", ("primaria",), "contains"),
             Rule(
-                "secondary_school",
+                "secondary_education",
                 ("ESCUELA SECUNDARIA GENERAL", "ESCUELA SECUNDARIA TECNICA"),
             ),
             Rule("preschool", ("preescolar",), "contains"),
         ),
         name_column="NOM_ESC",
     ),
-    "edu_sup": Layer((Rule("university"),), name_column="NOM_ESC"),
-    "med_sup": Layer((Rule("high_school"),), name_column="NOM_ESC"),
+    "med_sup": Layer((Rule("tertiary_education"),), name_column="NOM_ESC"),
     "deporte": Layer((Rule("sports"),), name_column="NOMBRE"),
     "cult_rec": Layer((Rule("cultural_center"),), name_column="NOMBRE"),
     # No name column; Sup_M2 is the space's area (SUP_HA and Shape_Area are the

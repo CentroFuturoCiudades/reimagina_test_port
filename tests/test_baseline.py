@@ -179,8 +179,8 @@ def test_imip_normalizer(tmp_path):
     raw_amenities.check(raw)
     table = raw.set_index("source_id")
     assert table["category"].to_dict() == {
-        "edu_basica:1": "primary_school",
-        "edu_basica:3": "secondary_school",
+        "edu_basica:1": "primary_education",
+        "edu_basica:3": "secondary_education",
         "edu_basica:2": "preschool",
         "esp_pub:1": "park",
         "esp_pub:3": "sports",
@@ -430,7 +430,7 @@ def test_build(city, tmp_path):
             "from_zoning_plan": 2,
             "without_zoning": 0,
         },
-        "amenities_file": {"park": 1, "primary_school": 1},
+        "amenities_file": {"park": 1, "primary_education": 1},
         # One source per kind: the IMIP park, not its school; the DENUE school,
         # not its sports club (sports come from the file).
         "amenities": {
@@ -522,7 +522,7 @@ def test_build(city, tmp_path):
     assert pd.isna(park["scian_code"])
     school = amenities.loc["denue:106"]
     assert school["parent_id"] == lots.loc["1-B-8-1", "id"]
-    assert school["category"] == "primary_school"
+    assert school["category"] == "primary_education"
     assert school["scian_code"] == "611122"
     assert school["num_workers"] == 40
     assert school["name"] == "Escuela"

@@ -264,8 +264,8 @@ def test_crosswalk_longest_prefix_and_other() -> None:
     expect_equal(
         list(zip(out["element"], out["category"], strict=True)),
         [("establishment", "grocery"), ("establishment", "dairy"),
-         ("establishment", "mini_supermarket"),
-         ("amenity", "primary_school"),
+         ("establishment", "convenience_store"),
+         ("amenity", "primary_education"),
          ("establishment", "tortilleria"), ("establishment", "other"),
          ("establishment", "pharmacy"), ("establishment", "poultry"),
          ("establishment", "other_food"),
@@ -275,16 +275,17 @@ def test_crosswalk_longest_prefix_and_other() -> None:
 
 
 def test_crosswalk_education_and_care() -> None:
-    # Each level of education is its own category, universities included; care
-    # splits into special education, daycare, community food and residences; the
-    # rest of 6242 is a community centre. An industrial bakery stays manufacturing.
+    # Each level of education is its own category, as the workbook groups them
+    # (media superior is tertiary; universities, 611312, are other); care splits
+    # into special education, daycare, community food and residences; the rest of
+    # 6242 is a community centre. An industrial bakery stays manufacturing.
     codes = pd.Series(["611112", "611182", "611132", "611162", "611312", "624212",
                        "624232", "813210", "624412", "623311", "311811",
                        "311812"])  # fmt: skip
     expect_equal(
         crosswalk.classify(codes)["category"].tolist(),
-        ["preschool", "special_education", "secondary_school", "high_school",
-         "university", "community_food", "community_center", "religious", "daycare",
+        ["preschool", "special_education", "secondary_education", "tertiary_education",
+         "other", "community_food", "community_center", "religious", "daycare",
          "residence", "manufacturing", "bakery"],
     )  # fmt: skip
 

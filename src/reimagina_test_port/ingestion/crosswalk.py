@@ -23,15 +23,15 @@ import pandas as pd
 PATH = Path(__file__).with_name("crosswalk.csv")
 
 AMENITY_CATEGORIES = (
-    "preschool", "primary_school", "secondary_school", "high_school", "university",
+    "preschool", "primary_education", "secondary_education", "tertiary_education",
     "special_education", "health_center", "clinic", "hospital", "residence",
     "daycare", "community_food", "community_center", "religious", "cultural_center",
     "museum", "library", "sports", "park", "police_station", "fire_station",
 )  # fmt: skip
 ESTABLISHMENT_CATEGORIES = (
-    "supermarket", "mini_supermarket", "grocery", "butcher", "poultry", "fishmonger",
+    "supermarket", "convenience_store", "grocery", "butcher", "poultry", "fishmonger",
     "greengrocer", "grains_spices", "dairy", "bakery", "tortilleria", "other_food",
-    "household_goods", "pharmacy", "bank", "petrol_station", "cinema", "sports",
+    "basic_household_goods", "pharmacy", "financial", "petrol_station", "cinema", "sports",
     "manufacturing", "other",
 )  # fmt: skip
 CATEGORIES = {"amenity": AMENITY_CATEGORIES, "establishment": ESTABLISHMENT_CATEGORIES}
