@@ -227,20 +227,50 @@ def population_access_metrics(
     ]
 
 
-SCIAN_COLUMN = "scian_code"
+CATEGORY_COLUMN = "category"
 DIVERSITY_M = 500
-# Each diversity set: its subcategories by scian_code; k is how many it has.
-# Tentative (2026-11-11): fresh food as GHSCI's seven; education, health, care and
-# community, culture and recreation come with their keys in indicator_catalog.
+# Each diversity set: its subcategories, each the element categories it groups
+# (crosswalk.CATEGORIES); k is how many subcategories it has. From the sheet's
+# «Subvariables» (indicadores_por_completar.xlsx, 2026-11-18), leaving out the kinds
+# with no data yet (markets; youth and activity centres). The sets are not
+# poi_catalog types: that table holds destinations only.
 DIVERSITY_SETS = {
     "fresh_food": {
-        "meat": ("461121", "461122", "461123"),
-        "produce": ("461130",),
-        "grains_and_spices": ("461140",),
-        "dairy": ("461150",),
-        "supermarket": ("462111",),
-        "minisuper": ("462112",),
-        "bakery_tortilleria": ("311811", "311812", "311830"),
+        "supermarket": ("supermarket",),
+        "grocery": ("grocery",),
+        "bakery": ("bakery",),
+        "tortilleria": ("tortilleria",),
+        "poultry": ("poultry",),
+        "butcher": ("butcher",),
+        "greengrocer": ("greengrocer",),
+    },
+    "education": {
+        "preschool": ("preschool",),
+        "primary": ("primary_school",),
+        "secondary": ("secondary_school",),
+        "tertiary": ("high_school", "university"),
+    },
+    "health": {
+        "health_center": ("health_center",),
+        "clinic": ("clinic",),
+        "hospital": ("hospital",),
+        "pharmacy": ("pharmacy",),
+    },
+    "care": {
+        "preschool": ("preschool",),
+        "special_education": ("special_education",),
+        "daycare": ("daycare",),
+        "community_food": ("community_food",),
+        "residence": ("residence",),
+    },
+    "community_culture_recreation": {
+        "cultural_center": ("cultural_center",),
+        "library": ("library",),
+        "museum": ("museum",),
+        "recreational_area": ("park",),
+        "religious": ("religious",),
+        "sports": ("sports",),
+        "community_center": ("community_center",),
     },
 }
 DIVERSITY_KEYS = [f"diversity_{name}" for name in DIVERSITY_SETS]
@@ -249,7 +279,7 @@ DIVERSITY_COLUMNS = [
         key,
         "number",
         Unit.RATIO,
-        "Shannon entropy of the set's subcategories (by scian_code) among the POIs "
+        "Shannon entropy of the set's subcategories (by category) among the POIs "
         "within 500 m over the road network, over ln k, k being how many "
         "subcategories the set has (0 = one or none, 1 = all k equally); for a "
         "block, its lots' average weighted by population. Null without geometry "
@@ -279,13 +309,13 @@ def poi_diversity_metric(
         crs = resolve_access_crs(lots)
         with timed("road network", context.logger):
             network = street_network(nodes, edges)
-        # One row per POI, whatever its poi_types: its scian_code is its subcategory.
+        # One row per POI, whatever its poi_types: its category gives its subcategory.
         places = pois.drop_duplicates("id")
-        codes = places.get(SCIAN_COLUMN, pd.Series(None, index=places.index))
+        categories = places.get(CATEGORY_COLUMN, pd.Series(None, index=places.index))
         values = {}
         for name, subcategories in DIVERSITY_SETS.items():
-            subcategory = codes.map(
-                {code: sub for sub, group in subcategories.items() for code in group}
+            subcategory = categories.map(
+                {cat: sub for sub, group in subcategories.items() for cat in group}
             )
             found = subcategory.notna()
             with timed(f"{name} diversity", context.logger):
@@ -317,7 +347,7 @@ def poi_diversity_metric(
         name="reimagina_poi_diversity",
         description=(
             "Diversity of each set of destinations within walking distance: the "
-            "Shannon entropy of its subcategories, by scian_code, among the POIs "
+            "Shannon entropy of its subcategories, by category, among the POIs "
             "within 500 m over the road network, over ln k, k being how many "
             "subcategories the set has. Lots count the POIs their entries reach, "
             "walked as in reimagina_nearest_poi_distance; blocks average their "

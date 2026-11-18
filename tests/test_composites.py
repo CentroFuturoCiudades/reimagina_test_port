@@ -109,7 +109,7 @@ def test_one_node_per_composite_wired_as_the_tree():
         "reimagina_composite_health_blocks"].columns]  # fmt: skip
     assert columns[3:] == [
         "health_facilities",
-        "health_services",
+        "health_minutes",
         "index",
         "mean",
         "penalty",
@@ -457,7 +457,7 @@ def test_catalog_rows_and_inputs_come_from_the_tree():
     ]
     # A share reads its count and the residents; a composite reads its children.
     assert health_inputs == [
-        "distance_m_health", "distance_to_health_services",
+        "distance_m_health", "distance_to_health",
         "population_with_access_health", "population",
     ]  # fmt: skip
     assert ("block", "composite_index", "composite_proximity") in inputs

@@ -154,19 +154,21 @@ trees:
             label: Acceso a salud, educación y cuidados
             phenomenon: positive
             children:
-              # ULI primary_school: primary schools within 300 m.
-              - name: primary_school
+              # ULI primary_school, over every level: the sheet's «Access to
+              # educational services» (preschool to tertiary) within 300 m. The
+              # reference is still the ULI's, measured on primary schools only.
+              - name: education
                 source: population_access
-                variable: distance_m_primary_education
+                variable: distance_m_education
                 transform: {soft_threshold: 300}
                 polarity: positive
                 method: ampi
                 reference: 0.141
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 300 m.
-              - name: primary_school_pct
+              - name: education_pct
                 source: population_access
-                variable: share_with_access_primary_education
+                variable: share_with_access_education
                 polarity: positive
                 method: ampi
                 reference: 0.124

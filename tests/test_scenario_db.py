@@ -160,19 +160,18 @@ CREATE TABLE poi_catalog (
     params jsonb NOT NULL DEFAULT '{}',
     status text NOT NULL DEFAULT 'active'
 );
--- Rules as alembic 5d0c2a7e9f13 / 7c2e4a9b1d58; "park" is active but has no
+-- Rules as the API's poi_catalog by category; "park" is active but has no
 -- accessibility outputs, "care" is inactive.
 INSERT INTO poi_catalog (poi_type, rule_criteria, status) VALUES
-    ('health', '{"type": "amenity", "category": {"in": ["primary_healthcare",
-        "medical_clinic", "hospital"]}}', 'active'),
-    ('health_services', '{"any": [{"type": "amenity", "category": {"in": [
-        "primary_healthcare", "medical_clinic", "hospital"]}},
-        {"type": "establishment", "category": "medicines"}]}', 'active'),
-    ('public_space', '{"type": "amenity", "category": "public_space"}', 'active'),
+    ('health', '{"any": [{"type": "amenity", "category": {"in": ["health_center",
+        "clinic", "hospital"]}},
+        {"type": "establishment", "category": "pharmacy"}]}', 'active'),
+    ('establishment', '{"type": "establishment"}', 'active'),
+    ('public_space', '{"type": "amenity", "category": "park"}', 'active'),
     ('convenience_store', '{"type": "establishment", "category":
-        "convenience_store"}', 'active'),
-    ('park', '{"type": "amenity", "category": "public_space"}', 'active'),
-    ('care', '{"type": "amenity", "category": "care"}', 'inactive');
+        "mini_supermarket"}', 'active'),
+    ('park', '{"type": "amenity", "category": "park"}', 'active'),
+    ('care', '{"type": "amenity", "category": "daycare"}', 'inactive');
 UPDATE attribute_catalog SET enum_values = ARRAY[
     'single_family', 'multifamily', 'mixed_use', 'amenity', 'commerce', 'office',
     'industrial'
@@ -308,16 +307,16 @@ def seed(conn, network_uri: str) -> None:
         set_attrs(conn, BASELINE, lot, attrs)
     # Contents: the flats hold a clinic (an amenity), GONE a pharmacy (an
     # establishment).
-    clinic = {"category": "primary_healthcare", "scian_code": "621112"}
+    clinic = {"category": "health_center", "scian_code": "621112"}
     add_point(conn, BASELINE, CLINIC, "amenity", FLATS, clinic)
-    pharmacy = {"category": "medicines", "scian_code": "464111"}
+    pharmacy = {"category": "pharmacy", "scian_code": "464111"}
     add_point(conn, BASELINE, PHARMACY, "establishment", GONE, pharmacy)
     # Fork: the shop becomes a house; the flats get an all-NULL unit size row; the
     # house moves to the second block with a new geometry; GONE is deleted; NEW is
     # a lot that exists only in the fork.
     add_state(conn, FORK, SHOP)
     set_attrs(conn, FORK, SHOP, {"land_use": "single_family", "num_levels": 2})
-    add_point(conn, FORK, PARK, "amenity", SHOP, {"category": "public_space"})
+    add_point(conn, FORK, PARK, "amenity", SHOP, {"category": "park"})
     add_state(conn, FORK, FLATS)
     set_attrs(conn, FORK, FLATS, {"housing.unit_size_m2": None})
     add_state(conn, FORK, CLINIC, parent=FLATS)
@@ -472,18 +471,18 @@ def test_pois_fall_back_to_baseline(dsn):
     # One row per poi_catalog type whose rule the element meets.
     assert list(zip(baseline["id"], baseline["poi_type"], strict=True)) == [
         (CLINIC, "health"),
-        (CLINIC, "health_services"),
-        (PHARMACY, "health_services"),
+        (PHARMACY, "establishment"),
+        (PHARMACY, "health"),
     ]
-    # Each row carries its element's scian_code.
-    assert baseline["scian_code"].tolist() == ["621112", "621112", "464111"]
+    # Each row carries its element's category.
+    assert baseline["category"].tolist() == ["health_center", "pharmacy", "pharmacy"]
     assert baseline.crs == "EPSG:4326"
     # Fork: SHOP gains a park, the clinic is hidden by all-NULL rows and the
     # pharmacy is deleted. "park" (no outputs) and inactive types are ignored.
     fork = scenario.read_pois(FORK).set_index("id")
     assert fork["poi_type"].to_dict() == {PARK: "public_space"}
     assert fork["capacity"].isna().all()
-    assert fork["scian_code"].isna().all()
+    assert fork["category"].tolist() == ["park"]
 
 
 def test_road_network_uri(dsn, network_uri):
@@ -515,7 +514,7 @@ def test_fork_accessibility(dsn):
         assert block["farthest_amenity"] == "public_space"
         assert block["minutes"] == block["distance_to_public_space"]
         assert pd.isna(block["distance_to_health"])
-        assert pd.isna(block["distance_to_health_services"])
+        assert pd.isna(block["distance_to_establishment"])
     assert lots[HOUSE]["parent_id"] == BLOCK_2
     assert (
         lots[HOUSE]["distance_to_public_space"]
@@ -566,7 +565,7 @@ def test_write_baseline_is_idempotent(dsn):
     assert values[(HOUSE, "density")][0] == pytest.approx(50)
     assert values[(BLOCK, "num_housing_units")][0] == 31
     # Baseline POIs: a clinic and a pharmacy.
-    assert values[(BLOCK, "farthest_amenity")][1] in {"health", "health_services"}
+    assert values[(BLOCK, "farthest_amenity")][1] in {"health", "establishment"}
     assert values[(BLOCK, "distance_to_health")][0] > 0
     # No POI: never written.
     assert (BLOCK, "distance_to_public_space") not in values
@@ -612,18 +611,20 @@ def test_write_population_access(dsn):
     with psycopg.connect(dsn) as conn:
         conn.execute(
             "UPDATE reimagina_urbano.poi_catalog SET params = '{\"coverage_m\": 300}' "
-            "WHERE poi_type IN ('health', 'health_services')"
+            "WHERE poi_type IN ('health', 'establishment')"
         )
     write(BASELINE)
     values = stored(dsn, BASELINE)
-    assert values[(BLOCK, "population_with_access_health_services")][0] == 93
-    assert values[(BLOCK, "distance_m_health_services")][0] > 0
+    assert values[(BLOCK, "population_with_access_health")][0] == 93
+    assert values[(BLOCK, "distance_m_health")][0] > 0
     # Only blocks are written.
-    assert (HOUSE, "distance_m_health_services") not in values
+    assert (HOUSE, "distance_m_health") not in values
     # No POIs of the type: no distance.
     assert (BLOCK, "distance_m_public_space") not in values
     # A partial run keeps the values of the other types.
-    run_metric("reimagina_scenario_population_access", BASELINE, poi_types=["health"])
+    run_metric(
+        "reimagina_scenario_population_access", BASELINE, poi_types=["establishment"]
+    )
     assert stored(dsn, BASELINE) == values
 
 
@@ -632,25 +633,29 @@ def test_population_access_without_coverage_uses_the_default(dsn, caplog):
     with caplog.at_level(logging.WARNING):
         write(BASELINE)
     assert "without coverage_m" in caplog.text
-    access = stored(dsn, BASELINE)[(BLOCK, "population_with_access_health_services")]
+    access = stored(dsn, BASELINE)[(BLOCK, "population_with_access_health")]
     assert access[0] == 93
 
 
 def test_write_diversity(dsn, monkeypatch):
-    # A set over the seeded scian_codes: the clinic's, the pharmacy's and one absent.
-    subcategories = {"clinic": ("621112",), "pharmacy": ("464111",), "other": ("0",)}
+    # A set over the seeded categories: the clinic's, the pharmacy's and one absent.
+    subcategories = {
+        "clinic": ("health_center",),
+        "pharmacy": ("pharmacy",),
+        "other": ("bank",),
+    }
     monkeypatch.setitem(
         population_access_nodes.DIVERSITY_SETS, "fresh_food", subcategories
     )
     write(BASELINE)
     values = stored(dsn, BASELINE)
-    # One of each: the clinic counts once, though of two poi_types; k = 3.
+    # One of each: the pharmacy counts once, though of two poi_types; k = 3.
     expected = np.log(2) / np.log(3)
     key = "diversity_fresh_food"
     assert values[(BLOCK, key)][0] == pytest.approx(expected, abs=1e-4)
     # Only blocks are written.
     assert (HOUSE, key) not in values
-    # The fork keeps only the park, without scian_code: 0 where the house now is.
+    # The fork keeps only the park, in no subcategory: 0 where the house now is.
     write(FORK)
     assert stored(dsn, FORK)[(BLOCK_2, key)][0] == 0
 
@@ -911,7 +916,7 @@ def new_tables(count: int = 4):
             "id": [NEW_AMENITY],
             "parent_id": [NEW_LOTS[0]],
             "source_record_ref": ["denue:11"],
-            "category": ["primary_healthcare"],
+            "category": ["health_center"],
             "scian_code": ["621112"],
             "num_workers": [3.0],
             "capacity": [1.0],
@@ -926,7 +931,7 @@ def new_tables(count: int = 4):
             "id": [NEW_ESTABLISHMENT],
             "parent_id": [NEW_LOTS[0]],
             "source_record_ref": ["denue:101"],
-            "category": ["convenience_store"],
+            "category": ["mini_supermarket"],
             "scian_code": ["461110"],
             "scian_sector": ["46"],
             "num_workers": [None],
@@ -1084,13 +1089,13 @@ def test_write_new_baseline(new_baseline, dsn):
         ).fetchone()[0]
     assert origin == NEW_BASELINE
     assert points == {"amenity": NEW_LOTS[0], "establishment": NEW_LOTS[0]}
-    assert clinic == "primary_healthcare"
+    assert clinic == "health_center"
     # Accessibility destinations are the amenity and establishment elements: the
     # clinic and the store count, by their category.
     assert scenario.read_pois(NEW_BASELINE)["poi_type"].tolist() == [
         "health",
-        "health_services",
         "convenience_store",
+        "establishment",
     ]
     # Indicators then come from the scenario writer.
     assert write(NEW_BASELINE)["values_written"] > 0

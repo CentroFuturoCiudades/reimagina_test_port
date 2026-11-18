@@ -21,9 +21,9 @@ trees:
                 method: ampi
                 reference: 0.5
                 goalposts: {min: 0, max: 1}
-              - name: health_services
+              - name: health_minutes
                 source: accessibility
-                variable: distance_to_health_services
+                variable: distance_to_health
                 transform: {soft_threshold: 10}
                 polarity: positive
                 method: ampi

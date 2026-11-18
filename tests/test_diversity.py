@@ -97,14 +97,14 @@ def test_blocks_average_their_lots_weighted_by_population():
     assert np.isnan(block[1:]).all()
 
 
-def test_snapshot_without_scian_code_scores_zero():
+def test_snapshot_without_category_scores_zero():
     runner = LocalRunner.from_definitions(
         {"reimagina-test-port": create_snapshot_plugin()}
     )
     outputs = runner.run(
         "reimagina_poi_diversity", {"parameters": {"snapshot": "synthetic"}}
     )
-    # The synthetic POIs have no scian_code, so no subcategory: 0 where measured.
+    # The synthetic POIs have no category, so no subcategory: 0 where measured.
     lots = outputs["reimagina_poi_diversity_lots"]["diversity_fresh_food"]
     assert lots.notna().any()
     assert (lots.dropna() == 0).all()

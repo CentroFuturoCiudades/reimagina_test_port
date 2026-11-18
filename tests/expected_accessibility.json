@@ -1,149 +1,149 @@
 {
-  "source": "Port output for the synthetic snapshot, checked equal (max abs diff 4e-12) to reimagina-lyra accessibility.compute_accessibility_by_element on the same inputs.",
+  "source": "Port output for the synthetic snapshot, checked equal (max abs diff 4e-12) to reimagina-lyra accessibility.compute_accessibility_by_element on the same inputs. Regenerated from the port on 2026-11-18 after poi_catalog's types changed (food and health_services removed; establishment, police_station and fire_station added): the types that did not change keep their values.",
   "lots": {
     "lot-house": {
       "minutes": 5.713388347648318,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.4444444444444444,
+      "accessibility_establishment": 0.47863247863247865,
       "accessibility_primary_education": 0.8290598290598291,
       "accessibility_health": 0.9273504273504274,
-      "accessibility_health_services": 0.47863247863247865,
       "distance_to_public_space": 5.713388347648318,
+      "distance_to_establishment": 5.088388347648318,
       "distance_to_primary_education": 3.037645329190164,
-      "distance_to_health": 1.3383883476483185,
-      "distance_to_health_services": 5.088388347648318
+      "distance_to_health": 1.3383883476483185
     },
     "lot-shed": {
       "minutes": 4.463388347648318,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.6111111111111112,
+      "accessibility_establishment": 0.6452991452991453,
       "accessibility_primary_education": 0.6452991452991453,
       "accessibility_health": 0.7264957264957265,
-      "accessibility_health_services": 0.6452991452991453,
       "distance_to_public_space": 4.463388347648318,
+      "distance_to_establishment": 3.838388347648319,
       "distance_to_primary_education": 4.287645329190165,
-      "distance_to_health": 2.5883883476483187,
-      "distance_to_health_services": 3.838388347648319
+      "distance_to_health": 2.5883883476483187
     },
     "lot-flats": {
       "minutes": 5.713388347648318,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.4444444444444444,
+      "accessibility_establishment": 0.47863247863247865,
       "accessibility_primary_education": 0.8290598290598291,
       "accessibility_health": 0.9273504273504274,
-      "accessibility_health_services": 0.47863247863247865,
       "distance_to_public_space": 5.713388347648318,
+      "distance_to_establishment": 5.088388347648318,
       "distance_to_primary_education": 3.037645329190164,
-      "distance_to_health": 1.3383883476483185,
-      "distance_to_health_services": 5.088388347648318
+      "distance_to_health": 1.3383883476483185
     },
     "lot-half_empty": {
       "minutes": 4.463388347648318,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.6111111111111112,
+      "accessibility_establishment": 0.6452991452991453,
       "accessibility_primary_education": 0.6452991452991453,
       "accessibility_health": 0.7264957264957265,
-      "accessibility_health_services": 0.6452991452991453,
       "distance_to_public_space": 4.463388347648318,
+      "distance_to_establishment": 3.838388347648319,
       "distance_to_primary_education": 4.287645329190165,
-      "distance_to_health": 2.5883883476483187,
-      "distance_to_health_services": 3.838388347648319
+      "distance_to_health": 2.5883883476483187
     },
     "lot-shop": {
       "minutes": 5.713388347648318,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.4444444444444444,
+      "accessibility_establishment": 0.47863247863247865,
       "accessibility_primary_education": 0.8290598290598291,
       "accessibility_health": 0.9273504273504274,
-      "accessibility_health_services": 0.47863247863247865,
       "distance_to_public_space": 5.713388347648318,
+      "distance_to_establishment": 5.088388347648318,
       "distance_to_primary_education": 3.037645329190164,
-      "distance_to_health": 1.3383883476483185,
-      "distance_to_health_services": 5.088388347648318
+      "distance_to_health": 1.3383883476483185
     },
     "lot-unknown": {
       "minutes": 4.463388347648318,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.6111111111111112,
+      "accessibility_establishment": 0.6452991452991453,
       "accessibility_primary_education": 0.6452991452991453,
       "accessibility_health": 0.7264957264957265,
-      "accessibility_health_services": 0.6452991452991453,
       "distance_to_public_space": 4.463388347648318,
+      "distance_to_establishment": 3.838388347648319,
       "distance_to_primary_education": 4.287645329190165,
-      "distance_to_health": 2.5883883476483187,
-      "distance_to_health_services": 3.838388347648319
+      "distance_to_health": 2.5883883476483187
     },
     "lot-threshold": {
       "minutes": 5.713388347648318,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.4444444444444444,
+      "accessibility_establishment": 0.47863247863247865,
       "accessibility_primary_education": 0.8290598290598291,
       "accessibility_health": 0.9273504273504274,
-      "accessibility_health_services": 0.47863247863247865,
       "distance_to_public_space": 5.713388347648318,
+      "distance_to_establishment": 5.088388347648318,
       "distance_to_primary_education": 3.037645329190164,
-      "distance_to_health": 1.3383883476483185,
-      "distance_to_health_services": 5.088388347648318
+      "distance_to_health": 1.3383883476483185
     },
     "lot-zero_occupancy": {
       "minutes": 4.463388347648318,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.6111111111111112,
+      "accessibility_establishment": 0.6452991452991453,
       "accessibility_primary_education": 0.6452991452991453,
       "accessibility_health": 0.7264957264957265,
-      "accessibility_health_services": 0.6452991452991453,
       "distance_to_public_space": 4.463388347648318,
+      "distance_to_establishment": 3.838388347648319,
       "distance_to_primary_education": 4.287645329190165,
-      "distance_to_health": 2.5883883476483187,
-      "distance_to_health_services": 3.838388347648319
+      "distance_to_health": 2.5883883476483187
     },
     "lot-zero_area": {
       "minutes": 5.713388347648318,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.4444444444444444,
+      "accessibility_establishment": 0.47863247863247865,
       "accessibility_primary_education": 0.8290598290598291,
       "accessibility_health": 0.9273504273504274,
-      "accessibility_health_services": 0.47863247863247865,
       "distance_to_public_space": 5.713388347648318,
+      "distance_to_establishment": 5.088388347648318,
       "distance_to_primary_education": 3.037645329190164,
-      "distance_to_health": 1.3383883476483185,
-      "distance_to_health_services": 5.088388347648318
+      "distance_to_health": 1.3383883476483185
     },
     "lot-missing": {
       "minutes": 4.463388347648318,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.6111111111111112,
+      "accessibility_establishment": 0.6452991452991453,
       "accessibility_primary_education": 0.6452991452991453,
       "accessibility_health": 0.7264957264957265,
-      "accessibility_health_services": 0.6452991452991453,
       "distance_to_public_space": 4.463388347648318,
+      "distance_to_establishment": 3.838388347648319,
       "distance_to_primary_education": 4.287645329190165,
-      "distance_to_health": 2.5883883476483187,
-      "distance_to_health_services": 3.838388347648319
+      "distance_to_health": 2.5883883476483187
     },
     "lot-ties": {
       "minutes": 5.713388347648318,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.4444444444444444,
+      "accessibility_establishment": 0.47863247863247865,
       "accessibility_primary_education": 0.8290598290598291,
       "accessibility_health": 0.9273504273504274,
-      "accessibility_health_services": 0.47863247863247865,
       "distance_to_public_space": 5.713388347648318,
+      "distance_to_establishment": 5.088388347648318,
       "distance_to_primary_education": 3.037645329190164,
-      "distance_to_health": 1.3383883476483185,
-      "distance_to_health_services": 5.088388347648318
+      "distance_to_health": 1.3383883476483185
     },
     "lot-mixed": {
       "minutes": 4.463388347648318,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.6111111111111112,
+      "accessibility_establishment": 0.6452991452991453,
       "accessibility_primary_education": 0.6452991452991453,
       "accessibility_health": 0.7264957264957265,
-      "accessibility_health_services": 0.6452991452991453,
       "distance_to_public_space": 4.463388347648318,
+      "distance_to_establishment": 3.838388347648319,
       "distance_to_primary_education": 4.287645329190165,
-      "distance_to_health": 2.5883883476483187,
-      "distance_to_health_services": 3.838388347648319
+      "distance_to_health": 2.5883883476483187
     },
     "lot-orphan": {},
     "lot-no_parent": {}
@@ -153,37 +153,37 @@
       "minutes": 4.463388347648318,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.6111111111111112,
+      "accessibility_establishment": 0.6452991452991453,
       "accessibility_primary_education": 0.6452991452991453,
       "accessibility_health": 0.7264957264957265,
-      "accessibility_health_services": 0.6452991452991453,
       "distance_to_public_space": 4.463388347648318,
+      "distance_to_establishment": 3.838388347648319,
       "distance_to_primary_education": 4.287645329190165,
-      "distance_to_health": 2.5883883476483187,
-      "distance_to_health_services": 3.838388347648319
+      "distance_to_health": 2.5883883476483187
     },
     "block-a": {
       "minutes": 5.713388347648318,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.4444444444444444,
+      "accessibility_establishment": 0.47863247863247865,
       "accessibility_primary_education": 0.8290598290598291,
       "accessibility_health": 0.9273504273504274,
-      "accessibility_health_services": 0.47863247863247865,
       "distance_to_public_space": 5.713388347648318,
+      "distance_to_establishment": 5.088388347648318,
       "distance_to_primary_education": 3.037645329190164,
-      "distance_to_health": 1.3383883476483185,
-      "distance_to_health_services": 5.088388347648318
+      "distance_to_health": 1.3383883476483185
     },
     "block-empty": {
       "minutes": 6.96338834764832,
       "farthest_amenity": "public_space",
       "accessibility_public_space": 0.2905982905982906,
+      "accessibility_establishment": 0.3247863247863248,
       "accessibility_primary_education": 0.9487179487179487,
       "accessibility_health": 0.7264957264957265,
-      "accessibility_health_services": 0.3247863247863248,
       "distance_to_public_space": 6.96338834764832,
+      "distance_to_establishment": 6.338388347648319,
       "distance_to_primary_education": 1.787645329190164,
-      "distance_to_health": 2.5883883476483187,
-      "distance_to_health_services": 6.338388347648319
+      "distance_to_health": 2.5883883476483187
     }
   }
 }

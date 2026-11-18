@@ -52,7 +52,7 @@ sources:
     uri: az://cleaned/por_estado/02_baja_california/002_mexicali/imip/equipamiento
     params:
       normalizer: imip
-      categories: [public_space, sports_recreation, cultural_facility]
+      categories: [park, sports, cultural_center]
   denue:   # INEGI DENUE 05_2025 as published: amenities and establishments by the SCIAN crosswalk
     uri: az://raw/inegi/denue/02_baja_california/denue_02_0525_csv/conjunto_de_datos/denue_inegi_02_.csv
     params: {municipio: Mexicali, encoding: latin-1}
