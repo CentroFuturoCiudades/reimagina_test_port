@@ -13,7 +13,8 @@
 #
 # Leaves:
 #   source     the indicator pipeline: accessibility, population_access,
-#              built_form, land_use or streets (blocks only)
+#              built_form, diversity, land_use or streets (the last three,
+#              blocks only)
 #   variable   its column (distance_m_public_space, density, ...)
 #   transform  optional, before normalising: {soft_threshold: distance, k: 5}
 #              in the variable's unit (closer is better, 0-1) or
@@ -40,7 +41,7 @@
 #   index > domain > core measure > indicator
 #
 # - Domains are the ULI's (its `domains` keys). Only those with an indicator in
-#   the database are here: housing, safety and sociodemographics have none yet.
+#   the database are here: housing and sociodemographics have none yet.
 # - Core measures are the sankey's (hoja «Indicadores» de
 #   indicadores_por_completar.xlsx), one composite each.
 # - Each sankey sub-variable with data is a leaf, in pairs:
@@ -59,7 +60,13 @@
 # - AMPI reference: the ULI's is the study region average. Here it is the
 #   average of the transformed indicator over Base Mexicali's blocks
 #   (510bff7c, November 2026), fixed so that a scenario is scored against the
-#   baseline and not against itself.
+#   baseline and not against itself. The leaves of land use, streets and
+#   diversity came later: theirs is over Base Mexicali of project «Mexicali»
+#   (1f6abbad, 13 November 2026), as those indicators are not on 510bff7c;
+#   diversity's, over Base Mexicali of «Mexicali v2» (ee468973, 17 November
+#   2026), the first baseline with it.
+# - The snapshot plugin has no land use or streets (they read the scenario from
+#   the database): its tree leaves them out, and the composites left empty.
 element: blocks
 trees:
   - name: index
@@ -131,6 +138,15 @@ trees:
                 polarity: negative
                 method: ampi
                 reference: 0.048
+                goalposts: {min: 0, max: 1}
+              # ULI div_fresh_food_500m: entropy of the fresh food subcategories
+              # within 500 m (0-1), as is.
+              - name: fresh_food_diversity
+                source: diversity
+                variable: diversity_fresh_food
+                polarity: positive
+                method: ampi
+                reference: 0.261
                 goalposts: {min: 0, max: 1}
 
           # Acceso a salud, educación y cuidados.
@@ -214,23 +230,49 @@ trees:
                 goalposts: {min: 0, max: 1}
 
           # Índice de caminabilidad: built environment, mobility and transport,
-          # social infrastructure. Of its components only net residential
-          # density is in the database; the ULI's walkability index is not.
+          # social infrastructure. Its four sankey sub-variables, by block; the
+          # ULI's walkability index is not in the database.
           - name: walkability
             label: Índice de caminabilidad
             phenomenon: positive
             weight: 0.3333
             children:
-              # Net residential density (homes per hectare); outliers reach
-              # 2,400 viv/ha, so they are compressed.
+              # Net residential density: homes per hectare of residential land;
+              # outliers reach 13,000 viv/ha, so they are compressed.
               - name: net_residential_density
-                source: built_form
-                variable: density
+                source: land_use
+                variable: net_residential_density
                 compress: true
                 polarity: positive
                 method: ampi
-                reference: 45.8
+                reference: 65.27
                 goalposts: {min: 0, max: 400}
+              # Commercial land use proportion: share (0-1) of the block's lot
+              # area in commerce or offices.
+              - name: commercial_land_share
+                source: land_use
+                variable: commercial_land_share
+                polarity: positive
+                method: ampi
+                reference: 0.117
+                goalposts: {min: 0, max: 1}
+              # Land use mix: entropy of the lots' land uses by area (0-1).
+              - name: land_use_mix
+                source: land_use
+                variable: land_use_mix
+                polarity: positive
+                method: ampi
+                reference: 0.446
+                goalposts: {min: 0, max: 1}
+              # Street connectivity: intersections per km² within 1 km; the
+              # highest block reaches 181.
+              - name: intersection_density
+                source: streets
+                variable: intersection_density
+                polarity: positive
+                method: ampi
+                reference: 56.5
+                goalposts: {min: 0, max: 200}
 
       # -- Mobility and transport -----------------------------------------------
       - name: mobility_transport
@@ -240,6 +282,8 @@ trees:
         children:
           - {ref: daily_services, weight: 0.3333}
           - {ref: walkability, weight: 0.3333}
+          - {ref: cycling_infrastructure, weight: 0.3333}
+          - {ref: street_lighting, weight: 0.3333}
 
       # -- Economic development -------------------------------------------------
       - name: economic_development
@@ -309,3 +353,54 @@ trees:
         children:
           - {ref: parks, weight: 0.5}
           - {ref: walkability, weight: 0.3333}
+          - {ref: cycling_infrastructure, weight: 0.3333}
+          - {ref: street_lighting, weight: 0.3333}
+
+      # -- Safety ---------------------------------------------------------------
+      - name: safety
+        label: Seguridad y protección
+        phenomenon: positive
+        min_valid: 1
+        children:
+          # Presencia de infraestructura ciclista: safety, mobility and
+          # transport, built environment. Each a share (0-1) of the street
+          # length within 500 m of the block.
+          - name: cycling_infrastructure
+            label: Presencia de infraestructura ciclista
+            phenomenon: positive
+            weight: 0.3333
+            children:
+              # Bicycle lanes coverage: streets with a bike lane, shared or
+              # protected.
+              - name: bike_lane_coverage
+                source: streets
+                variable: bike_lane_coverage
+                polarity: positive
+                method: ampi
+                reference: 0.0051
+                goalposts: {min: 0, max: 1}
+              # Protected bicycle lanes coverage (ULI
+              # ext_protected_cycling_street_pct).
+              - name: protected_bike_lane_coverage
+                source: streets
+                variable: protected_bike_lane_coverage
+                polarity: positive
+                method: ampi
+                reference: 0.0004
+                goalposts: {min: 0, max: 1}
+          # Seguridad personal y vial (cobertura de alumbrado público): safety,
+          # mobility and transport, built environment.
+          - name: street_lighting
+            label: Seguridad personal y vial (alumbrado público)
+            phenomenon: positive
+            weight: 0.3333
+            children:
+              # Presence of street lighting: share of the street length with
+              # lights.
+              - name: street_lighting_coverage
+                source: streets
+                variable: street_lighting_coverage
+                polarity: positive
+                method: ampi
+                reference: 0.455
+                goalposts: {min: 0, max: 1}
