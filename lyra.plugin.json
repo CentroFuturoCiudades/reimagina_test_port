@@ -1984,8 +1984,12 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Composite indicator community_culture_recreation per block: the weighted Mazziotta-Pareto index (positive) of ccr_any, ccr_any_pct, each normalised (AMPI or MPI) as composite_config.yaml says.",
+      "description": "Composite indicator community_culture_recreation per block: the weighted Mazziotta-Pareto index (positive) of ccr_any, ccr_any_pct, ccr_diversity, each normalised (AMPI or MPI) as composite_config.yaml says.",
       "inputs": {
+        "diversity": {
+          "arguments": {},
+          "output": "reimagina_poi_diversity_blocks"
+        },
         "population_access": {
           "arguments": {},
           "output": "reimagina_population_access_blocks"
@@ -2026,6 +2030,13 @@
             {
               "description": "share_with_access_community_culture_recreation from population_access, normalised (ampi) around 100.",
               "name": "ccr_any_pct",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "diversity_community_culture_recreation from diversity, normalised (ampi) around 100.",
+              "name": "ccr_diversity",
               "nullable": true,
               "type": "number",
               "unit": "score"
@@ -2607,8 +2618,12 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Composite indicator health_education_care per block: the weighted Mazziotta-Pareto index (positive) of education, education_pct, primary_healthcare, primary_healthcare_pct, care_support, care_support_pct, each normalised (AMPI or MPI) as composite_config.yaml says.",
+      "description": "Composite indicator health_education_care per block: the weighted Mazziotta-Pareto index (positive) of education, education_pct, primary_healthcare, primary_healthcare_pct, care_support, care_support_pct, education_diversity, health_diversity, care_diversity, each normalised (AMPI or MPI) as composite_config.yaml says.",
       "inputs": {
+        "diversity": {
+          "arguments": {},
+          "output": "reimagina_poi_diversity_blocks"
+        },
         "population_access": {
           "arguments": {},
           "output": "reimagina_population_access_blocks"
@@ -2677,6 +2692,27 @@
             {
               "description": "share_with_access_care from population_access, normalised (ampi) around 100.",
               "name": "care_support_pct",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "diversity_education from diversity, normalised (ampi) around 100.",
+              "name": "education_diversity",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "diversity_health from diversity, normalised (ampi) around 100.",
+              "name": "health_diversity",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "diversity_care from diversity, normalised (ampi) around 100.",
+              "name": "care_diversity",
               "nullable": true,
               "type": "number",
               "unit": "score"
@@ -3435,8 +3471,12 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Composite indicator street_lighting per block: the weighted Mazziotta-Pareto index (positive) of street_lighting_coverage, each normalised (AMPI or MPI) as composite_config.yaml says.",
+      "description": "Composite indicator street_lighting per block: the weighted Mazziotta-Pareto index (positive) of street_lighting_coverage, police_2km, fire_3km, each normalised (AMPI or MPI) as composite_config.yaml says.",
       "inputs": {
+        "population_access": {
+          "arguments": {},
+          "output": "reimagina_population_access_blocks"
+        },
         "streets": {
           "arguments": {},
           "output": "reimagina_streets_blocks"
@@ -3470,6 +3510,20 @@
             {
               "description": "street_lighting_coverage from streets, normalised (ampi) around 100.",
               "name": "street_lighting_coverage",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "distance_m_police_station from population_access, normalised (ampi) around 100.",
+              "name": "police_2km",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "distance_m_fire_station from population_access, normalised (ampi) around 100.",
+              "name": "fire_3km",
               "nullable": true,
               "type": "number",
               "unit": "score"

@@ -207,6 +207,33 @@ trees:
                 method: ampi
                 reference: 0.225
                 goalposts: {min: 0, max: 1}
+              # ULI div_education_500m: entropy of the education levels within 500 m (0-1), as
+              # is. Reference: the ULI's, until a baseline has the categories.
+              - name: education_diversity
+                source: diversity
+                variable: diversity_education
+                polarity: positive
+                method: ampi
+                reference: 0.270
+                goalposts: {min: 0, max: 1}
+              # ULI div_health_500m: entropy of the health services within 500 m (0-1), as
+              # is. Reference: the ULI's, until a baseline has the categories.
+              - name: health_diversity
+                source: diversity
+                variable: diversity_health
+                polarity: positive
+                method: ampi
+                reference: 0.311
+                goalposts: {min: 0, max: 1}
+              # ULI div_care_500m: entropy of the care services within 500 m (0-1), as
+              # is. Reference: the ULI's, until a baseline has the categories.
+              - name: care_diversity
+                source: diversity
+                variable: diversity_care
+                polarity: positive
+                method: ampi
+                reference: 0.061
+                goalposts: {min: 0, max: 1}
 
           # Acceso a espacios comunitarios, culturales y recreativos.
           - name: community_culture_recreation
@@ -229,6 +256,15 @@ trees:
                 polarity: positive
                 method: ampi
                 reference: 0.662
+                goalposts: {min: 0, max: 1}
+              # ULI div_ccr_500m: entropy of the community, culture and recreation places within 500 m (0-1), as
+              # is. Reference: the ULI's, until a baseline has the categories.
+              - name: ccr_diversity
+                source: diversity
+                variable: diversity_community_culture_recreation
+                polarity: positive
+                method: ampi
+                reference: 0.164
                 goalposts: {min: 0, max: 1}
 
           # Índice de caminabilidad: built environment, mobility and transport,
@@ -396,6 +432,9 @@ trees:
             label: Seguridad personal y vial (alumbrado público)
             phenomenon: positive
             weight: 0.3333
+            # Police and fire stations have no source yet: the lighting alone
+            # scores the measure until they do.
+            min_valid: 1
             children:
               # Presence of street lighting: share of the street length with
               # lights.
@@ -405,4 +444,25 @@ trees:
                 polarity: positive
                 method: ampi
                 reference: 0.455
+                goalposts: {min: 0, max: 1}
+              # ULI police_2km: a police station within 2 km, soft threshold
+              # (the sheet's «% of the population with coverage of police
+              # stations»). Reference: the ULI's, until there are stations.
+              - name: police_2km
+                source: population_access
+                variable: distance_m_police_station
+                transform: {soft_threshold: 2000}
+                polarity: positive
+                method: ampi
+                reference: 0.615
+                goalposts: {min: 0, max: 1}
+              # ULI fire_3km: a fire station within 3 km, soft threshold (the
+              # sheet's «coverage of emergency services»).
+              - name: fire_3km
+                source: population_access
+                variable: distance_m_fire_station
+                transform: {soft_threshold: 3000}
+                polarity: positive
+                method: ampi
+                reference: 0.596
                 goalposts: {min: 0, max: 1}

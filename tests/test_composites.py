@@ -127,7 +127,9 @@ def test_the_bundled_tree_is_in_both_graphs():
     )
     snapshot_names = {m.name for m in plugin.create_snapshot_plugin().node_manifests}
     assert {f"reimagina_composite_{name}" for name in kept} <= snapshot_names
-    assert "reimagina_composite_safety" not in snapshot_names
+    assert "reimagina_composite_cycling_infrastructure" not in snapshot_names
+    # Safety keeps police and fire stations, from population access.
+    assert "reimagina_composite_safety" in snapshot_names
     assert "reimagina_composite_index" in snapshot_names
 
 
