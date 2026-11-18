@@ -80,6 +80,8 @@ AREAS = {
         ("Extensión Condesa", f"{ZONES}/extension_condesa.fgb"),
         ("Zona Poniente", f"{ZONES}/zona_poniente.fgb"),
     ],
+    # The whole municipality (INEGI's areas_municipales 2024, 09012).
+    "tlalpan": [("Tlalpan", f"{ZONES}/tlalpan.fgb")],
 }
 
 # ------------------------------------------------------------------------------
