@@ -44,7 +44,10 @@ def download(uri: str, directory: Path) -> Path:
 
 
 def download_shapefile(uri: str, directory: Path) -> Path:
-    """Copy a ``.shp`` and its sidecar files (same stem) into ``directory``."""
+    """Copy a ``.shp`` and its sidecar files (same stem) into ``directory``; any
+    other format (``.fgb``, ``.gpkg``...) is a single file."""
+    if not uri.lower().endswith(".shp"):
+        return download(uri, directory)
     stem = uri.rsplit("/", 1)[-1].rsplit(".", 1)[0]
     parent = uri.rsplit("/", 1)[0]
     if uri.startswith("az://"):

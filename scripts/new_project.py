@@ -7,7 +7,7 @@ cases, users or areas if needed). In order, it:
 
 1. creates the project (or reuses the one with the same name in the organization);
 2. gives USERS their role on it;
-3. adds the areas of interest of AREAS;
+3. adds its city's areas of interest (AREAS);
 4. creates its baseline scenario (or reuses it);
 5. builds the street network, uploads its H5 and sets road_network_uri
    (reimagina_street_network_write);
@@ -47,6 +47,12 @@ CASES = {
         "description": "Mexicali tal como es hoy 13 nov.",
         "baseline": "Base Mexicali",
     },
+    "tlalpan": {
+        "city": "tlalpan",
+        "project": "Tlalpan",
+        "description": "Tlalpan tal como es hoy.",
+        "baseline": "Base Tlalpan",
+    },
     # "mexicali_plan_maestro": {
     #    "city": "mexicali",
     #    "project": "Mexicali plan maestro",
@@ -67,12 +73,14 @@ REFRESH_OSM = False
 # email -> role (admin, editor or viewer).
 USERS = {"ana@example.com": "admin"}
 
-# Areas of interest: (name, polygon file), in the order the web lists them.
-AREAS = [
-    ("Condesa", f"{ZONES}/condesa.fgb"),
-    ("Extensión Condesa", f"{ZONES}/extension_condesa.fgb"),
-    ("Zona Poniente", f"{ZONES}/zona_poniente.fgb"),
-]
+# Areas of interest by city: (name, polygon file), in the order the web lists them.
+AREAS = {
+    "mexicali": [
+        ("Condesa", f"{ZONES}/condesa.fgb"),
+        ("Extensión Condesa", f"{ZONES}/extension_condesa.fgb"),
+        ("Zona Poniente", f"{ZONES}/zona_poniente.fgb"),
+    ],
+}
 
 # ------------------------------------------------------------------------------
 
@@ -137,7 +145,7 @@ def setup(case: dict) -> tuple[str, str]:
             )
             logger.info("2. %s: %s", email, role)
         workdir = ROOT / ".cache/areas"
-        for order, (name, uri) in enumerate(AREAS, start=1):
+        for order, (name, uri) in enumerate(AREAS.get(case["city"], []), start=1):
             if cur.execute(
                 f"SELECT 1 FROM {s}.area_of_interest WHERE project_id = %s::uuid "
                 "AND name = %s AND deleted_at IS NULL",

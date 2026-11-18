@@ -785,6 +785,17 @@ def test_refined_bike_lanes(refined_city, tmp_path):
     assert "protected_bike_lane" not in table.loc["5-6", "bands.use"]
 
 
+def test_band_of_an_axis_folding_back():
+    # Part of a Tlalpan OSM way that turns back on itself: GEOS's one-sided buffer
+    # fails on it as it is.
+    axis = LineString(
+        [(0, 0), (-18.345, -33.355), (-16.388, -29.797), (-14.431, -26.239),
+         (-12.475, -22.682), (-10.518, -19.124), (-8.561, -15.566),
+         (-6.604, -12.008), (-4.647, -8.45), (-2.691, -4.892), (-0.734, -1.334)]
+    )  # fmt: skip
+    assert street_fit.band(axis, 3, 9).area > 0
+
+
 def test_refined_lane_bands(tmp_path):
     # An avenue 40 m wide, west to east: its lanes reach 20 m, past the 15 m.
     axes = gpd.GeoSeries(
@@ -980,6 +991,34 @@ def test_existing_land_use_is_optional(tmp_path):
         tmp_path, "mexicali", lambda c: c["sources"].pop("existing_land_use")
     )
     assert cities.from_yaml(path).existing_land_use_uri is None
+
+
+def test_tlalpan_yaml():
+    city = CITIES["tlalpan"]
+    assert (city.cve_code, city.target_crs) == ("09012", "EPSG:32614")
+    assert city.lots_uri.endswith("lots_09012.fgb")
+    assert city.key_columns == ("fid",)
+    # No amenities file: every amenity comes from the DENUE.
+    assert (city.amenities_uri, city.amenity_file_categories) == (None, ())
+
+
+def test_build_without_an_amenities_file(city, tmp_path):
+    city = replace(city, amenities_uri=None, amenity_file_categories=())
+    report = baseline.build(city, tmp_path / "job", lambda *_: None)["report"]
+    # Every amenity comes from the DENUE: both of Mexicali's.
+    assert report["amenities_file"] == {}
+    assert report["amenities"]["from_file"] == 0
+    assert report["amenities"]["from_denue"] == 2
+
+
+def test_lots_in_a_single_file(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "lots.fgb").write_bytes(b"lots")
+    (source / "lots.cpg").write_text("UTF-8")
+    path = lake.download_shapefile(str(source / "lots.fgb"), tmp_path / "job")
+    # A .fgb has no sidecars: only it is copied.
+    assert [p.name for p in path.parent.iterdir()] == ["lots.fgb"]
 
 
 def write_city(tmp_path: Path, name: str, change) -> Path:
