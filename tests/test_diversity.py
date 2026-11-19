@@ -14,6 +14,7 @@ from reimagina_test_port.indicators.population_access.access_calculation import 
 )
 from reimagina_test_port.indicators.population_access.diversity_calculation import (
     diversity,
+    lot_entries,
     poi_diversity,
     reachable,
 )
@@ -81,6 +82,11 @@ def test_entropy_of_the_subcategories_reached():
     # One subcategory reached is 0, not -0.0.
     assert not np.signbit(values[2])
     assert values[0] == pytest.approx(np.log(2) / np.log(3))
+    # The lots' entries, built once and shared across sets, give the same.
+    origins = lot_entries(lots, street(), CRS)
+    np.testing.assert_array_equal(
+        poi_diversity(lots, pois, types, street(), CRS, 100, 3, origins), values
+    )
 
 
 def test_blocks_average_their_lots_weighted_by_population():
