@@ -311,6 +311,38 @@ def test_dag_errors(change, message):
         nodes.check_tree(config)
 
 
+def test_pending_leaves_are_checked_and_left_out():
+    config = dag()
+    # A leaf whose indicator isn't computed yet, and a composite of only that.
+    pending = {
+        "name": "ndvi",
+        "source": "raster",
+        "variable": "ndvi",
+        "reference": 0.1,
+        "goalposts": {"min": 0, "max": 1},
+        "pending": True,
+    }
+    health(config)["children"].append(pending | {"name": "heat"})
+    config["trees"][1]["children"].append({"name": "green", "children": [pending]})
+    _, order, _ = nodes.check_tree(config)
+    by_name = {n["name"]: n for n in order}
+    assert "green" not in by_name
+    assert "heat" not in [nodes.child_name(c) for c in by_name["health"]["children"]]
+    assert nodes.check_tree(config) == nodes.check_tree(
+        nodes.without_sources(config, ())
+    )
+    with pytest.raises(nodes.CompositeConfigError, match="pending must be true"):
+        nodes.check_tree(
+            dag()
+            | {"trees": [{"name": "t", "children": [pending | {"pending": "yes"}]}]}
+        )
+    # Checked all the same: a pending leaf without its goalposts fails.
+    with pytest.raises(nodes.CompositeConfigError, match="care > green > ndvi"):
+        broken = copy.deepcopy(config)
+        broken["trees"][1]["children"][-1]["children"][0]["goalposts"] = {"min": 1}
+        nodes.check_tree(broken)
+
+
 def test_errors_say_where():
     config = tree()
     health(config)["children"][0].update(source="osm")

@@ -60,7 +60,7 @@ SOURCES = {
 ELEMENTS = ("blocks", "lots")
 LEAF_KEYS = {
     "name", "source", "variable", "polarity", "method", "transform", "reference",
-    "goalposts", "mean", "sd", "compress", "weight",
+    "goalposts", "mean", "sd", "compress", "weight", "pending",
 }  # fmt: skip
 COMPOSITE_KEYS = {"name", "label", "phenomenon", "min_valid", "weight", "children"}
 RESULT = ["index", "mean", "penalty", "n"]
@@ -119,7 +119,8 @@ def min_valid(node: dict) -> int | None:
 
 def check_tree(config: dict) -> tuple[str, list[dict], str | None]:
     """The config's element, its composites (every tree's, each once, children
-    before parents) and its boundary URL, if any.
+    before parents) and its boundary URL, if any. A ``pending`` leaf, one whose
+    indicator isn't computed yet, is checked but left out (``without_sources``).
 
     Raises:
         CompositeConfigError: a node that can't be computed, named by its path.
@@ -143,6 +144,7 @@ def check_tree(config: dict) -> tuple[str, list[dict], str | None]:
     names: set[str] = set()
     defined: dict[str, dict] = {}  # composite name -> node
     refs: list[tuple[str, str]] = []  # (where, composite it reuses)
+    pending: list[str] = []
 
     def fail(where: str, detail: str) -> None:
         msg = f"{where}: {detail}"
@@ -192,11 +194,16 @@ def check_tree(config: dict) -> tuple[str, list[dict], str | None]:
             fail(where, "a tree's root must be a composite (have children)")
         if unknown := sorted(set(node) - LEAF_KEYS):
             fail(where, f"unknown keys {unknown}")
-        source = node.get("source")
-        if source not in SOURCES:
-            fail(where, f"source must be one of {sorted(SOURCES)}")
-        if node.get("variable") not in SOURCES[source][1]:
-            fail(where, f"{source} has no column {node.get('variable')!r}")
+        if "pending" in node:
+            if node["pending"] is not True:
+                fail(where, "pending must be true, or left out")
+            pending.append(where)
+        else:
+            source = node.get("source")
+            if source not in SOURCES:
+                fail(where, f"source must be one of {sorted(SOURCES)}")
+            if node.get("variable") not in SOURCES[source][1]:
+                fail(where, f"{source} has no column {node.get('variable')!r}")
         try:  # the normalisation's own checks, on one value
             normalize_indicators(pd.Series([0.0]), **leaf_arguments(node))
         except (ValueError, TypeError, KeyError) as exc:
@@ -209,6 +216,8 @@ def check_tree(config: dict) -> tuple[str, list[dict], str | None]:
             fail(where, f"no composite named {target!r} to reuse")
         if target in RESERVED:
             fail(where, f"{target!r} can't be a column; rename that composite")
+    if pending:
+        return check_tree(without_sources(config, ()))
 
     # Children before parents; a composite that ends up needing itself fails.
     order: list[dict] = []
@@ -398,11 +407,9 @@ def boundary_dataset(uri: str, parameters_type: type[MetricParameters]):
 
 
 def without_sources(config: dict, missing: Collection[str]) -> dict:
-    """``config`` without the leaves that read a source in ``missing``: a
-    composite left without children goes too, and so do the refs to it; a
-    ``min_valid`` above its remaining children drops to them."""
-    if not missing:
-        return config
+    """``config`` without its pending leaves and those that read a source in
+    ``missing``: a composite left without children goes too, and so do the refs
+    to it; a ``min_valid`` above its remaining children drops to them."""
     config = copy.deepcopy(config)
     gone: set[str] = set()
 
@@ -411,7 +418,7 @@ def without_sources(config: dict, missing: Collection[str]) -> dict:
         if is_ref(node):
             return node["ref"] not in gone
         if not is_composite(node):
-            return node.get("source") not in missing
+            return not node.get("pending") and node.get("source") not in missing
         node["children"] = [child for child in node["children"] if prune(child)]
         if not node["children"]:
             gone.add(node["name"])
@@ -436,8 +443,10 @@ def composite_metrics(
     """One metric per composite of ``config`` (by default composite_config.yaml),
     and the boundary dataset when it names one. ``missing`` names the sources
     this graph lacks: their leaves are left out (``without_sources``)."""
+    config = load_config() if config is None else config
+    # check_tree leaves the pending leaves out itself, once it has checked them.
     element, composites, boundary = check_tree(
-        without_sources(load_config() if config is None else config, missing)
+        without_sources(config, missing) if missing else config
     )
     nodes = [boundary_dataset(boundary, parameters_type)] if boundary else []
     return nodes + [

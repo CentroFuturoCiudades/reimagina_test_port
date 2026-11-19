@@ -23,6 +23,10 @@
 #   polarity   positive (more is better) or negative
 #   method     ampi (needs reference and goalposts {min, max}) or mpi (mean, sd)
 #   weight     its weight in its composite (default 1)
+#   pending    optional, true: its indicator isn't computed yet. It is checked
+#              all the same, then left out, and so is a composite left with
+#              none of its children (and the refs to it); without source, its
+#              variable is the ULI's key
 # Composites:
 #   label      optional: its name in indicator_catalog (Spanish, as the web shows)
 #   phenomenon positive (higher index is better) or negative
@@ -384,6 +388,71 @@ trees:
                 method: ampi
                 reference: 0.125
                 goalposts: {min: 0, max: 1}
+          # The sankey's diagnostic core measures that weigh in the ULI's
+          # index, pending: their goalposts are the technical document's
+          # (min · reference · max), not over a baseline.
+          # Índice Global de Vulnerabilidad al Calor Urbano (GUHVI).
+          - name: heat_vulnerability
+            label: Índice Global de Vulnerabilidad al Calor Urbano
+            phenomenon: positive
+            children:
+              # ULI heat_exposure: GUHVI's exposure sub-index (0-100), from the
+              # land surface temperature.
+              - name: heat_exposure
+                variable: heat_exposure
+                pending: true
+                polarity: negative
+                method: ampi
+                reference: 48
+                goalposts: {min: 0, max: 100}
+              # ULI heat_sensitivity: albedo, vegetation, local climate zones,
+              # population density and vulnerable population.
+              - name: heat_sensitivity
+                variable: heat_sensitivity
+                pending: true
+                polarity: negative
+                method: ampi
+                reference: 59
+                goalposts: {min: 0, max: 100}
+              # ULI adaptive_capability: child dependency ratio, subnational HDI
+              # and infant mortality.
+              - name: adaptive_capability
+                variable: adaptive_capability
+                pending: true
+                polarity: positive
+                method: ampi
+                reference: 22
+                goalposts: {min: 0, max: 100}
+          # Vegetación y sombra: ambient environment, built environment.
+          - name: vegetation_shade
+            label: Vegetación y sombra
+            phenomenon: positive
+            weight: 0.5
+            children:
+              # ULI vegetation: mean NDVI.
+              - name: vegetation
+                variable: vegetation
+                pending: true
+                polarity: positive
+                method: ampi
+                reference: 0.082
+                goalposts: {min: -0.251, max: 0.416}
+          # Disponibilidad de espacios azules naturales.
+          - name: blue_spaces
+            label: Disponibilidad de espacios azules naturales
+            phenomenon: positive
+            children:
+              # ULI sp_walk_nearest_node_blue_space: walking distance to the
+              # nearest body of water, on the arid-city steps (100 within 200 m,
+              # 90 within 500 m, 80 within 1 km, 60 beyond).
+              - name: blue_space
+                variable: sp_walk_nearest_node_blue_space
+                pending: true
+                transform: {steps: [[200, 100], [500, 90], [1000, 80]], beyond: 60}
+                polarity: positive
+                method: ampi
+                reference: 76.9
+                goalposts: {min: 56.9, max: 96.9}
 
       # -- Built environment ----------------------------------------------------
       - name: built_environment
@@ -392,6 +461,7 @@ trees:
         min_valid: 1
         children:
           - {ref: parks, weight: 0.5}
+          - {ref: vegetation_shade, weight: 0.5}
           - {ref: walkability, weight: 0.3333}
           - {ref: cycling_infrastructure, weight: 0.3333}
           - {ref: street_lighting, weight: 0.3333}
