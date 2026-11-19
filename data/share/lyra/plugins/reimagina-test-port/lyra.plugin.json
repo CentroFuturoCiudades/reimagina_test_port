@@ -79,13 +79,6 @@
               "unit": "score"
             },
             {
-              "description": "Gravity score for food, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_food",
-              "nullable": true,
-              "type": "number",
-              "unit": "score"
-            },
-            {
               "description": "Gravity score for convenience_store, as a 0-1 percentile rank among the run's blocks.",
               "name": "accessibility_convenience_store",
               "nullable": true,
@@ -95,6 +88,13 @@
             {
               "description": "Gravity score for petrol_station, as a 0-1 percentile rank among the run's blocks.",
               "name": "accessibility_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for establishment, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_establishment",
               "nullable": true,
               "type": "number",
               "unit": "score"
@@ -128,13 +128,6 @@
               "unit": "score"
             },
             {
-              "description": "Gravity score for health_services, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_health_services",
-              "nullable": true,
-              "type": "number",
-              "unit": "score"
-            },
-            {
               "description": "Gravity score for care, as a 0-1 percentile rank among the run's blocks.",
               "name": "accessibility_care",
               "nullable": true,
@@ -144,6 +137,20 @@
             {
               "description": "Gravity score for community_culture_recreation, as a 0-1 percentile rank among the run's blocks.",
               "name": "accessibility_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for police_station, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_police_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for fire_station, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_fire_station",
               "nullable": true,
               "type": "number",
               "unit": "score"
@@ -163,13 +170,6 @@
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest food.",
-              "name": "distance_to_food",
-              "nullable": true,
-              "type": "number",
-              "unit": null
-            },
-            {
               "description": "Walking minutes to the nearest convenience_store.",
               "name": "distance_to_convenience_store",
               "nullable": true,
@@ -179,6 +179,13 @@
             {
               "description": "Walking minutes to the nearest petrol_station.",
               "name": "distance_to_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest establishment.",
+              "name": "distance_to_establishment",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -212,13 +219,6 @@
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest health_services.",
-              "name": "distance_to_health_services",
-              "nullable": true,
-              "type": "number",
-              "unit": null
-            },
-            {
               "description": "Walking minutes to the nearest care.",
               "name": "distance_to_care",
               "nullable": true,
@@ -228,6 +228,20 @@
             {
               "description": "Walking minutes to the nearest community_culture_recreation.",
               "name": "distance_to_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest police_station.",
+              "name": "distance_to_police_station",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest fire_station.",
+              "name": "distance_to_fire_station",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -288,13 +302,6 @@
               "unit": "score"
             },
             {
-              "description": "Gravity score for food, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_food",
-              "nullable": true,
-              "type": "number",
-              "unit": "score"
-            },
-            {
               "description": "Gravity score for convenience_store, as a 0-1 percentile rank among the run's blocks.",
               "name": "accessibility_convenience_store",
               "nullable": true,
@@ -304,6 +311,13 @@
             {
               "description": "Gravity score for petrol_station, as a 0-1 percentile rank among the run's blocks.",
               "name": "accessibility_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for establishment, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_establishment",
               "nullable": true,
               "type": "number",
               "unit": "score"
@@ -337,13 +351,6 @@
               "unit": "score"
             },
             {
-              "description": "Gravity score for health_services, as a 0-1 percentile rank among the run's blocks.",
-              "name": "accessibility_health_services",
-              "nullable": true,
-              "type": "number",
-              "unit": "score"
-            },
-            {
               "description": "Gravity score for care, as a 0-1 percentile rank among the run's blocks.",
               "name": "accessibility_care",
               "nullable": true,
@@ -353,6 +360,20 @@
             {
               "description": "Gravity score for community_culture_recreation, as a 0-1 percentile rank among the run's blocks.",
               "name": "accessibility_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for police_station, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_police_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Gravity score for fire_station, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_fire_station",
               "nullable": true,
               "type": "number",
               "unit": "score"
@@ -372,13 +393,6 @@
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest food.",
-              "name": "distance_to_food",
-              "nullable": true,
-              "type": "number",
-              "unit": null
-            },
-            {
               "description": "Walking minutes to the nearest convenience_store.",
               "name": "distance_to_convenience_store",
               "nullable": true,
@@ -388,6 +402,13 @@
             {
               "description": "Walking minutes to the nearest petrol_station.",
               "name": "distance_to_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest establishment.",
+              "name": "distance_to_establishment",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -421,13 +442,6 @@
               "unit": null
             },
             {
-              "description": "Walking minutes to the nearest health_services.",
-              "name": "distance_to_health_services",
-              "nullable": true,
-              "type": "number",
-              "unit": null
-            },
-            {
               "description": "Walking minutes to the nearest care.",
               "name": "distance_to_care",
               "nullable": true,
@@ -437,6 +451,20 @@
             {
               "description": "Walking minutes to the nearest community_culture_recreation.",
               "name": "distance_to_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest police_station.",
+              "name": "distance_to_police_station",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest fire_station.",
+              "name": "distance_to_fire_station",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -1956,8 +1984,12 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Composite indicator community_culture_recreation per block: the weighted Mazziotta-Pareto index (positive) of ccr_any, ccr_any_pct, each normalised (AMPI or MPI) as composite_config.yaml says.",
+      "description": "Composite indicator community_culture_recreation per block: the weighted Mazziotta-Pareto index (positive) of ccr_any, ccr_any_pct, ccr_diversity, each normalised (AMPI or MPI) as composite_config.yaml says.",
       "inputs": {
+        "diversity": {
+          "arguments": {},
+          "output": "reimagina_poi_diversity_blocks"
+        },
         "population_access": {
           "arguments": {},
           "output": "reimagina_population_access_blocks"
@@ -1998,6 +2030,13 @@
             {
               "description": "share_with_access_community_culture_recreation from population_access, normalised (ampi) around 100.",
               "name": "ccr_any_pct",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "diversity_community_culture_recreation from diversity, normalised (ampi) around 100.",
+              "name": "ccr_diversity",
               "nullable": true,
               "type": "number",
               "unit": "score"
@@ -2579,8 +2618,12 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Composite indicator health_education_care per block: the weighted Mazziotta-Pareto index (positive) of primary_school, primary_school_pct, primary_healthcare, primary_healthcare_pct, care_support, care_support_pct, each normalised (AMPI or MPI) as composite_config.yaml says.",
+      "description": "Composite indicator health_education_care per block: the weighted Mazziotta-Pareto index (positive) of education, education_pct, primary_healthcare, primary_healthcare_pct, care_support, care_support_pct, education_diversity, health_diversity, care_diversity, each normalised (AMPI or MPI) as composite_config.yaml says.",
       "inputs": {
+        "diversity": {
+          "arguments": {},
+          "output": "reimagina_poi_diversity_blocks"
+        },
         "population_access": {
           "arguments": {},
           "output": "reimagina_population_access_blocks"
@@ -2612,15 +2655,15 @@
               "unit": null
             },
             {
-              "description": "distance_m_primary_education from population_access, normalised (ampi) around 100.",
-              "name": "primary_school",
+              "description": "distance_m_education from population_access, normalised (ampi) around 100.",
+              "name": "education",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "share_with_access_primary_education from population_access, normalised (ampi) around 100.",
-              "name": "primary_school_pct",
+              "description": "share_with_access_education from population_access, normalised (ampi) around 100.",
+              "name": "education_pct",
               "nullable": true,
               "type": "number",
               "unit": "score"
@@ -2649,6 +2692,27 @@
             {
               "description": "share_with_access_care from population_access, normalised (ampi) around 100.",
               "name": "care_support_pct",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "diversity_education from diversity, normalised (ampi) around 100.",
+              "name": "education_diversity",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "diversity_health from diversity, normalised (ampi) around 100.",
+              "name": "health_diversity",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "diversity_care from diversity, normalised (ampi) around 100.",
+              "name": "care_diversity",
               "nullable": true,
               "type": "number",
               "unit": "score"
@@ -3407,8 +3471,12 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Composite indicator street_lighting per block: the weighted Mazziotta-Pareto index (positive) of street_lighting_coverage, each normalised (AMPI or MPI) as composite_config.yaml says.",
+      "description": "Composite indicator street_lighting per block: the weighted Mazziotta-Pareto index (positive) of street_lighting_coverage, police_2km, fire_3km, each normalised (AMPI or MPI) as composite_config.yaml says.",
       "inputs": {
+        "population_access": {
+          "arguments": {},
+          "output": "reimagina_population_access_blocks"
+        },
         "streets": {
           "arguments": {},
           "output": "reimagina_streets_blocks"
@@ -3442,6 +3510,20 @@
             {
               "description": "street_lighting_coverage from streets, normalised (ampi) around 100.",
               "name": "street_lighting_coverage",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "distance_m_police_station from population_access, normalised (ampi) around 100.",
+              "name": "police_2km",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "distance_m_fire_station from population_access, normalised (ampi) around 100.",
+              "name": "fire_3km",
               "nullable": true,
               "type": "number",
               "unit": "score"
@@ -3943,13 +4025,6 @@
             },
             {
               "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
-              "name": "distance_m_food",
-              "nullable": true,
-              "type": "number",
-              "unit": "m"
-            },
-            {
-              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
               "name": "distance_m_convenience_store",
               "nullable": true,
               "type": "number",
@@ -3958,6 +4033,13 @@
             {
               "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
               "name": "distance_m_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_establishment",
               "nullable": true,
               "type": "number",
               "unit": "m"
@@ -3992,13 +4074,6 @@
             },
             {
               "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
-              "name": "distance_m_health_services",
-              "nullable": true,
-              "type": "number",
-              "unit": "m"
-            },
-            {
-              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
               "name": "distance_m_care",
               "nullable": true,
               "type": "number",
@@ -4007,6 +4082,20 @@
             {
               "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
               "name": "distance_m_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_police_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_fire_station",
               "nullable": true,
               "type": "number",
               "unit": "m"
@@ -4029,16 +4118,17 @@
                       "enum": [
                         "public_space",
                         "fresh_food",
-                        "food",
                         "convenience_store",
                         "petrol_station",
+                        "establishment",
                         "manufacturing",
                         "education",
                         "primary_education",
                         "health",
-                        "health_services",
                         "care",
-                        "community_culture_recreation"
+                        "community_culture_recreation",
+                        "police_station",
+                        "fire_station"
                       ],
                       "type": "string"
                     },
@@ -4083,7 +4173,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Diversity of each set of destinations within walking distance: the Shannon entropy of its subcategories, by scian_code, among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has. Lots count the POIs their entries reach, walked as in reimagina_nearest_poi_distance; blocks average their lots weighted by population.",
+      "description": "Diversity of each set of destinations within walking distance: the Shannon entropy of its subcategories, by category, among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has. Lots count the POIs their entries reach, walked as in reimagina_nearest_poi_distance; blocks average their lots weighted by population.",
       "inputs": {
         "blocks": {
           "arguments": {},
@@ -4132,8 +4222,36 @@
               "unit": null
             },
             {
-              "description": "Shannon entropy of the set's subcategories (by scian_code) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
+              "description": "Shannon entropy of the set's subcategories (by category) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
               "name": "diversity_fresh_food",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the set's subcategories (by category) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
+              "name": "diversity_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the set's subcategories (by category) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
+              "name": "diversity_health",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the set's subcategories (by category) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
+              "name": "diversity_care",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the set's subcategories (by category) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
+              "name": "diversity_community_culture_recreation",
               "nullable": true,
               "type": "number",
               "unit": "ratio"
@@ -4166,8 +4284,36 @@
               "unit": null
             },
             {
-              "description": "Shannon entropy of the set's subcategories (by scian_code) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
+              "description": "Shannon entropy of the set's subcategories (by category) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
               "name": "diversity_fresh_food",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the set's subcategories (by category) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
+              "name": "diversity_education",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the set's subcategories (by category) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
+              "name": "diversity_health",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the set's subcategories (by category) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
+              "name": "diversity_care",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Shannon entropy of the set's subcategories (by category) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
+              "name": "diversity_community_culture_recreation",
               "nullable": true,
               "type": "number",
               "unit": "ratio"
@@ -4270,13 +4416,6 @@
             },
             {
               "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
-              "name": "distance_m_food",
-              "nullable": true,
-              "type": "number",
-              "unit": "m"
-            },
-            {
-              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
               "name": "distance_m_convenience_store",
               "nullable": true,
               "type": "number",
@@ -4285,6 +4424,13 @@
             {
               "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
               "name": "distance_m_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_establishment",
               "nullable": true,
               "type": "number",
               "unit": "m"
@@ -4319,13 +4465,6 @@
             },
             {
               "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
-              "name": "distance_m_health_services",
-              "nullable": true,
-              "type": "number",
-              "unit": "m"
-            },
-            {
-              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
               "name": "distance_m_care",
               "nullable": true,
               "type": "number",
@@ -4334,6 +4473,20 @@
             {
               "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
               "name": "distance_m_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_police_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_fire_station",
               "nullable": true,
               "type": "number",
               "unit": "m"
@@ -4354,13 +4507,6 @@
             },
             {
               "description": "Residents of lots within the type's coverage distance of one of its POIs.",
-              "name": "population_with_access_food",
-              "nullable": true,
-              "type": "number",
-              "unit": "count"
-            },
-            {
-              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
               "name": "population_with_access_convenience_store",
               "nullable": true,
               "type": "number",
@@ -4369,6 +4515,13 @@
             {
               "description": "Residents of lots within the type's coverage distance of one of its POIs.",
               "name": "population_with_access_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_establishment",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -4403,13 +4556,6 @@
             },
             {
               "description": "Residents of lots within the type's coverage distance of one of its POIs.",
-              "name": "population_with_access_health_services",
-              "nullable": true,
-              "type": "number",
-              "unit": "count"
-            },
-            {
-              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
               "name": "population_with_access_care",
               "nullable": true,
               "type": "number",
@@ -4418,6 +4564,20 @@
             {
               "description": "Residents of lots within the type's coverage distance of one of its POIs.",
               "name": "population_with_access_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_police_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_fire_station",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -4438,13 +4598,6 @@
             },
             {
               "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
-              "name": "share_with_access_food",
-              "nullable": true,
-              "type": "number",
-              "unit": null
-            },
-            {
-              "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
               "name": "share_with_access_convenience_store",
               "nullable": true,
               "type": "number",
@@ -4453,6 +4606,13 @@
             {
               "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
               "name": "share_with_access_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
+              "name": "share_with_access_establishment",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -4487,13 +4647,6 @@
             },
             {
               "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
-              "name": "share_with_access_health_services",
-              "nullable": true,
-              "type": "number",
-              "unit": null
-            },
-            {
-              "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
               "name": "share_with_access_care",
               "nullable": true,
               "type": "number",
@@ -4502,6 +4655,20 @@
             {
               "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
               "name": "share_with_access_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
+              "name": "share_with_access_police_station",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
+              "name": "share_with_access_fire_station",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -4549,13 +4716,6 @@
             },
             {
               "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
-              "name": "distance_m_food",
-              "nullable": true,
-              "type": "number",
-              "unit": "m"
-            },
-            {
-              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
               "name": "distance_m_convenience_store",
               "nullable": true,
               "type": "number",
@@ -4564,6 +4724,13 @@
             {
               "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
               "name": "distance_m_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_establishment",
               "nullable": true,
               "type": "number",
               "unit": "m"
@@ -4598,13 +4765,6 @@
             },
             {
               "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
-              "name": "distance_m_health_services",
-              "nullable": true,
-              "type": "number",
-              "unit": "m"
-            },
-            {
-              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
               "name": "distance_m_care",
               "nullable": true,
               "type": "number",
@@ -4613,6 +4773,20 @@
             {
               "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
               "name": "distance_m_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_police_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_fire_station",
               "nullable": true,
               "type": "number",
               "unit": "m"
@@ -4633,13 +4807,6 @@
             },
             {
               "description": "Residents of lots within the type's coverage distance of one of its POIs.",
-              "name": "population_with_access_food",
-              "nullable": true,
-              "type": "number",
-              "unit": "count"
-            },
-            {
-              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
               "name": "population_with_access_convenience_store",
               "nullable": true,
               "type": "number",
@@ -4648,6 +4815,13 @@
             {
               "description": "Residents of lots within the type's coverage distance of one of its POIs.",
               "name": "population_with_access_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_establishment",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -4682,13 +4856,6 @@
             },
             {
               "description": "Residents of lots within the type's coverage distance of one of its POIs.",
-              "name": "population_with_access_health_services",
-              "nullable": true,
-              "type": "number",
-              "unit": "count"
-            },
-            {
-              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
               "name": "population_with_access_care",
               "nullable": true,
               "type": "number",
@@ -4697,6 +4864,20 @@
             {
               "description": "Residents of lots within the type's coverage distance of one of its POIs.",
               "name": "population_with_access_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_police_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_fire_station",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -4717,13 +4898,6 @@
             },
             {
               "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
-              "name": "share_with_access_food",
-              "nullable": true,
-              "type": "number",
-              "unit": null
-            },
-            {
-              "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
               "name": "share_with_access_convenience_store",
               "nullable": true,
               "type": "number",
@@ -4732,6 +4906,13 @@
             {
               "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
               "name": "share_with_access_petrol_station",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
+              "name": "share_with_access_establishment",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -4766,13 +4947,6 @@
             },
             {
               "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
-              "name": "share_with_access_health_services",
-              "nullable": true,
-              "type": "number",
-              "unit": null
-            },
-            {
-              "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
               "name": "share_with_access_care",
               "nullable": true,
               "type": "number",
@@ -4781,6 +4955,20 @@
             {
               "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
               "name": "share_with_access_community_culture_recreation",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
+              "name": "share_with_access_police_station",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
+              "name": "share_with_access_fire_station",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -4803,16 +4991,17 @@
                       "enum": [
                         "public_space",
                         "fresh_food",
-                        "food",
                         "convenience_store",
                         "petrol_station",
+                        "establishment",
                         "manufacturing",
                         "education",
                         "primary_education",
                         "health",
-                        "health_services",
                         "care",
-                        "community_culture_recreation"
+                        "community_culture_recreation",
+                        "police_station",
+                        "fire_station"
                       ],
                       "type": "string"
                     },
@@ -5730,8 +5919,8 @@
               "unit": "count"
             },
             {
-              "description": "The element's scian_code; missing without one.",
-              "name": "scian_code",
+              "description": "The element's category; missing without one.",
+              "name": "category",
               "nullable": false,
               "type": "string",
               "unit": null
@@ -5860,16 +6049,17 @@
                       "enum": [
                         "public_space",
                         "fresh_food",
-                        "food",
                         "convenience_store",
                         "petrol_station",
+                        "establishment",
                         "manufacturing",
                         "education",
                         "primary_education",
                         "health",
-                        "health_services",
                         "care",
-                        "community_culture_recreation"
+                        "community_culture_recreation",
+                        "police_station",
+                        "fire_station"
                       ],
                       "type": "string"
                     },

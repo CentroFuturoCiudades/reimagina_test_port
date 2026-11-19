@@ -1,12 +1,17 @@
 """SCIAN code -> element type (amenity or establishment) and category.
 
 The platform's crosswalk (reimagina_urbano_api ``urban_fabric.md``, *Platform
-configuration*), the codes the team's DENUE crosswalk (``denue_crosswalk.xlsx``,
+configuration*), from the codes the team's DENUE crosswalk (``denue_crosswalk.xlsx``,
 November 2026) lists under *What does this include specifically?*:
-``crosswalk.csv``, one SCIAN prefix per row, the longest prefix winning (``46112``
+``crosswalk.csv``, one SCIAN prefix per row, the longest prefix winning (``461121``
 before ``4611``). A code no prefix matches is an establishment
 of category ``other``: it counts only as jobs. Each DENUE record is one or the
 other, never both.
+
+A category is the finest kind of place the platform tells apart (a bakery, a
+daycare, a library), the one attribute that says what a place is: ``poi_catalog``
+rules and the diversity sets group categories, and a place counts in every group
+that lists its category (a preschool is both education and care).
 """
 
 import csv
@@ -18,15 +23,16 @@ import pandas as pd
 PATH = Path(__file__).with_name("crosswalk.csv")
 
 AMENITY_CATEGORIES = (
-    "primary_education", "secondary_education", "tertiary_education", "university",
-    "primary_healthcare", "medical_clinic", "hospital", "care", "community_facility",
-    "cultural_facility", "sports_recreation", "public_space", "police",
-    "emergency_services",
+    "preschool", "primary_education", "secondary_education", "tertiary_education",
+    "special_education", "health_center", "clinic", "hospital", "residence",
+    "daycare", "community_food", "community_center", "religious", "cultural_center",
+    "museum", "library", "sports", "park", "police_station", "fire_station",
 )  # fmt: skip
 ESTABLISHMENT_CATEGORIES = (
-    "food_retail", "fresh_food", "convenience_store", "basic_household_goods",
-    "medicines", "financial", "petrol_station", "cultural_facility",
-    "sports_recreation", "manufacturing", "other",
+    "supermarket", "convenience_store", "grocery", "butcher", "poultry", "fishmonger",
+    "greengrocer", "grains_spices", "dairy", "bakery", "tortilleria", "other_food",
+    "basic_household_goods", "pharmacy", "financial", "petrol_station", "cinema", "sports",
+    "manufacturing", "other",
 )  # fmt: skip
 CATEGORIES = {"amenity": AMENITY_CATEGORIES, "establishment": ESTABLISHMENT_CATEGORIES}
 

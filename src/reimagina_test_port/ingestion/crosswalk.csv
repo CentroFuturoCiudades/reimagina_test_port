@@ -1,46 +1,52 @@
 scian_prefix,element,category,note
-61111,amenity,care,Preescolar y estimulación temprana (in the workbook's description of Care)
+61111,amenity,preschool,Preescolar y estimulación temprana
 61112,amenity,primary_education,Primaria
 61113,amenity,secondary_education,Secundaria general
 61114,amenity,secondary_education,Secundaria técnica
-61115,amenity,tertiary_education,Media técnica terminal
-61116,amenity,tertiary_education,Media superior
-61118,amenity,care,Educación para necesidades especiales (in the workbook's description of Care)
-621111,amenity,primary_healthcare,Consultorios de medicina general privados
-621112,amenity,primary_healthcare,Consultorios de medicina general públicos
-62121,amenity,primary_healthcare,Consultorios dentales
-62132,amenity,primary_healthcare,Consultorios de optometría
-62139,amenity,primary_healthcare,"Otros consultorios (nutriólogos, dietistas y otros)"
-62149,amenity,primary_healthcare,Otros centros para pacientes que no requieren hospitalización
-621115,amenity,medical_clinic,Clínicas de consultorios médicos privadas
-621116,amenity,medical_clinic,Clínicas de consultorios médicos públicas
+61115,amenity,tertiary_education,Media técnica terminal (the workbook's Tertiary/vocational education)
+61116,amenity,tertiary_education,Media superior (the workbook's Tertiary/vocational education)
+61118,amenity,special_education,Educación para necesidades especiales
+621111,amenity,health_center,Consultorios de medicina general privados
+621112,amenity,health_center,Consultorios de medicina general públicos
+62121,amenity,health_center,Consultorios dentales
+62132,amenity,health_center,Consultorios de optometría
+62139,amenity,health_center,"Otros consultorios (nutriólogos, dietistas y otros)"
+62149,amenity,health_center,Otros centros para pacientes que no requieren hospitalización
+621115,amenity,clinic,Clínicas de consultorios médicos privadas
+621116,amenity,clinic,Clínicas de consultorios médicos públicas
 622,amenity,hospital,Hospitales
-623,amenity,care,Residencias de asistencia social y para el cuidado de la salud
-6244,amenity,care,Guarderías
-62421,amenity,care,Servicios de alimentación comunitarios
-6242,amenity,community_facility,"Alimentación, refugio y emergencia comunitarios"
-6243,amenity,community_facility,Capacitación para el trabajo de personas desempleadas
-81321,amenity,community_facility,Asociaciones y organizaciones religiosas
-71211,amenity,cultural_facility,Museos
-713942,amenity,sports_recreation,Clubes deportivos públicos
-713944,amenity,sports_recreation,Centros de acondicionamiento físico públicos
-4611,establishment,food_retail,Abarrotes y alimentos
-46112,establishment,fresh_food,"Carnes rojas, aves, pescados y mariscos"
-46113,establishment,fresh_food,Frutas y verduras frescas
-46114,establishment,fresh_food,"Semillas y granos alimenticios, especias y chiles secos"
-46115,establishment,fresh_food,"Leche, otros productos lácteos y embutidos"
-4621,establishment,basic_household_goods,Tiendas de autoservicio (supermercados y minisupers)
-462112,establishment,convenience_store,Minisupers
+623,amenity,residence,Residencias de asistencia social y para el cuidado de la salud
+6244,amenity,daycare,Guarderías
+62421,amenity,community_food,Servicios de alimentación comunitarios
+6242,amenity,community_center,"Alimentación, refugio y emergencia comunitarios"
+6243,amenity,community_center,Capacitación para el trabajo de personas desempleadas
+81321,amenity,religious,Asociaciones y organizaciones religiosas
+71211,amenity,museum,Museos
+51912,amenity,library,Bibliotecas y archivos (SCIAN 2018; not in the workbook)
+51921,amenity,library,Bibliotecas y archivos (SCIAN 2023; not in the workbook)
+713942,amenity,sports,Clubes deportivos públicos
+713944,amenity,sports,Centros de acondicionamiento físico públicos
+46111,establishment,grocery,"Abarrotes, ultramarinos y misceláneas"
+4611,establishment,other_food,"Dulces, paletas y otros alimentos"
+461121,establishment,butcher,Carnes rojas
+461122,establishment,poultry,Carne de aves
+461123,establishment,fishmonger,Pescados y mariscos
+46113,establishment,greengrocer,Frutas y verduras frescas
+46114,establishment,grains_spices,"Semillas y granos alimenticios, especias y chiles secos"
+46115,establishment,dairy,"Leche, otros productos lácteos y embutidos"
+462111,establishment,supermarket,Supermercados
+462112,establishment,convenience_store,Minisupers (the sheet's convenience stores and minimarts)
+311812,establishment,bakery,Panificación tradicional (panaderías; the industrial 311811 stays manufacturing)
+311830,establishment,tortilleria,Tortillas de maíz y molienda de nixtamal
 468411,establishment,petrol_station,Gasolina y diésel
 466111,establishment,basic_household_goods,Muebles para el hogar
 466112,establishment,basic_household_goods,Electrodomésticos menores y aparatos de línea blanca
 466114,establishment,basic_household_goods,"Cristalería, loza y utensilios de cocina"
-464111,establishment,medicines,Farmacias sin minisúper
-464112,establishment,medicines,Farmacias con minisúper
+46411,establishment,pharmacy,Farmacias con y sin minisúper
 522110,establishment,financial,Banca múltiple
-512130,establishment,cultural_facility,Exhibición de películas y otros materiales audiovisuales
-713941,establishment,sports_recreation,Clubes deportivos privados
-713943,establishment,sports_recreation,Centros de acondicionamiento físico privados
+512130,establishment,cinema,Exhibición de películas y otros materiales audiovisuales
+713941,establishment,sports,Clubes deportivos privados
+713943,establishment,sports,Centros de acondicionamiento físico privados
 31,establishment,manufacturing,Industrias manufactureras
 32,establishment,manufacturing,Industrias manufactureras
 33,establishment,manufacturing,Industrias manufactureras

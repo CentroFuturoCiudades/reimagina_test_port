@@ -345,16 +345,35 @@ SCIAN crosswalk (`ingestion/crosswalk.csv`: a prefix, an element type and a
 category, the longest prefix winning; no match is an establishment of category
 `other`). It is the team's DENUE crosswalk (`denue_crosswalk.xlsx`, November
 2026): the codes of each group's *What does this include specifically?*
-column, and nothing else. A subgroup takes its codes from its group, the longest
-prefix winning: meat, fruit and vegetables, grains and dairy (46112–46115) are
-`fresh_food`, the rest of groceries (4611) `food_retail`; supermarkets (4621)
-`basic_household_goods`, mini-supermarkets (462112) `convenience_store`; petrol
-stations (468411) are `petrol_station`, outside the workbook, so that
-`poi_catalog` rules read categories, not SCIAN codes; community food services (62421) `care`, the rest of
-6242 `community_facility`. Preschool and special education (61111, 61118) are
-`care`, as the workbook's description of the group says, though its code column
-leaves them out. Public sports clubs and gyms, and museums, are amenities; private
-sports clubs and gyms, and cinemas, establishments.
+column, split into the platform's categories, the longest prefix winning.
+
+A category is the finest kind of place the platform tells apart (a bakery, a
+daycare, a library), and the only attribute that says what a place is: there is
+no separate subcategory. `poi_catalog` rules and the diversity sets
+(`population_access/nodes.py`) group categories, and a place counts in every
+group that lists its category: a preschool is both education and care.
+
+Each name comes from a source: the workbook's functional categories where one is
+a single kind of place (`primary_education`, `secondary_education`,
+`tertiary_education`, `hospital`, `basic_household_goods`, `financial`,
+`manufacturing`), else the kinds the indicators sheet lists («Subvariables»,
+column H): `supermarket`, `grocery` (abarroterías), `butcher`, `poultry`,
+`fishmonger`, `greengrocer` (fruterías and verdulerías, both 461130), `bakery`,
+`tortilleria`, `convenience_store`, `petrol_station`, `preschool`, `health_center`,
+`clinic`, `pharmacy`, `cultural_center`, `library`, `museum`, `religious`,
+`sports`, `community_center`, `park`, `police_station`, `fire_station`; or the
+kinds the workbook's descriptions name: `special_education`, `daycare`,
+`community_food`, `residence` (its *Care/community support*), `grains_spices` and
+`dairy` (46114, 46115, in its fresh food) and `cinema` (512130, in its cultural
+facilities). `other_food` is the rest of its food retail (4611).
+
+Media superior (61115–61116) is `tertiary_education`, the workbook's
+*Tertiary/vocational education*; neither it nor the sheet counts universities.
+Only traditional bakeries (311812) are `bakery`; the industrial 311811 stays
+`manufacturing`. Public sports clubs and gyms, museums and libraries (51912,
+51921, codes the workbook does not list; the API's rules already read them) are
+amenities; private sports clubs and gyms, and cinemas, establishments.
+`police_station` and `fire_station` have no source yet.
 
 The other amenities come from each city's own layers, in two steps. The
 `raw_amenities` step (`ingestion/raw_amenities.py`) reads the raw layers of
@@ -368,22 +387,23 @@ Each amenity category comes from one source only, as exe_reimagina did, so no
 amenity is loaded twice: the categories in `sources.amenities.params.categories`
 come only from the amenities file, every other one only from the DENUE; the
 report counts the rows each source left to the other (`file_skipped`,
-`denue_skipped`). Mexicali takes `public_space`, `sports_recreation` and
-`cultural_facility` from IMIP (366 sports and 339 culture places, against the
+`denue_skipped`). Mexicali takes `park`, `sports` and
+`cultural_center` from IMIP (366 sports and 339 culture places, against the
 DENUE's 18 and 47) and schools from the DENUE (with their SCIAN level and
 workers). Matched within 100 m, about 214 IMIP schools have no DENUE school of
 the same level nearby, and about 40 DENUE sports and culture places no IMIP one.
 
 Mexicali's normalizer, `imip`, reads IMIP's equipment layers
 (`az://cleaned/por_estado/02_baja_california/002_mexicali/imip/equipamiento/`)
-with exe_reimagina's `2_equip_for_exe.ipynb` rules: six of its 15 layers,
-`edu_basica` split by `TIPO` (primary `primary_education`, preschool `care`,
+with exe_reimagina's `2_equip_for_exe.ipynb` rules: five of its 15 layers,
+`edu_basica` split by `TIPO` (primary `primary_education`, preschool `preschool`,
 general and technical secondary `secondary_education`; CENDI and telesecundaria
-left out), `med_sup` `tertiary_education`, `edu_sup` `university`, `deporte`
-`sports_recreation`, `cult_rec` `cultural_facility`, and `esp_pub` filtered to
-neighbourhood gardens and parks (`public_space`) and sports spaces
-(`sports_recreation`; exe counted them as parks). Names come from `NOM_ESC` or `NOMBRE` (`esp_pub` has none); `area_m2`,
-of public spaces only, from `esp_pub`'s `Sup_M2`. It replaces the copy of that
+left out), `med_sup` `tertiary_education` (`edu_sup`, universities, is left out),
+`deporte`
+`sports`, `cult_rec` `cultural_center`, and `esp_pub` filtered to
+neighbourhood gardens and parks (`park`) and sports spaces
+(`sports`; exe counted them as parks). Names come from `NOM_ESC` or `NOMBRE` (`esp_pub` has none); `area_m2`,
+of parks only, from `esp_pub`'s `Sup_M2`. It replaces the copy of that
 notebook's output exe_reimagina read (`pois_accesibilidad/pois_02002`), which
 also lost names and areas.
 

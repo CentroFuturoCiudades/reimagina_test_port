@@ -17,10 +17,10 @@ from reimagina_test_port.indicators.population_access.nodes import KEYS
 from reimagina_test_port.plugin import create_snapshot_plugin
 
 CRS = "EPSG:32611"
-# The synthetic pharmacy: a 10 m box (x 640450-640460) on the street y=3610000.
-DISTANCE = "distance_m_health_services"
-ACCESS = "population_with_access_health_services"
-SHARE = "share_with_access_health_services"
+# The synthetic shop: a 10 m box (x 640450-640460) on the street y=3610000.
+DISTANCE = "distance_m_establishment"
+ACCESS = "population_with_access_establishment"
+SHARE = "share_with_access_establishment"
 
 
 def run(**parameters) -> dict[str, gpd.GeoDataFrame]:
@@ -38,13 +38,13 @@ def run(**parameters) -> dict[str, gpd.GeoDataFrame]:
 
 
 def test_walks_from_frontage_to_frontage():
-    # 20 m lots on the same street as the pharmacy: the walk is the gap between them.
+    # 20 m lots on the same street as the shop: the walk is the gap between them.
     lots = run()["lots"]
     np.testing.assert_allclose(lots[DISTANCE], 640460 - lots.geometry.bounds["maxx"])
 
 
 def test_blocks_add_up_their_lots(monkeypatch):
-    monkeypatch.setitem(vocabulary.DESTINATION_COVERAGE_M, "health_services", 300)
+    monkeypatch.setitem(vocabulary.DESTINATION_COVERAGE_M, "establishment", 300)
     blocks = run()["blocks"]
     # Only lot-mixed (90 residents, 165 m) is within 300 m.
     assert blocks.loc["block-z", ACCESS] == 90
@@ -57,7 +57,7 @@ def test_blocks_add_up_their_lots(monkeypatch):
 
 
 def test_each_type_uses_its_coverage():
-    # health_services reaches 500 m: every resident of block-z.
+    # establishment reaches 500 m: every resident of block-z.
     assert run()["blocks"].loc["block-z", ACCESS] == 135
 
 

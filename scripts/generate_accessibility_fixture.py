@@ -32,12 +32,12 @@ edges = pd.DataFrame(
 # Small parcels, as elements are polygons; one unknown type is ignored.
 pois = gpd.GeoDataFrame(
     {
-        "id": ["poi-park", "poi-clinic", "poi-school", "poi-pharmacy", "poi-unknown"],
+        "id": ["poi-park", "poi-clinic", "poi-school", "poi-shop", "poi-unknown"],
         "poi_type": [
             "public_space",
             "health",
             "primary_education",
-            "health_services",
+            "establishment",
             "casino",
         ],
         "capacity": [None, 2.0, None, None, None],

@@ -7,9 +7,9 @@ layers), so a normalizer per source, named in the city YAML
 with ``AMENITIES_FILE_COLUMNS``.
 
 - ``source``, ``source_id``: the record's origin; ``source:source_id`` is its key.
-- ``category``: one of urban_fabric.md's amenity categories.
+- ``category``: one of the amenity categories (``crosswalk.AMENITY_CATEGORIES``).
 - ``name``, ``area_m2``: when the source has them (``area_m2`` only for
-  ``public_space``).
+  ``park``).
 - ``geometry``: a point, in any CRS.
 """
 
@@ -49,15 +49,16 @@ class Rule:
 class Layer:
     rules: tuple[Rule, ...]
     name_column: str | None = None
-    # Read for public_space rows only: urban_fabric.md's area_m2.
+    # Read for park rows only: urban_fabric.md's area_m2.
     area_column: str | None = None
 
 
 PUBLIC_SPACES = ("JARDIN VECINAL", "PARQUE DE BARRIO", "PARQUE URBANO")
 # exe_reimagina ``cleaning/equipamientos/mexicali/2_equip_for_exe.ipynb``
-# (CATEGORY_CONFIG): the same six layers and TIPO filters, with the categories of
-# urban_fabric.md. One change: esp_pub's sports spaces are sports_recreation (exe
-# counted them as parks). Rows no rule matches are left out (edu_basica's CENDI
+# (CATEGORY_CONFIG): its layers and TIPO filters, with the categories of
+# crosswalk.AMENITY_CATEGORIES. Two changes: esp_pub's sports spaces are sports (exe
+# counted them as parks), and edu_sup's universities are left out (neither the
+# indicators sheet nor denue_crosswalk.xlsx counts them). Rows no rule matches are left out (edu_basica's CENDI
 # and telesecundarias; esp_pub's medians, roundabouts...).
 IMIP_LAYERS = {
     "edu_basica": Layer(
@@ -67,20 +68,19 @@ IMIP_LAYERS = {
                 "secondary_education",
                 ("ESCUELA SECUNDARIA GENERAL", "ESCUELA SECUNDARIA TECNICA"),
             ),
-            Rule("care", ("preescolar",), "contains"),
+            Rule("preschool", ("preescolar",), "contains"),
         ),
         name_column="NOM_ESC",
     ),
-    "edu_sup": Layer((Rule("university"),), name_column="NOM_ESC"),
     "med_sup": Layer((Rule("tertiary_education"),), name_column="NOM_ESC"),
-    "deporte": Layer((Rule("sports_recreation"),), name_column="NOMBRE"),
-    "cult_rec": Layer((Rule("cultural_facility"),), name_column="NOMBRE"),
+    "deporte": Layer((Rule("sports"),), name_column="NOMBRE"),
+    "cult_rec": Layer((Rule("cultural_center"),), name_column="NOMBRE"),
     # No name column; Sup_M2 is the space's area (SUP_HA and Shape_Area are the
     # urban boundary's).
     "esp_pub": Layer(
         (
-            Rule("public_space", PUBLIC_SPACES),
-            Rule("sports_recreation", ("ESPACIO DEPORTIVO",)),
+            Rule("park", PUBLIC_SPACES),
+            Rule("sports", ("ESPACIO DEPORTIVO",)),
         ),
         area_column="Sup_M2",
     ),
@@ -123,7 +123,7 @@ def imip(folder: Path) -> gpd.GeoDataFrame:
                         "name": names.where(names.ne("") & names.ne("None")),
                         "area_m2": (
                             pd.to_numeric(rows[layer.area_column], errors="coerce")
-                            if layer.area_column and rule.category == "public_space"
+                            if layer.area_column and rule.category == "park"
                             else float("nan")
                         ),
                     },

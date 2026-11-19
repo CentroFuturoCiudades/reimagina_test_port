@@ -181,16 +181,16 @@ def test_imip_normalizer(tmp_path):
     assert table["category"].to_dict() == {
         "edu_basica:1": "primary_education",
         "edu_basica:3": "secondary_education",
-        "edu_basica:2": "care",
-        "esp_pub:1": "public_space",
-        "esp_pub:3": "sports_recreation",
-        "deporte:9": "sports_recreation",
+        "edu_basica:2": "preschool",
+        "esp_pub:1": "park",
+        "esp_pub:3": "sports",
+        "deporte:9": "sports",
     }
     assert table.loc["edu_basica:1", "name"] == "edu_basica 1"
     assert table.loc["esp_pub:1", "area_m2"] == 1500
     assert pd.isna(table.loc["esp_pub:1", "name"])
     assert pd.isna(table.loc["deporte:9", "area_m2"])
-    # area_m2 is for public spaces only.
+    # area_m2 is for parks only.
     assert pd.isna(table.loc["esp_pub:3", "area_m2"])
     assert (table["source"] == "IMIP").all()
 
@@ -430,7 +430,7 @@ def test_build(city, tmp_path):
             "from_zoning_plan": 2,
             "without_zoning": 0,
         },
-        "amenities_file": {"public_space": 1, "primary_education": 1},
+        "amenities_file": {"park": 1, "primary_education": 1},
         # One source per kind: the IMIP park, not its school; the DENUE school,
         # not its sports club (sports come from the file).
         "amenities": {
@@ -515,7 +515,7 @@ def test_build(city, tmp_path):
     # 5 m east of the last lot, box(80, 0, 100, 20) ("sin_clave").
     assert park["parent_id"] == lots.loc["sin_clave", "id"]
     assert park.geometry.equals_exact(centers[park["parent_id"]], 1e-12)
-    assert park["category"] == "public_space"
+    assert park["category"] == "park"
     assert park["area_m2"] == 1500
     assert pd.isna(park["name"])
     assert park["capacity"] == 1
@@ -532,7 +532,7 @@ def test_build(city, tmp_path):
     shop = establishments.loc["denue:101"]
     assert shop["parent_id"] == lots.loc["1-B-8-1", "id"]
     assert shop.geometry.equals_exact(centers[shop["parent_id"]], 1e-12)
-    assert shop["category"] == "food_retail"
+    assert shop["category"] == "grocery"
     assert shop["scian_code"] == "461110"
     assert shop["scian_sector"] == "46"
     assert shop["num_workers"] == 3
@@ -540,7 +540,7 @@ def test_build(city, tmp_path):
     assert establishments.loc["denue:102", "category"] == "other"
     assert establishments.loc["denue:102", "num_workers"] == 20
     assert establishments.loc["denue:102", "parent_id"] == lots.loc["1-A-7-1", "id"]
-    assert establishments.loc["denue:105", "category"] == "medicines"
+    assert establishments.loc["denue:105", "category"] == "pharmacy"
     # Same sources, same ids.
     again = baseline.build(city, tmp_path / "again", lambda *_: None)
     # The same workdir reuses the height statistics, with the same result.

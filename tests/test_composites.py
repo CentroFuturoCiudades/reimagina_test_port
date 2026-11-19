@@ -109,7 +109,7 @@ def test_one_node_per_composite_wired_as_the_tree():
         "reimagina_composite_health_blocks"].columns]  # fmt: skip
     assert columns[3:] == [
         "health_facilities",
-        "health_services",
+        "health_minutes",
         "index",
         "mean",
         "penalty",
@@ -127,7 +127,9 @@ def test_the_bundled_tree_is_in_both_graphs():
     )
     snapshot_names = {m.name for m in plugin.create_snapshot_plugin().node_manifests}
     assert {f"reimagina_composite_{name}" for name in kept} <= snapshot_names
-    assert "reimagina_composite_safety" not in snapshot_names
+    assert "reimagina_composite_cycling_infrastructure" not in snapshot_names
+    # Safety keeps police and fire stations, from population access.
+    assert "reimagina_composite_safety" in snapshot_names
     assert "reimagina_composite_index" in snapshot_names
 
 
@@ -457,7 +459,7 @@ def test_catalog_rows_and_inputs_come_from_the_tree():
     ]
     # A share reads its count and the residents; a composite reads its children.
     assert health_inputs == [
-        "distance_m_health", "distance_to_health_services",
+        "distance_m_health", "distance_to_health",
         "population_with_access_health", "population",
     ]  # fmt: skip
     assert ("block", "composite_index", "composite_proximity") in inputs

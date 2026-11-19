@@ -55,15 +55,15 @@ from reimagina_test_port.scenario import source, writer
 
 logger = logging.getLogger(__name__)
 
-# The destinations, plus the scian_code that gives their diversity subcategory.
+# The destinations, plus the category that gives their diversity subcategory.
 SCENARIO_POIS_DECLARATION = TableOutput(
     columns=[
         *POIS_DECLARATION.columns,
         TableColumn(
-            name="scian_code",
+            name="category",
             type="string",
             unit=None,
-            description="The element's scian_code; missing without one.",
+            description="The element's category; missing without one.",
         ),
     ],
     geometry="geometry",

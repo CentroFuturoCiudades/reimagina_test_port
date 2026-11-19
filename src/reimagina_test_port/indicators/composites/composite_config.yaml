@@ -64,7 +64,10 @@
 #   diversity came later: theirs is over Base Mexicali of project «Mexicali»
 #   (1f6abbad, 13 November 2026), as those indicators are not on 510bff7c;
 #   diversity's, over Base Mexicali of «Mexicali v2» (ee468973, 17 November
-#   2026), the first baseline with it.
+#   2026), the first baseline with it. The leaves whose destinations changed
+#   with the categories (fresh food, education, health, manufacturing) and
+#   every diversity, over ee468973 rewritten with them (19 November 2026).
+#   Police and fire stations keep the ULI's until there are stations.
 # - The snapshot plugin has no land use or streets (they read the scenario from
 #   the database): its tree leaves them out, and the composites left empty.
 element: blocks
@@ -94,7 +97,7 @@ trees:
                 transform: {soft_threshold: 300}
                 polarity: positive
                 method: ampi
-                reference: 0.162
+                reference: 0.698
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 300 m.
               - name: fresh_food_pct
@@ -102,7 +105,7 @@ trees:
                 variable: share_with_access_fresh_food
                 polarity: positive
                 method: ampi
-                reference: 0.153
+                reference: 0.751
                 goalposts: {min: 0, max: 1}
               # ULI convenience: convenience stores within 300 m.
               - name: convenience
@@ -146,7 +149,7 @@ trees:
                 variable: diversity_fresh_food
                 polarity: positive
                 method: ampi
-                reference: 0.261
+                reference: 0.250
                 goalposts: {min: 0, max: 1}
 
           # Acceso a salud, educación y cuidados.
@@ -154,22 +157,23 @@ trees:
             label: Acceso a salud, educación y cuidados
             phenomenon: positive
             children:
-              # ULI primary_school: primary schools within 300 m.
-              - name: primary_school
+              # ULI primary_school, over every level: the sheet's «Access to
+              # educational services» (preschool to tertiary) within 300 m.
+              - name: education
                 source: population_access
-                variable: distance_m_primary_education
+                variable: distance_m_education
                 transform: {soft_threshold: 300}
                 polarity: positive
                 method: ampi
-                reference: 0.141
+                reference: 0.262
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 300 m.
-              - name: primary_school_pct
+              - name: education_pct
                 source: population_access
-                variable: share_with_access_primary_education
+                variable: share_with_access_education
                 polarity: positive
                 method: ampi
-                reference: 0.124
+                reference: 0.250
                 goalposts: {min: 0, max: 1}
               # ULI primary_healthcare: health care within 300 m.
               - name: primary_healthcare
@@ -178,7 +182,7 @@ trees:
                 transform: {soft_threshold: 300}
                 polarity: positive
                 method: ampi
-                reference: 0.328
+                reference: 0.395
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 300 m.
               - name: primary_healthcare_pct
@@ -186,7 +190,7 @@ trees:
                 variable: share_with_access_health
                 polarity: positive
                 method: ampi
-                reference: 0.336
+                reference: 0.408
                 goalposts: {min: 0, max: 1}
               # ULI care_support: care services within 300 m.
               - name: care_support
@@ -204,6 +208,33 @@ trees:
                 polarity: positive
                 method: ampi
                 reference: 0.225
+                goalposts: {min: 0, max: 1}
+              # ULI div_education_500m: entropy of the education levels within 500 m (0-1), as
+              # is.
+              - name: education_diversity
+                source: diversity
+                variable: diversity_education
+                polarity: positive
+                method: ampi
+                reference: 0.182
+                goalposts: {min: 0, max: 1}
+              # ULI div_health_500m: entropy of the health services within 500 m (0-1), as
+              # is.
+              - name: health_diversity
+                source: diversity
+                variable: diversity_health
+                polarity: positive
+                method: ampi
+                reference: 0.211
+                goalposts: {min: 0, max: 1}
+              # ULI div_care_500m: entropy of the care services within 500 m (0-1), as
+              # is.
+              - name: care_diversity
+                source: diversity
+                variable: diversity_care
+                polarity: positive
+                method: ampi
+                reference: 0.087
                 goalposts: {min: 0, max: 1}
 
           # Acceso a espacios comunitarios, culturales y recreativos.
@@ -227,6 +258,15 @@ trees:
                 polarity: positive
                 method: ampi
                 reference: 0.662
+                goalposts: {min: 0, max: 1}
+              # ULI div_ccr_500m: entropy of the community, culture and recreation places within 500 m (0-1), as
+              # is.
+              - name: ccr_diversity
+                source: diversity
+                variable: diversity_community_culture_recreation
+                polarity: positive
+                method: ampi
+                reference: 0.294
                 goalposts: {min: 0, max: 1}
 
           # Índice de caminabilidad: built environment, mobility and transport,
@@ -304,7 +344,7 @@ trees:
                 transform: {steps: [[1000, 1]], beyond: 0}
                 polarity: positive
                 method: ampi
-                reference: 0.976
+                reference: 0.967
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 1000 m.
               - name: manufacturing_1000m_pct
@@ -312,7 +352,7 @@ trees:
                 variable: share_with_access_manufacturing
                 polarity: positive
                 method: ampi
-                reference: 0.975
+                reference: 0.966
                 goalposts: {min: 0, max: 1}
 
       # -- Ambient environment --------------------------------------------------
@@ -394,6 +434,9 @@ trees:
             label: Seguridad personal y vial (alumbrado público)
             phenomenon: positive
             weight: 0.3333
+            # Police and fire stations have no source yet: the lighting alone
+            # scores the measure until they do.
+            min_valid: 1
             children:
               # Presence of street lighting: share of the street length with
               # lights.
@@ -403,4 +446,25 @@ trees:
                 polarity: positive
                 method: ampi
                 reference: 0.455
+                goalposts: {min: 0, max: 1}
+              # ULI police_2km: a police station within 2 km, soft threshold
+              # (the sheet's «% of the population with coverage of police
+              # stations»). Reference: the ULI's, until there are stations.
+              - name: police_2km
+                source: population_access
+                variable: distance_m_police_station
+                transform: {soft_threshold: 2000}
+                polarity: positive
+                method: ampi
+                reference: 0.615
+                goalposts: {min: 0, max: 1}
+              # ULI fire_3km: a fire station within 3 km, soft threshold (the
+              # sheet's «coverage of emergency services»).
+              - name: fire_3km
+                source: population_access
+                variable: distance_m_fire_station
+                transform: {soft_threshold: 3000}
+                polarity: positive
+                method: ampi
+                reference: 0.596
                 goalposts: {min: 0, max: 1}
