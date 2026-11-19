@@ -62,6 +62,7 @@ import pandas as pd
 import shapely
 import shapely.affinity
 import shapely.ops
+from shapely.errors import GEOSException
 from shapely.geometry import LineString, MultiLineString, Point, Polygon
 from shapely.ops import linemerge, substring
 
@@ -268,9 +269,14 @@ def band(axis: LineString, left: float, right: float) -> Polygon:
     """The corridor from ``right`` metres right of ``axis`` to ``left`` metres left."""
     # One-sided buffers (left: positive) hold for any axis, curved or zig-zag, where
     # offset outlines break apart.
-    sides = [
-        axis.buffer(w, single_sided=True, cap_style="flat") for w in (left, -right) if w
-    ]
+    widths = [w for w in (left, -right) if w]
+    try:
+        sides = [axis.buffer(w, single_sided=True, cap_style="flat") for w in widths]
+    except GEOSException:
+        # An axis folding back on itself (a Tlalpan OSM way) can break GEOS's
+        # noding; simplified by a centimetre, it buffers.
+        line = axis.simplify(0.01)
+        sides = [line.buffer(w, single_sided=True, cap_style="flat") for w in widths]
     return shapely.union_all(sides) if sides else Polygon()
 
 

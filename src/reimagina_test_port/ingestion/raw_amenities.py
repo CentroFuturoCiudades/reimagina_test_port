@@ -150,14 +150,19 @@ NORMALIZERS = {
 
 
 def build(
-    normalizer: str, uri: str, directory: Path
+    normalizer: str, uri: str | None, directory: Path
 ) -> tuple[gpd.GeoDataFrame, dict[str, int]]:
     """Download the normalizer's files from the ``uri`` folder into ``directory``
-    and return the amenities file and its rows per category.
+    and return the amenities file and its rows per category. Without ``uri`` (a
+    city without sources.amenities) the file is empty: every amenity comes from
+    the DENUE.
 
     Raises:
         ValueError: an unknown normalizer, or a result outside the format.
     """
+    if uri is None:
+        empty = {column: pd.Series(dtype=object) for column in AMENITIES_FILE_COLUMNS}
+        return gpd.GeoDataFrame(empty, geometry=gpd.GeoSeries(crs=4326)), {}
     if normalizer not in NORMALIZERS:
         msg = (
             f"Unknown amenities normalizer {normalizer!r}; known: {sorted(NORMALIZERS)}"

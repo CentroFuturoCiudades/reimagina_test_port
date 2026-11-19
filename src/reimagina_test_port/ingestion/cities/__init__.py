@@ -136,8 +136,9 @@ class CityPreset:
     manifests_uri: str
     year: str
     # Folder of the city's raw amenity layers, and the raw_amenities normalizer
-    # that turns them into the amenities file (raw_amenities.NORMALIZERS).
-    amenities_uri: str
+    # that turns them into the amenities file (raw_amenities.NORMALIZERS). None:
+    # no such layers, every amenity comes from the DENUE.
+    amenities_uri: str | None
     amenities_normalizer: str
     # Amenity categories taken from the amenities file only; every other category
     # comes from the DENUE only. One source per kind, so no amenity is loaded twice.
@@ -249,7 +250,11 @@ def from_yaml(path: Path) -> CityPreset:
     lots_uri, parcels = source("parcels")
     normativa_uri, zoning = source("zoning")
     tiles_uri, heights = source("heights")
-    amenities_uri, raw_amenities = source("amenities")
+    amenities_uri, raw_amenities = (
+        source("amenities")
+        if "amenities" in sources.values
+        else (None, _Section(None, "amenities"))
+    )
     denue_uri, denue = source("denue")
     existing_uri, existing = (
         source("existing_land_use")
@@ -386,8 +391,14 @@ def from_yaml(path: Path) -> CityPreset:
         manifests_uri=str(heights.required("manifests_uri")),
         year=str(heights.required("year")),
         amenities_uri=amenities_uri,
-        amenities_normalizer=str(raw_amenities.required("normalizer")),
-        amenity_file_categories=tuple(map(str, raw_amenities.required("categories"))),
+        amenities_normalizer=(
+            str(raw_amenities.required("normalizer")) if amenities_uri else ""
+        ),
+        amenity_file_categories=(
+            tuple(map(str, raw_amenities.required("categories")))
+            if amenities_uri
+            else ()
+        ),
         denue_uri=denue_uri,
         denue_municipio=str(denue.required("municipio")),
         denue_encoding=str(denue.optional("encoding", default("denue_encoding"))),
@@ -430,7 +441,7 @@ def from_yaml(path: Path) -> CityPreset:
     # Imported here: raw_amenities needs geopandas, the presets do not.
     from reimagina_test_port.ingestion.raw_amenities import NORMALIZERS
 
-    if preset.amenities_normalizer not in NORMALIZERS:
+    if amenities_uri and preset.amenities_normalizer not in NORMALIZERS:
         msg = (
             f"{path.name}: sources.amenities: unknown normalizer "
             f"{preset.amenities_normalizer!r}; known: {sorted(NORMALIZERS)}"

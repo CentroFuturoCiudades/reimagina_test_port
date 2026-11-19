@@ -806,8 +806,11 @@
             "description": "City whose baseline is built from the data lake.",
             "properties": {
               "city": {
-                "const": "mexicali",
                 "description": "City preset (ingestion/cities/<city>.yaml).",
+                "enum": [
+                  "mexicali",
+                  "tlalpan"
+                ],
                 "title": "City",
                 "type": "string"
               }
@@ -1207,8 +1210,11 @@
             "description": "City whose baseline is built from the data lake.",
             "properties": {
               "city": {
-                "const": "mexicali",
                 "description": "City preset (ingestion/cities/<city>.yaml).",
+                "enum": [
+                  "mexicali",
+                  "tlalpan"
+                ],
                 "title": "City",
                 "type": "string"
               }
@@ -1313,8 +1319,11 @@
             "description": "City whose baseline is built from the data lake.",
             "properties": {
               "city": {
-                "const": "mexicali",
                 "description": "City preset (ingestion/cities/<city>.yaml).",
+                "enum": [
+                  "mexicali",
+                  "tlalpan"
+                ],
                 "title": "City",
                 "type": "string"
               }
@@ -1466,8 +1475,11 @@
             "description": "Baseline scenario to fill, created beforehand in the API.",
             "properties": {
               "city": {
-                "const": "mexicali",
                 "description": "City preset (ingestion/cities/<city>.yaml).",
+                "enum": [
+                  "mexicali",
+                  "tlalpan"
+                ],
                 "title": "City",
                 "type": "string"
               },
@@ -6510,8 +6522,11 @@
             "description": "City whose street network is built, and an optional file of streets.",
             "properties": {
               "city": {
-                "const": "mexicali",
                 "description": "City preset (ingestion/cities/<city>.yaml).",
+                "enum": [
+                  "mexicali",
+                  "tlalpan"
+                ],
                 "title": "City",
                 "type": "string"
               },
@@ -6675,8 +6690,11 @@
             "description": "City whose street network is built, and an optional file of streets.",
             "properties": {
               "city": {
-                "const": "mexicali",
                 "description": "City preset (ingestion/cities/<city>.yaml).",
+                "enum": [
+                  "mexicali",
+                  "tlalpan"
+                ],
                 "title": "City",
                 "type": "string"
               },
@@ -6799,8 +6817,11 @@
             "description": "Project whose road_network_uri gets the new network.",
             "properties": {
               "city": {
-                "const": "mexicali",
                 "description": "City preset (ingestion/cities/<city>.yaml).",
+                "enum": [
+                  "mexicali",
+                  "tlalpan"
+                ],
                 "title": "City",
                 "type": "string"
               },

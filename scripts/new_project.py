@@ -6,8 +6,8 @@ Nothing is read from the command line: pick the case in CASE below (and edit the
 cases, users or areas if needed). In order, it:
 
 1. creates the project (or reuses the one with the same name in the organization);
-2. gives USERS their role on it;
-3. adds the areas of interest of AREAS;
+2. gives the case's users their role on it;
+3. adds its city's areas of interest (AREAS);
 4. creates its baseline scenario (or reuses it);
 5. builds the street network, uploads its H5 and sets road_network_uri
    (reimagina_street_network_write);
@@ -37,18 +37,35 @@ ROOT = Path(__file__).resolve().parents[1]
 # Which case to create.
 CASE = "mexicali"
 
-ORGANIZATION_ID = "c35c2da2-52df-4e51-95f4-adcaf15fb7a4"  # Mexicali Org
+MEXICALI_ORG = "c35c2da2-52df-4e51-95f4-adcaf15fb7a4"  # Mexicali Org
+TLALPAN_ORG = "7e6ec679-9d2b-4884-9f2c-9e3a6eab4f78"  # Tlalpan Org
 ZONES = "az://sandbox/projects/EXE/cleaned/zonas_de_interes"
 
+# Each case: its city, its project (looked up by name in its organization), and
+# its users, email -> role (admin, editor or viewer); each must already exist.
 CASES = {
     "mexicali": {
         "city": "mexicali",
+        "organization_id": MEXICALI_ORG,
+        "users": {"ana@example.com": "admin"},
         "project": "Mexicali v2",
         "description": "Mexicali tal como es hoy 13 nov.",
         "baseline": "Base Mexicali",
     },
+    "tlalpan": {
+        "city": "tlalpan",
+        "organization_id": TLALPAN_ORG,
+        # Access is by role, not by organization: Ana (of Mexicali Org) can be its
+        # admin. Tlalpan Org has no users of its own yet.
+        "users": {"ana@example.com": "admin"},
+        "project": "Tlalpan",
+        "description": "Tlalpan tal como es hoy.",
+        "baseline": "Base Tlalpan",
+    },
     # "mexicali_plan_maestro": {
     #    "city": "mexicali",
+    #    "organization_id": MEXICALI_ORG,
+    #    "users": {"ana@example.com": "admin"},
     #    "project": "Mexicali plan maestro",
     #    "description": "Mexicali con el plan maestro en la zona de Condesa.",
     #    "baseline": "Base Mexicali con plan maestro",
@@ -64,15 +81,16 @@ CASES = {
 # instance, when the copy there lacks the tags refine needs). Overpass is retried.
 REFRESH_OSM = False
 
-# email -> role (admin, editor or viewer).
-USERS = {"ana@example.com": "admin"}
-
-# Areas of interest: (name, polygon file), in the order the web lists them.
-AREAS = [
-    ("Condesa", f"{ZONES}/condesa.fgb"),
-    ("Extensión Condesa", f"{ZONES}/extension_condesa.fgb"),
-    ("Zona Poniente", f"{ZONES}/zona_poniente.fgb"),
-]
+# Areas of interest by city: (name, polygon file), in the order the web lists them.
+AREAS = {
+    "mexicali": [
+        ("Condesa", f"{ZONES}/condesa.fgb"),
+        ("Extensión Condesa", f"{ZONES}/extension_condesa.fgb"),
+        ("Zona Poniente", f"{ZONES}/zona_poniente.fgb"),
+    ],
+    # The whole municipality (INEGI's areas_municipales 2024, 09012).
+    "tlalpan": [("Tlalpan", f"{ZONES}/tlalpan.fgb")],
+}
 
 # ------------------------------------------------------------------------------
 
@@ -98,12 +116,16 @@ def setup(case: dict) -> tuple[str, str]:
     from reimagina_test_port.common import lake
     from reimagina_test_port.scenario.source import resolve_dsn
 
+    if not case["users"]:
+        # Projects are listed by role: without one, nobody would see it.
+        msg = f"Case {case['project']!r} has no users: add one to its 'users'."
+        raise SystemExit(msg)
     s = "reimagina_urbano"
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
         row = cur.execute(
             f"SELECT id::text FROM {s}.projects WHERE organization_id = %s::uuid "
             "AND name = %s AND deleted_at IS NULL",
-            (ORGANIZATION_ID, case["project"]),
+            (case["organization_id"], case["project"]),
         ).fetchone()
         if row:
             project = row[0]
@@ -113,14 +135,14 @@ def setup(case: dict) -> tuple[str, str]:
                 f"INSERT INTO {s}.projects (organization_id, name, short_name, "
                 "description) VALUES (%s::uuid, %s, %s, %s) RETURNING id::text",
                 (
-                    ORGANIZATION_ID,
+                    case["organization_id"],
                     case["project"],
                     case["project"].strip().lower().replace(" ", "_"),
                     case["description"],
                 ),
             ).fetchone()[0]
             logger.info("1. Project created: %s", project)
-        for email, role in USERS.items():
+        for email, role in case["users"].items():
             user = cur.execute(
                 f"SELECT id FROM {s}.users WHERE email = %s AND deleted_at IS NULL",
                 (email,),
@@ -137,7 +159,7 @@ def setup(case: dict) -> tuple[str, str]:
             )
             logger.info("2. %s: %s", email, role)
         workdir = ROOT / ".cache/areas"
-        for order, (name, uri) in enumerate(AREAS, start=1):
+        for order, (name, uri) in enumerate(AREAS.get(case["city"], []), start=1):
             if cur.execute(
                 f"SELECT 1 FROM {s}.area_of_interest WHERE project_id = %s::uuid "
                 "AND name = %s AND deleted_at IS NULL",
