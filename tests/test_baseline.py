@@ -1000,6 +1000,7 @@ def test_tlalpan_yaml():
     assert city.key_columns == ("fid",)
     # No amenities file: every amenity comes from the DENUE.
     assert (city.amenities_uri, city.amenity_file_categories) == (None, ())
+    assert city.tree_canopy.uri.endswith("meta_canopy_height_09.tif")
 
 
 def test_build_without_an_amenities_file(city, tmp_path):

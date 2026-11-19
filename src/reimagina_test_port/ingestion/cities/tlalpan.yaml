@@ -3,7 +3,7 @@
 #
 # Not in the lake for Tlalpan, so not loaded: an equipment file (every amenity
 # comes from the DENUE), an existing land use, INEGI's block faces for street
-# lighting, bike lanes and the canopy raster (scripts/canopy_raster.py).
+# lighting and bike lanes.
 city: tlalpan
 name: Tlalpan
 ent_code: "09"
@@ -48,6 +48,12 @@ sources:
       boundary_uri: az://cleaned/inegi/marco_geostadistico/2024/areas_municipales.parquet/CVE_ENT=09/CVE_MUN=012
       output_prefix: az://sandbox/projects/EXE/cleaned/vialidades
       refine: true
+  # tree_coverage of lots and rights of way, as mexicali.yaml's: Meta & WRI's
+  # canopy height map, cut to all of Mexico City (09) in canopy_raster.py's format.
+  tree_canopy:
+    uri: az://sandbox/projects/EXE/cleaned/canopy_height/meta_canopy_height_09.tif
+    params:
+      min_height_m: 2
 
 params:
   lots:   # exe_reimagina cities/tlalpan.toml values
