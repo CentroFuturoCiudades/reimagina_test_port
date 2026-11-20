@@ -1009,9 +1009,9 @@ def test_catalog_upsert_needs_the_element_types(dsn):
     with (
         psycopg.connect(dsn) as conn,
         conn.cursor() as cur,
-        pytest.raises(contract.ContractError, match=r"lacks \['station'\]"),
+        pytest.raises(contract.ContractError, match=r"lacks \['gate'\]"),
     ):
-        catalogs.upsert(cur, {"station": {"name": "text"}})
+        catalogs.upsert(cur, {"gate": {"name": "text"}})
 
 
 def test_write_new_baseline(new_baseline, dsn):
