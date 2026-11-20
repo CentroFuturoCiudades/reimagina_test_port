@@ -339,6 +339,7 @@ def seed_catalog(conn) -> None:
         *accessibility_nodes.SCORE_KEYS,
         *population_access_nodes.KEYS,
         *population_access_nodes.DIVERSITY_KEYS,
+        population_access_nodes.REACHABLE_JOBS_KEY,
         *land_use_calculation.KEYS,
         *streets_calculation.KEYS,
     ]
