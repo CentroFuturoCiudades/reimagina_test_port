@@ -5,7 +5,8 @@
   share of the residents, and the average distance to its nearest POI, per lot and
   per block.
 - reimagina_poi_diversity: entropy of the subcategories of each diversity set among
-  the POIs within walking distance, per lot and per block.
+  the POIs within walking distance, and the jobs (workers of the establishments)
+  within it, per lot and per block.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -40,8 +41,10 @@ from reimagina_test_port.indicators.population_access.access_calculation import 
 )
 from reimagina_test_port.indicators.population_access.diversity_calculation import (
     diversity,
-    poi_diversity,
+    entropy,
+    reached,
 )
+from reimagina_test_port.ingestion.crosswalk import ESTABLISHMENT_CATEGORIES
 
 POI_TYPE_COLUMN = "poi_type"
 MAX_DISTANCE_M = 10_000
@@ -326,8 +329,25 @@ DIVERSITY_SETS = {
         "sports": ("sports",),
         "community_center": ("community_center",),
     },
+    # Job diversity: the establishments' categories (not the SCIAN sectors of the
+    # ULI's), establishments only (JOBS_ELEMENT).
+    "jobs": {category: (category,) for category in ESTABLISHMENT_CATEGORIES},
 }
 DIVERSITY_KEYS = [f"diversity_{name}" for name in DIVERSITY_SETS]
+ELEMENT_TYPE_COLUMN = "element_type"
+WORKERS_COLUMN = "num_workers"
+# The set whose places are establishments only; its walk also adds up their workers.
+JOBS_SET = "jobs"
+JOBS_ELEMENT = "establishment"
+REACHABLE_JOBS_KEY = "reachable_jobs"
+REACHABLE_JOBS_COLUMN = column(
+    REACHABLE_JOBS_KEY,
+    "number",
+    Unit.COUNT,
+    "Workers (DENUE's num_workers) of the establishments within 500 m over the road "
+    "network; for a block, its lots' average weighted by population. Null without "
+    "geometry or residents.",
+)
 DIVERSITY_COLUMNS = [
     column(
         key,
@@ -368,26 +388,34 @@ def poi_diversity_metric(
         # One row per POI, whatever its poi_types: its category gives its subcategory.
         places = pois.drop_duplicates("id")
         categories = places.get(CATEGORY_COLUMN, pd.Series(None, index=places.index))
+        missing = pd.Series(None, index=places.index)
+        element_types = places.get(ELEMENT_TYPE_COLUMN, missing)
+        workers = places.get(WORKERS_COLUMN, missing)
         values = {}
         for name, subcategories in DIVERSITY_SETS.items():
             subcategory = categories.map(
                 {cat: sub for sub, group in subcategories.items() for cat in group}
             )
             found = subcategory.notna()
+            if name == JOBS_SET:
+                found &= element_types == JOBS_ELEMENT
             with timed(f"{name} diversity", context.logger):
-                values[f"diversity_{name}"] = diversity(
+                counts, totals, measured = reached(
                     lots,
-                    blocks,
-                    poi_diversity(
-                        lots,
-                        places.geometry[found],
-                        subcategory[found],
-                        network,
-                        crs,
-                        DIVERSITY_M,
-                        len(subcategories),
-                        origins,
-                    ),
+                    places.geometry[found],
+                    subcategory[found],
+                    network,
+                    crs,
+                    DIVERSITY_M,
+                    origins,
+                    workers[found] if name == JOBS_SET else None,
+                )
+                values[f"diversity_{name}"] = diversity(
+                    lots, blocks, entropy(counts, measured, len(subcategories))
+                )
+            if name == JOBS_SET:
+                values[REACHABLE_JOBS_KEY] = diversity(
+                    lots, blocks, np.where(measured, totals, np.nan)
                 )
         return {
             f"reimagina_poi_diversity_{name}": source[IDENTITY + ["geometry"]].assign(
@@ -398,7 +426,8 @@ def poi_diversity_metric(
 
     diversity_handler.__annotations__["parameters"] = parameters_type
     output = TableOutput(
-        columns=[*identity_columns(), *DIVERSITY_COLUMNS], geometry="geometry"
+        columns=[*identity_columns(), *DIVERSITY_COLUMNS, REACHABLE_JOBS_COLUMN],
+        geometry="geometry",
     )
     return metric(
         name="reimagina_poi_diversity",
@@ -406,9 +435,10 @@ def poi_diversity_metric(
             "Diversity of each set of destinations within walking distance: the "
             "Shannon entropy of its subcategories, by category, among the POIs "
             "within 500 m over the road network, over ln k, k being how many "
-            "subcategories the set has. Lots count the POIs their entries reach, "
-            "walked as in reimagina_nearest_poi_distance; blocks average their "
-            "lots weighted by population."
+            "subcategories the set has; and the workers of the establishments "
+            "within 500 m (reachable jobs). Lots count the POIs their entries "
+            "reach, walked as in reimagina_nearest_poi_distance; blocks average "
+            "their lots weighted by population."
         ),
         inputs={
             "lots": Dependency("reimagina_built_form_lots"),

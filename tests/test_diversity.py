@@ -17,6 +17,7 @@ from reimagina_test_port.indicators.population_access.diversity_calculation impo
     lot_entries,
     poi_diversity,
     reachable,
+    reached,
 )
 from reimagina_test_port.plugin import create_snapshot_plugin
 
@@ -87,6 +88,25 @@ def test_entropy_of_the_subcategories_reached():
     np.testing.assert_array_equal(
         poi_diversity(lots, pois, types, street(), CRS, 100, 3, origins), values
     )
+
+
+def test_reached_adds_up_the_weights():
+    lots = gpd.GeoDataFrame(geometry=[Point(500, 10), Point(2500, 10), None], crs=CRS)
+    # Two establishments share the place at 520 m; one has no workers; the last
+    # is beyond 100 m of every lot.
+    pois = points((480, 5), (520, 5), (520, 5), (2520, 5), (2900, 5))
+    counts, totals, measured = reached(
+        lots,
+        pois,
+        ["a", "b", "a", "b", "a"],
+        street(),
+        CRS,
+        100,
+        weights=[3.0, 10.0, 2.0, None, 50.0],
+    )
+    np.testing.assert_array_equal(totals, [15.0, 0.0, 0.0])
+    np.testing.assert_array_equal(counts, [[2, 1], [0, 1], [0, 0]])
+    np.testing.assert_array_equal(measured, [True, True, False])
 
 
 def test_blocks_average_their_lots_weighted_by_population():

@@ -66,7 +66,8 @@
 #   diversity's, over Base Mexicali of «Mexicali v2» (ee468973, 17 November
 #   2026), the first baseline with it. The leaves whose destinations changed
 #   with the categories (fresh food, education, health, manufacturing) and
-#   every diversity, over ee468973 rewritten with them (19 November 2026).
+#   every diversity, over ee468973 rewritten with them (19 November 2026); reachable
+#   jobs and job diversity, over ee468973 too (20 November 2026).
 #   Police and fire stations keep the ULI's until there are stations.
 # - The snapshot plugin has no land use or streets (they read the scenario from
 #   the database): its tree leaves them out, and the composites left empty.
@@ -353,6 +354,26 @@ trees:
                 polarity: positive
                 method: ampi
                 reference: 0.966
+                goalposts: {min: 0, max: 1}
+              # Reachable jobs: workers (DENUE's num_workers) of the
+              # establishments within 500 m; the 99th percentile is near 1,500
+              # and the highest block reaches 3,600, so they are compressed.
+              - name: reachable_jobs
+                source: diversity
+                variable: reachable_jobs
+                compress: true
+                polarity: positive
+                method: ampi
+                reference: 342.1
+                goalposts: {min: 0, max: 2000}
+              # Job diversity: entropy of the establishments' categories within
+              # 500 m (the crosswalk's 20, not the ULI's SCIAN sectors).
+              - name: job_diversity
+                source: diversity
+                variable: diversity_jobs
+                polarity: positive
+                method: ampi
+                reference: 0.321
                 goalposts: {min: 0, max: 1}
 
       # -- Ambient environment --------------------------------------------------

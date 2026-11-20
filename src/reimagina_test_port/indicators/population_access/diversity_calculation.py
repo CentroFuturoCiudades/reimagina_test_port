@@ -8,6 +8,9 @@ many subcategories the set has, fixed. A lot reaching nothing, or only one
 subcategory, scores 0; one reaching as many POIs of each of the k scores 1. A POI
 counts once, however many entries it has.
 
+The same walk adds up a weight of the POIs reached, such as an establishment's
+workers (reachable jobs).
+
 A POI is reached when the walk to it is within the radius, walked as in
 ``access_calculation``: from one of the lot's entries to one of the POI's, over the
 street network. A block averages its lots weighted by population.
@@ -127,6 +130,74 @@ def reachable(
         ).drop_duplicates(ignore_index=True)
 
 
+def reached(
+    lots: gpd.GeoDataFrame,
+    pois: gpd.GeoSeries,
+    types: Sequence[str],
+    network: StreetNetwork,
+    crs: str,
+    radius: float,
+    origins: pd.DataFrame | None = None,
+    weights: Sequence[float] | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """POIs reached by each lot within ``radius``: ``(counts, totals, measured)``.
+    ``counts`` is lots x subcategories (``types``, in order of first appearance),
+    ``totals`` adds up the ``weights`` of the POIs reached (missing weights count
+    0; zeros when omitted) and ``measured`` marks the lots with an entry. Rows at
+    the same place are walked once. ``origins`` is ``lot_entries`` of ``lots``,
+    built here when omitted."""
+    if origins is None:
+        origins = lot_entries(lots, network, crs)
+    measured = np.zeros(len(lots), dtype=bool)
+    measured[origins["owner"].unique()] = True
+    kind, kinds = pd.factorize(np.asarray(types))
+    counts = np.zeros((len(lots), len(kinds)))
+    totals = np.zeros(len(lots))
+    if len(pois) == 0:
+        return counts, totals, measured
+    place, places = pd.factorize(pois.to_wkb())
+    rows = pd.DataFrame(
+        {
+            "destination": place,
+            "kind": kind,
+            "weight": 0.0
+            if weights is None
+            else pd.to_numeric(pd.Series(weights), errors="coerce")
+            .fillna(0.0)
+            .to_numpy(),
+        }
+    )
+    # POIs reached by lot and type, added up a chunk of places at a time.
+    for pairs in reachable(
+        origins,
+        entries(gpd.GeoSeries.from_wkb(places, crs=pois.crs).to_crs(crs), network),
+        network,
+        radius,
+    ):
+        found = pairs.merge(rows, on="destination")
+        origin = found["origin"].to_numpy()
+        counts += np.bincount(
+            origin * len(kinds) + found["kind"].to_numpy(),
+            minlength=counts.size,
+        ).reshape(counts.shape)
+        totals += np.bincount(origin, found["weight"], minlength=len(lots))
+    return counts, totals, measured
+
+
+def entropy(counts: np.ndarray, measured: np.ndarray, k: int) -> np.ndarray:
+    """D per lot from ``reached``'s counts; NaN where not measured."""
+    values = np.where(measured, 0.0, np.nan)
+    if counts.shape[1] < 2:
+        return values
+    total = counts.sum(axis=1)
+    hit = total > 0
+    share = counts[hit] / total[hit, None]
+    # As sum(p ln 1/p), 0 where p = 0: a negated sum of zeros would give -0.0.
+    surprise = np.log(np.divide(1, share, where=share > 0, out=np.ones_like(share)))
+    values[hit] = (share * surprise).sum(axis=1) / np.log(k)
+    return values
+
+
 def poi_diversity(
     lots: gpd.GeoDataFrame,
     pois: gpd.GeoSeries,
@@ -141,35 +212,11 @@ def poi_diversity(
     ``types`` its subcategory, ``radius`` is in metres and ``k`` is how many
     subcategories the set has. Rows at the same place are walked once.
     ``origins`` is ``lot_entries`` of ``lots``, built here when omitted."""
-    if origins is None:
-        origins = lot_entries(lots, network, crs)
-    values = np.full(len(lots), np.nan)
-    values[origins["owner"].unique()] = 0.0
-    kind, kinds = pd.factorize(np.asarray(types))
-    if len(kinds) < 2:
-        return values
-    place, places = pd.factorize(pois.to_wkb())
-    rows = pd.DataFrame({"destination": place, "kind": kind})
-    # POIs reached by lot and type, added up a chunk of places at a time.
-    counts = np.zeros((len(lots), len(kinds)))
-    for pairs in reachable(
-        origins,
-        entries(gpd.GeoSeries.from_wkb(places, crs=pois.crs).to_crs(crs), network),
-        network,
-        radius,
-    ):
-        found = pairs.merge(rows, on="destination")
-        counts += np.bincount(
-            found["origin"].to_numpy() * len(kinds) + found["kind"].to_numpy(),
-            minlength=counts.size,
-        ).reshape(counts.shape)
-    total = counts.sum(axis=1)
-    reached = total > 0
-    share = counts[reached] / total[reached, None]
-    # As sum(p ln 1/p), 0 where p = 0: a negated sum of zeros would give -0.0.
-    surprise = np.log(np.divide(1, share, where=share > 0, out=np.ones_like(share)))
-    values[reached] = (share * surprise).sum(axis=1) / np.log(k)
-    return values
+    if len(pd.unique(np.asarray(types))) < 2:
+        # Nothing to walk to: every measured lot scores 0.
+        pois, types = pois.iloc[:0], []
+    counts, _, measured = reached(lots, pois, types, network, crs, radius, origins)
+    return entropy(counts, measured, k)
 
 
 def diversity(
