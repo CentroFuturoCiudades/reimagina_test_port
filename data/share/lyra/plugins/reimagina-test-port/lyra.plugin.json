@@ -3977,11 +3977,111 @@
       "spatial_inputs": {}
     },
     {
+      "description": "Where each lot joins the road network, as GHSCI: points are their own entry and polygons are entered anywhere along their outline (a point every 20 m within 30 m of a street), each joining the street at its projection on the nearest segment. Shared by the nearest POI distances and the diversity.",
+      "inputs": {
+        "edges": {
+          "arguments": {},
+          "output": "reimagina_road_network_edges"
+        },
+        "lots": {
+          "arguments": {},
+          "output": "reimagina_scenario_lots"
+        },
+        "nodes": {
+          "arguments": {},
+          "output": "reimagina_road_network_nodes"
+        }
+      },
+      "name": "reimagina_lot_entries",
+      "outputs": {
+        "reimagina_lot_entries": {
+          "columns": [
+            {
+              "description": "The lot's id.",
+              "name": "id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Street segment the entry joins.",
+              "name": "segment",
+              "nullable": true,
+              "type": "integer",
+              "unit": null
+            },
+            {
+              "description": "Along the segment to its start.",
+              "name": "along_start",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Along the segment to its end.",
+              "name": "along_end",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
+              "description": "Straight from the entry to the segment.",
+              "name": "offset",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "ScenarioParameters": {
+            "additionalProperties": false,
+            "description": "Select a Reimagina scenario; forks fall back to their baseline.",
+            "properties": {
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id"
+            ],
+            "title": "ScenarioParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/ScenarioParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_lot_entries_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
       "description": "Walking distance over the road network from each lot to the nearest POI of each poi_catalog type, as GHSCI: points are their own entry and polygons are entered anywhere along their outline (a point every 20 m within 30 m of a street); entries join the street at their projection on the nearest segment, every street two-way.",
       "inputs": {
         "edges": {
           "arguments": {},
           "output": "reimagina_road_network_edges"
+        },
+        "entries": {
+          "arguments": {},
+          "output": "reimagina_lot_entries"
         },
         "lots": {
           "arguments": {},
@@ -4194,6 +4294,10 @@
         "edges": {
           "arguments": {},
           "output": "reimagina_road_network_edges"
+        },
+        "entries": {
+          "arguments": {},
+          "output": "reimagina_lot_entries"
         },
         "lots": {
           "arguments": {},

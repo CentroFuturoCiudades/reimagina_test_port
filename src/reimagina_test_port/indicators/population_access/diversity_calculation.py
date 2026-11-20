@@ -27,6 +27,7 @@ from reimagina_test_port.indicators.population_access.access_calculation import 
     _MIN_WEIGHT,
     StreetNetwork,
     entries,
+    lot_entries,
 )
 
 # POIs per Dijkstra call; each returns a dense row over every node.
@@ -124,14 +125,6 @@ def reachable(
                 same[same["destination"].isin(chunk)],
             ]
         ).drop_duplicates(ignore_index=True)
-
-
-def lot_entries(
-    lots: gpd.GeoDataFrame, network: StreetNetwork, crs: str
-) -> pd.DataFrame:
-    return entries(
-        gpd.GeoSeries(lots.geometry.to_numpy(), crs=lots.crs).to_crs(crs), network
-    )
 
 
 def poi_diversity(

@@ -32,19 +32,29 @@ from reimagina_test_port.common.vocabulary import (
 )
 from reimagina_test_port.indicators.accessibility.model import resolve_access_crs
 from reimagina_test_port.indicators.population_access.access_calculation import (
+    lot_entries,
     nearest_distances,
+    owned_by,
     population_access,
     street_network,
 )
 from reimagina_test_port.indicators.population_access.diversity_calculation import (
     diversity,
-    lot_entries,
     poi_diversity,
 )
 
 POI_TYPE_COLUMN = "poi_type"
 MAX_DISTANCE_M = 10_000
 DISTANCE_OUTPUT = "reimagina_nearest_poi_distance_lots"
+# The lots' entries, shared by the distances and the diversity: ~5 s in Mexicali.
+ENTRIES_OUTPUT = "reimagina_lot_entries"
+ENTRIES_COLUMNS = [
+    column("id", "string", None, "The lot's id."),
+    column("segment", "integer", None, "Street segment the entry joins."),
+    column("along_start", "number", Unit.METRE, "Along the segment to its start."),
+    column("along_end", "number", Unit.METRE, "Along the segment to its end."),
+    column("offset", "number", Unit.METRE, "Straight from the entry to the segment."),
+]
 PoiType = Literal[DESTINATION_TYPES]  # ty: ignore[invalid-type-form]
 DISTANCE_KEYS = [f"distance_m_{poi_type}" for poi_type in DESTINATION_TYPES]
 ACCESS_KEYS = [f"population_with_access_{poi_type}" for poi_type in DESTINATION_TYPES]
@@ -121,12 +131,29 @@ def population_access_metrics(
             DESTINATION_TYPES if parameters.poi_types is None else parameters.poi_types
         )
 
+    def entries_handler(
+        parameters,
+        lots: gpd.GeoDataFrame,
+        nodes: pd.DataFrame,
+        edges: pd.DataFrame,
+        context: RunContext,
+    ) -> pd.DataFrame:
+        crs = resolve_access_crs(lots)
+        with timed("road network", context.logger):
+            network = street_network(nodes, edges)
+        with timed("lot entries", context.logger):
+            origins = lot_entries(lots, network, crs)
+        return origins.assign(
+            id=lots["id"].astype(str).to_numpy()[origins["owner"].to_numpy()]
+        ).reindex(columns=[c.name for c in ENTRIES_COLUMNS])
+
     def distance_handler(
         parameters,
         lots: gpd.GeoDataFrame,
         pois: gpd.GeoDataFrame,
         nodes: pd.DataFrame,
         edges: pd.DataFrame,
+        entries: pd.DataFrame,
         context: RunContext,
     ) -> pd.DataFrame:
         crs = resolve_access_crs(lots)
@@ -137,7 +164,14 @@ def population_access_metrics(
             for poi_type in requested(parameters)
         }
         with timed("nearest POI distances", context.logger):
-            distances = nearest_distances(lots, selected, network, crs, MAX_DISTANCE_M)
+            distances = nearest_distances(
+                lots,
+                selected,
+                network,
+                crs,
+                MAX_DISTANCE_M,
+                owned_by(entries, lots),
+            )
         values = pd.DataFrame(
             {f"distance_m_{key}": value for key, value in distances.items()},
             index=lots.index,
@@ -172,6 +206,8 @@ def population_access_metrics(
             ),
         }
 
+    # The source's parameters alone: one run for the distances and the diversity.
+    entries_handler.__annotations__["parameters"] = parameters_type
     distance_handler.__annotations__["parameters"] = PopulationAccessParameters
     access_handler.__annotations__["parameters"] = PopulationAccessParameters
     population_access_output = TableOutput(
@@ -184,6 +220,22 @@ def population_access_metrics(
         geometry="geometry",
     )
     return [
+        metric(
+            name="reimagina_lot_entries",
+            description=(
+                "Where each lot joins the road network, as GHSCI: points are their "
+                "own entry and polygons are entered anywhere along their outline (a "
+                "point every 20 m within 30 m of a street), each joining the street "
+                "at its projection on the nearest segment. Shared by the nearest "
+                "POI distances and the diversity."
+            ),
+            inputs={
+                "lots": Dependency(lots_output),
+                "nodes": Dependency(nodes_output),
+                "edges": Dependency(edges_output),
+            },
+            outputs={ENTRIES_OUTPUT: TableOutput(columns=ENTRIES_COLUMNS)},
+        )(entries_handler),
         metric(
             name="reimagina_nearest_poi_distance",
             description=(
@@ -198,6 +250,7 @@ def population_access_metrics(
                 "pois": Dependency(pois_output),
                 "nodes": Dependency(nodes_output),
                 "edges": Dependency(edges_output),
+                "entries": Dependency(ENTRIES_OUTPUT),
             },
             outputs={
                 DISTANCE_OUTPUT: TableOutput(
@@ -305,13 +358,13 @@ def poi_diversity_metric(
         pois: gpd.GeoDataFrame,
         nodes: pd.DataFrame,
         edges: pd.DataFrame,
+        entries: pd.DataFrame,
         context: RunContext,
     ) -> dict[str, gpd.GeoDataFrame]:
         crs = resolve_access_crs(lots)
         with timed("road network", context.logger):
             network = street_network(nodes, edges)
-        with timed("lot entries", context.logger):
-            origins = lot_entries(lots, network, crs)
+        origins = owned_by(entries, lots)
         # One row per POI, whatever its poi_types: its category gives its subcategory.
         places = pois.drop_duplicates("id")
         categories = places.get(CATEGORY_COLUMN, pd.Series(None, index=places.index))
@@ -363,6 +416,7 @@ def poi_diversity_metric(
             "pois": Dependency(pois_output),
             "nodes": Dependency(nodes_output),
             "edges": Dependency(edges_output),
+            "entries": Dependency(ENTRIES_OUTPUT),
         },
         outputs={
             "reimagina_poi_diversity_lots": output,
