@@ -91,7 +91,9 @@ _WITHIN_TOLERANCE = sql.SQL(
 # - write: values that differ from the baseline and are new or changed.
 # The baseline's values of these keys are read once (MATERIALIZED) and hashed:
 # joined directly, the planner may look each payload row up by element_id instead,
-# 13 s against 0.4 s for a group of 300,000 values.
+# 13 s against 0.4 s for a group of 300,000 values. The keys whose payload is a few
+# elements (a fork's lots, see _to_send) are looked up by element instead: reading
+# every lot's baseline values took 3 s for built-form in Mexicali (3M rows).
 _CHANGES_QUERY = sql.SQL(
     """
     CREATE TEMP TABLE indicator_change ON COMMIT DROP AS
@@ -99,7 +101,13 @@ _CHANGES_QUERY = sql.SQL(
         SELECT element_id, indicator_id, value_num, value_text
         FROM {element_state_indicator_value}
         WHERE scenario_id = %(baseline)s::uuid
-          AND indicator_id = ANY(%(indicator_ids)s)
+          AND indicator_id = ANY(%(scanned_ids)s)
+        UNION ALL
+        SELECT element_id, indicator_id, value_num, value_text
+        FROM {element_state_indicator_value}
+        WHERE scenario_id = %(baseline)s::uuid
+          AND element_id = ANY(%(lookup_elements)s::uuid[])
+          AND indicator_id = ANY(%(lookup_ids)s)
     )
     SELECT
         coalesce(p.element_id, s.element_id) AS element_id,
@@ -329,6 +337,7 @@ def write_indicators(
             ).to_numpy()
         )
         timer("catalog")
+        lookup_ids: list[int] = []
         if baseline_id is not None and not full:
             values = values[
                 _to_send(
@@ -339,6 +348,13 @@ def write_indicators(
                     indicator_ids,
                 )
             ]
+            # Only the lots sent need their baseline values.
+            lookup_ids = sorted(i for (t, _), i in indicator_ids.items() if t == "lot")
+        lookup_elements = (
+            pd.unique(values.loc[values["element_type"] == "lot", "id"]).tolist()
+            if lookup_ids
+            else []
+        )
         timer("select")
         # JIT costs about a second per query and saves nothing here.
         cur.execute("SET LOCAL jit = off")
@@ -382,6 +398,9 @@ def write_indicators(
             "scenario": scenario_id,
             "baseline": baseline_id,
             "indicator_ids": sorted(indicator_ids.values()),
+            "scanned_ids": sorted(set(indicator_ids.values()) - set(lookup_ids)),
+            "lookup_ids": lookup_ids,
+            "lookup_elements": lookup_elements,
             "tolerance_ids": list(tolerance_by_id),
             "tolerances": list(tolerance_by_id.values()),
             "job_run": job_run_id,
