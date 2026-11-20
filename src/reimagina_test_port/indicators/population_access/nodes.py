@@ -38,6 +38,7 @@ from reimagina_test_port.indicators.population_access.access_calculation import 
 )
 from reimagina_test_port.indicators.population_access.diversity_calculation import (
     diversity,
+    lot_entries,
     poi_diversity,
 )
 
@@ -309,6 +310,8 @@ def poi_diversity_metric(
         crs = resolve_access_crs(lots)
         with timed("road network", context.logger):
             network = street_network(nodes, edges)
+        with timed("lot entries", context.logger):
+            origins = lot_entries(lots, network, crs)
         # One row per POI, whatever its poi_types: its category gives its subcategory.
         places = pois.drop_duplicates("id")
         categories = places.get(CATEGORY_COLUMN, pd.Series(None, index=places.index))
@@ -330,6 +333,7 @@ def poi_diversity_metric(
                         crs,
                         DIVERSITY_M,
                         len(subcategories),
+                        origins,
                     ),
                 )
         return {

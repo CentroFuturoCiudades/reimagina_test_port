@@ -126,6 +126,14 @@ def reachable(
         ).drop_duplicates(ignore_index=True)
 
 
+def lot_entries(
+    lots: gpd.GeoDataFrame, network: StreetNetwork, crs: str
+) -> pd.DataFrame:
+    return entries(
+        gpd.GeoSeries(lots.geometry.to_numpy(), crs=lots.crs).to_crs(crs), network
+    )
+
+
 def poi_diversity(
     lots: gpd.GeoDataFrame,
     pois: gpd.GeoSeries,
@@ -134,13 +142,14 @@ def poi_diversity(
     crs: str,
     radius: float,
     k: int,
+    origins: pd.DataFrame | None = None,
 ) -> np.ndarray:
     """D per lot, in order; NaN without geometry. ``pois`` has one row per POI,
     ``types`` its subcategory, ``radius`` is in metres and ``k`` is how many
-    subcategories the set has. Rows at the same place are walked once."""
-    origins = entries(
-        gpd.GeoSeries(lots.geometry.to_numpy(), crs=lots.crs).to_crs(crs), network
-    )
+    subcategories the set has. Rows at the same place are walked once.
+    ``origins`` is ``lot_entries`` of ``lots``, built here when omitted."""
+    if origins is None:
+        origins = lot_entries(lots, network, crs)
     values = np.full(len(lots), np.nan)
     values[origins["owner"].unique()] = 0.0
     kind, kinds = pd.factorize(np.asarray(types))

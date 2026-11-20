@@ -73,8 +73,17 @@ def coverage_by_block(
     # Reprojected polygons may come out slightly invalid.
     shapes = np.where(shapely.is_valid(shapes), shapes, shapely.make_valid(shapes))
     areas = shapely.buffer(blocks.geometry.to_crs(crs).to_numpy(), NEIGHBOURHOOD_M)
-    block, street = shapely.STRtree(shapes).query(areas, predicate="intersects")
-    length = strip_length(shapely.intersection(shapes[street], areas[block]))
+    tree = shapely.STRtree(shapes)
+    block, street = tree.query(areas, predicate="intersects")
+    # A street wholly within the neighbourhood counts whole; only those crossing its
+    # edge are clipped. In Mexicali 82% are within, and clipping them all took 18 s.
+    inside = pd.MultiIndex.from_arrays([block, street]).isin(
+        pd.MultiIndex.from_arrays(tree.query(areas, predicate="contains"))
+    )
+    length = strip_length(shapes)[street]
+    length[~inside] = strip_length(
+        shapely.intersection(shapes[street[~inside]], areas[block[~inside]])
+    )
     lit = pd.to_numeric(streets["streetlights"]).to_numpy("float64")[street] / 100
 
     def per_block(weights: np.ndarray) -> np.ndarray:

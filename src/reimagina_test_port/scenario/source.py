@@ -66,26 +66,36 @@ _ELEMENTS_QUERY = sql.SQL(
         ST_AsBinary(st.geometry) AS geometry
     FROM states st
     JOIN {elements} e ON e.id = st.element_id
-    WHERE e.deleted_at IS NULL AND e.type::text IN ('block', 'lot')
-    ORDER BY e.type::text, st.element_id::text
+    WHERE e.deleted_at IS NULL AND e.type IN ('block', 'lot')
+    ORDER BY e.type, st.element_id
     """
 ).format(**_TABLES)
 
-# Scenario row first, so an all-NULL scenario row hides the baseline value.
+# The lot attributes read, by id: the values come back by id, not by key.
+_LOT_ATTRIBUTES_QUERY = sql.SQL(
+    """
+    SELECT id, key, value_type::text
+    FROM {attribute_catalog}
+    WHERE element_type = 'lot' AND key = ANY(%(keys)s)
+    """
+).format(**_TABLES)
+
+# Scenario row first, so an all-NULL scenario row hides the baseline value. One row
+# per element, its values in arrays: a tenth of the rows of one per value.
 _ATTRIBUTES_QUERY = sql.SQL(
     """
-    SELECT DISTINCT ON (v.element_id, v.attribute_id)
-        v.element_id::text AS element_id,
-        ac.key,
-        ac.value_type::text AS value_type,
-        v.value_num,
-        v.value_text,
-        v.value_json
-    FROM {element_state_attribute_value} v
-    JOIN {attribute_catalog} ac ON ac.id = v.attribute_id
-    WHERE v.scenario_id IN (%(scenario)s::uuid, %(baseline)s::uuid)
-      AND ac.key = ANY(%(keys)s)
-    ORDER BY v.element_id, v.attribute_id, (v.scenario_id = %(scenario)s::uuid) DESC
+    SELECT element_id::text, array_agg(attribute_id), array_agg(value_num),
+           array_agg(value_text), array_agg(value_json)
+    FROM (
+        SELECT DISTINCT ON (v.element_id, v.attribute_id)
+            v.element_id, v.attribute_id, v.value_num, v.value_text, v.value_json
+        FROM {element_state_attribute_value} v
+        WHERE v.scenario_id IN (%(scenario)s::uuid, %(baseline)s::uuid)
+          AND v.attribute_id = ANY(%(attributes)s)
+        ORDER BY v.element_id, v.attribute_id,
+                 (v.scenario_id = %(scenario)s::uuid) DESC
+    ) effective
+    GROUP BY element_id
     """
 ).format(**_TABLES)
 
@@ -316,10 +326,12 @@ def read_road_network_uri(scenario_id: str) -> str | None:
 def read_scenario(scenario_id: str, keys: list[str]) -> dict[str, gpd.GeoDataFrame]:
     """Return effective ``lot`` and ``block`` tables with attribute ``keys`` as columns."""
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
+        cur.execute(_LOT_ATTRIBUTES_QUERY, {"keys": keys})
+        catalog = {id_: (key, value_type) for id_, key, value_type in cur.fetchall()}
         params = {
             "scenario": scenario_id,
             "baseline": _baseline_id(cur, scenario_id),
-            "keys": keys,
+            "attributes": list(catalog),
         }
         cur.execute(_ELEMENTS_QUERY, params)
         elements = pd.DataFrame(
@@ -330,10 +342,11 @@ def read_scenario(scenario_id: str, keys: list[str]) -> dict[str, gpd.GeoDataFra
         attribute_rows = cur.fetchall()
 
     attributes: dict[str, dict[str, Any]] = {}
-    for element_id, key, value_type, num, text, js in attribute_rows:
-        attributes.setdefault(element_id, {})[key] = decode_value(
-            value_type, num, text, js
-        )
+    for element_id, ids, nums, texts, jsons in attribute_rows:
+        values = attributes.setdefault(element_id, {})
+        for id_, num, text, js in zip(ids, nums, texts, jsons, strict=True):
+            key, value_type = catalog[id_]
+            values[key] = decode_value(value_type, num, text, js)
     result = {}
     for kind in ("lot", "block"):
         frame = elements[elements["type"] == kind].reset_index(drop=True)
