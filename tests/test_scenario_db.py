@@ -616,6 +616,28 @@ def test_write_fork_stores_only_differences(dsn):
     assert stored(dsn, FORK) == fork
 
 
+def test_write_registers_missing_indicator_keys(dsn):
+    # A key new to the plugin, missing from the catalog until the next baseline.
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            "DELETE FROM reimagina_urbano.indicator_catalog "
+            "WHERE key IN ('distance_m_health', 'reachable_jobs')"
+        )
+    write(BASELINE)
+    with psycopg.connect(dsn) as conn:
+        rows = conn.execute(
+            "SELECT element_type::text, key, job_code, status::text "
+            "FROM reimagina_urbano.indicator_catalog "
+            "WHERE key IN ('distance_m_health', 'reachable_jobs') ORDER BY 1, 2"
+        ).fetchall()
+    assert rows == [
+        ("block", "distance_m_health", "population_access", "active"),
+        ("block", "reachable_jobs", "diversity", "active"),
+    ]
+    # Its values are written with the rest.
+    assert stored(dsn, BASELINE)[(BLOCK, "distance_m_health")][0] > 0
+
+
 def test_write_population_access(dsn):
     with psycopg.connect(dsn) as conn:
         conn.execute(
