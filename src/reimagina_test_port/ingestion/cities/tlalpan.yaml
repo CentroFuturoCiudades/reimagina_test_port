@@ -1,9 +1,8 @@
 # Tlalpan (09012): exe_reimagina's sources (src/pipeline/cities/tlalpan.toml), laid
 # out as mexicali.yaml. Read from the CFC data lake (account cfcetlsadls).
 #
-# Not in the lake for Tlalpan, so not loaded: an equipment file (every amenity
-# comes from the DENUE), an existing land use, INEGI's block faces for street
-# lighting and bike lanes.
+# Not in the lake for Tlalpan, so not loaded: an existing land use, INEGI's block
+# faces for street lighting and bike lanes.
 city: tlalpan
 name: Tlalpan
 ent_code: "09"
@@ -34,6 +33,14 @@ sources:
     params:
       year: "2023"
       manifests_uri: az://sandbox/projects/EXE/raw/open_buildings_temporal_data_v1_mx
+  # SIG CDMX's equipment layers (areas_verdes, servicios, escuelas), as Mexicali's
+  # IMIP: these categories come only from them, the rest only from the DENUE, which
+  # has no parks.
+  amenities:
+    uri: az://cleaned/por_estado/09_ciudad_de_mexico/012_tlalpan/sigcdmx/equipamiento
+    params:
+      normalizer: sigcdmx
+      categories: [park, sports, cultural_center]
   denue:   # INEGI DENUE 05_2025 as published: amenities and establishments by the SCIAN crosswalk
     uri: az://raw/inegi/denue/09_ciudad_de_mexico/denue_09_0525_csv/conjunto_de_datos/denue_inegi_09_.csv
     params: {municipio: Tlalpan, encoding: latin-1}

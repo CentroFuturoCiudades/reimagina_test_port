@@ -195,6 +195,43 @@ def test_imip_normalizer(tmp_path):
     assert (table["source"] == "IMIP").all()
 
 
+def test_sigcdmx_normalizer(tmp_path):
+    folder = tmp_path / "sigcdmx"
+    folder.mkdir()
+    gpd.GeoDataFrame(
+        {"gid": [1, 2], "categoria": ["Parques, arboledas y alamedas", "Vialidades"],
+         "nombre": ["Parque 1", "Camellón"], "superficie": ["400.5", "90"]},
+        geometry=[box(0, 0, 20, 20), box(30, 0, 40, 2)],
+        crs=CRS,
+    ).to_parquet(folder / "areas_verdes.geoparquet")  # fmt: skip
+    gpd.GeoDataFrame(
+        {"OID": [7, 8, 9], "TIPO": ["Cancha", "Museo", "Agua"],
+         "NOMGEO": ["Cancha 7", "Museo 8", "Pozo 9"]},
+        geometry=[Point(1, 1), Point(2, 2), Point(3, 3)],
+        crs=CRS,
+    ).to_parquet(folder / "servicios.geoparquet")  # fmt: skip
+    gpd.GeoDataFrame(
+        {"fid": [3, 4], "nivel": ["Preescolar - Inicial *", "INICIAL"],
+         "nombre": ["Jardín 3", "Cendi 4"]},
+        geometry=gpd.GeoSeries.from_wkt(["MULTIPOINT (5 5)", "MULTIPOINT (6 6)"]),
+        crs=CRS,
+    ).to_parquet(folder / "escuelas.geoparquet")  # fmt: skip
+    raw = raw_amenities.sigcdmx(folder)
+    raw_amenities.check(raw)  # points only: the park's polygon and the multipoints
+    table = raw.set_index("source_id")
+    # Rows no rule matches (a road's verge, a water well) are left out.
+    assert table["category"].to_dict() == {
+        "areas_verdes:1": "park",
+        "servicios:7": "sports",
+        "servicios:8": "museum",
+        "escuelas:3": "preschool",
+        "escuelas:4": "daycare",
+    }
+    assert table.loc["areas_verdes:1", "area_m2"] == 400.5
+    assert table.loc["servicios:8", "name"] == "Museo 8"
+    assert (table["source"] == "SIGCDMX").all()
+
+
 def write_sources(root: Path) -> dict[str, str]:
     """A tiny Mexicali: two blocks, five cadastral rows, one height tile."""
     blocks = gpd.GeoDataFrame(
@@ -998,9 +1035,15 @@ def test_tlalpan_yaml():
     assert (city.cve_code, city.target_crs) == ("09012", "EPSG:32614")
     assert city.lots_uri.endswith("lots_09012.fgb")
     assert city.key_columns == ("fid",)
-    # No amenities file: every amenity comes from the DENUE.
-    assert (city.amenities_uri, city.amenity_file_categories) == (None, ())
+    assert city.amenities_normalizer == "sigcdmx"
+    assert city.amenity_file_categories == ("park", "sports", "cultural_center")
     assert city.tree_canopy.uri.endswith("meta_canopy_height_09.tif")
+
+
+def test_amenities_are_optional(tmp_path):
+    path = write_city(tmp_path, "mexicali", lambda c: c["sources"].pop("amenities"))
+    preset = cities.from_yaml(path)
+    assert (preset.amenities_uri, preset.amenity_file_categories) == (None, ())
 
 
 def test_build_without_an_amenities_file(city, tmp_path):
@@ -1039,8 +1082,8 @@ def write_city(tmp_path: Path, name: str, change) -> Path:
          "existing_land_use.params: column is required"),
         (lambda c: c["sources"]["existing_land_use"]["params"].update(typo=1),
          r"existing_land_use.params: unknown keys \['typo'\]"),
-        (lambda c: c["sources"]["amenities"]["params"].update(normalizer="sigcdmx"),
-         "unknown normalizer 'sigcdmx'"),
+        (lambda c: c["sources"]["amenities"]["params"].update(normalizer="nope"),
+         "unknown normalizer 'nope'"),
         (lambda c: c["sources"]["amenities"]["params"].update(categories=["parks"]),
          r"unknown categories \['parks'\]"),
         (lambda c: c["sources"]["amenities"]["params"].pop("categories"),
