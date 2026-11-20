@@ -62,7 +62,8 @@ CREATE EXTENSION postgis;
 CREATE SCHEMA reimagina_urbano;
 SET search_path = reimagina_urbano, public;
 CREATE TYPE element_type AS ENUM (
-    'block', 'lot', 'building', 'tree', 'amenity', 'establishment', 'right_of_way'
+    'block', 'lot', 'building', 'tree', 'amenity', 'establishment', 'right_of_way',
+    'bus_stop', 'station'
 );
 CREATE TYPE attribute_value_type AS ENUM ('number', 'integer', 'text', 'enum', 'json');
 CREATE TABLE projects (id uuid PRIMARY KEY, road_network_uri text);
@@ -1008,9 +1009,9 @@ def test_catalog_upsert_needs_the_element_types(dsn):
     with (
         psycopg.connect(dsn) as conn,
         conn.cursor() as cur,
-        pytest.raises(contract.ContractError, match=r"lacks \['station'\]"),
+        pytest.raises(contract.ContractError, match=r"lacks \['gate'\]"),
     ):
-        catalogs.upsert(cur, {"station": {"name": "text"}})
+        catalogs.upsert(cur, {"gate": {"name": "text"}})
 
 
 def test_write_new_baseline(new_baseline, dsn):
@@ -1180,7 +1181,7 @@ def test_migrate_fork_edits(new_baseline, dsn):
 
 
 def test_baseline_write_metric(new_baseline, dsn, monkeypatch, offline_network):
-    from reimagina_test_port.ingestion import baseline, streets
+    from reimagina_test_port.ingestion import baseline, streets, transit
 
     tables = new_tables()
     monkeypatch.setattr(
@@ -1209,6 +1210,19 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch, offline_network):
         crs=4326,
     )
     monkeypatch.setattr(streets, "build", lambda *_: street)
+    stop = gpd.GeoDataFrame(
+        {
+            "id": [str(uuid4())],
+            "parent_id": [None],
+            "source_record_ref": ["IMIP:1"],
+            "element_type": ["bus_stop"],
+            "source": ["IMIP"],
+            "name": ["AUTOTRANSPORTES URBANOS"],
+        },
+        geometry=gpd.points_from_xy([-115.5], [32.6]),
+        crs=4326,
+    )
+    monkeypatch.setattr(transit, "build", lambda *_: stop)
     runner = LocalRunner.from_definitions(
         {"reimagina-test-port": plugin.create_plugin()}
     )
@@ -1219,9 +1233,24 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch, offline_network):
     parameters["scenario_id"] = NEW_BASELINE
     result = runner.run("reimagina_baseline_write", {"parameters": parameters})
     row = result["reimagina_baseline_write"].iloc[0].to_dict()
-    assert (row["elements"], row["elements_created"], row["dry_run"]) == (9, 7, False)
-    columns = ("blocks", "lots", "amenities", "establishments", "rights_of_way")
-    assert [row[c] for c in columns] == [2, 4, 1, 1, 1]
+    assert (row["elements"], row["elements_created"], row["dry_run"]) == (10, 8, False)
+    columns = (
+        "blocks", "lots", "amenities", "establishments", "rights_of_way", "bus_stops",
+        "stations",
+    )  # fmt: skip
+    assert [row[c] for c in columns] == [2, 4, 1, 1, 1, 1, 0]
+    # The stop has no parent; its source and name are stored as text.
+    with psycopg.connect(dsn) as conn:
+        parent, source = conn.execute(
+            "SELECT s.parent_element_id, v.value_text "
+            "FROM reimagina_urbano.element_state s "
+            "JOIN reimagina_urbano.element_state_attribute_value v "
+            "ON v.element_id = s.element_id AND v.scenario_id = s.scenario_id "
+            "JOIN reimagina_urbano.attribute_catalog c ON c.id = v.attribute_id "
+            "WHERE s.element_id = %s::uuid AND c.key = 'source'",
+            (stop["id"].iloc[0],),
+        ).fetchone()
+    assert (parent, source) == (None, "IMIP")
 
     # A street's bands are stored as JSON lists; its streetlights and
     # tree_coverage as numbers. A lot's tree_coverage too.

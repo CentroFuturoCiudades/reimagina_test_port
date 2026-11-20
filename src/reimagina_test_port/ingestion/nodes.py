@@ -1,8 +1,8 @@
 """Lyra nodes that build a city's baseline from the data lake and write it into a
 Reimagina baseline scenario: reimagina_baseline, reimagina_baseline_elements and
 reimagina_baseline_write. The elements are blocks, lots, amenities,
-establishments and rights of way (reimagina_baseline_streets, over the street
-network). Its street network: reimagina_street_network,
+establishments, rights of way (reimagina_baseline_streets, over the street
+network) and public transport stops (reimagina_baseline_transit_stops). Its street network: reimagina_street_network,
 reimagina_street_network_tables and reimagina_street_network_write
 (ingestion/network.py)."""
 
@@ -101,6 +101,15 @@ RIGHT_OF_WAY_DECLARATION = TableOutput(
             "Share of its area under tree canopy (Meta's canopy height); only a "
             "street drawn as a polygon has one.",
         ),
+    ],
+    geometry="geometry",
+)
+TRANSIT_DECLARATION = TableOutput(
+    columns=[
+        *identity_columns(),
+        column("element_type", "string", None, "bus_stop or station."),
+        column("source", "string", None, "Where the stop comes from: IMIP, OSM."),
+        column("name", "string", None, "The stop's name, when its source has one."),
     ],
     geometry="geometry",
 )
@@ -255,21 +264,49 @@ def baseline_streets(
     return table
 
 
+@dataset(
+    name="reimagina_baseline_transit_stops",
+    description=(
+        "A city's public transport stops as bus_stop and station elements, as the "
+        "ULI's pt_any: its own layer (sources.transit_stops; Mexicali: IMIP's "
+        "equipment category transp without the freight terminals) pooled with "
+        "OpenStreetMap's stops by GHSCI's tags (sources.osm_transit_stops, "
+        "extracted by scripts/osm_transit.py), each at its own point. Empty "
+        "without either source."
+    ),
+    outputs={"reimagina_baseline_transit_stops": TRANSIT_DECLARATION},
+)
+def baseline_transit_stops(
+    parameters: BaselineParameters, context: DatasetContext
+) -> gpd.GeoDataFrame:
+    """Download the sources into the job's scratch folder and build the table."""
+    from reimagina_test_port.ingestion import transit
+
+    table = transit.build(CITIES[parameters.city], context.temp_dir / "transit")
+    context.logger.info(
+        "Transit stops: %s",
+        table.groupby(["source", "element_type"]).size().to_dict(),
+    )
+    return table
+
+
 BASELINE_INPUTS = {
     "lots": Dependency("reimagina_baseline_lots"),
     "blocks": Dependency("reimagina_baseline_blocks"),
     "amenities": Dependency("reimagina_baseline_amenities"),
     "establishments": Dependency("reimagina_baseline_establishments"),
     "right_of_way": Dependency("reimagina_baseline_right_of_way"),
+    "transit_stops": Dependency("reimagina_baseline_transit_stops"),
 }
 
 
 @metric(
     name="reimagina_baseline_elements",
     description=(
-        "Return a city's baseline lots, blocks, amenities, establishments and "
-        "streets as built from the data lake (reimagina_baseline, "
-        "reimagina_baseline_streets). Nothing is written to Reimagina's database."
+        "Return a city's baseline lots, blocks, amenities, establishments, "
+        "streets and transit stops as built from the data lake "
+        "(reimagina_baseline, reimagina_baseline_streets, "
+        "reimagina_baseline_transit_stops). Nothing is written to Reimagina's database."
     ),
     inputs=BASELINE_INPUTS,
     outputs={
@@ -278,6 +315,7 @@ BASELINE_INPUTS = {
         "reimagina_baseline_elements_amenities": AMENITY_DECLARATION,
         "reimagina_baseline_elements_establishments": ESTABLISHMENT_DECLARATION,
         "reimagina_baseline_elements_right_of_way": RIGHT_OF_WAY_DECLARATION,
+        "reimagina_baseline_elements_transit_stops": TRANSIT_DECLARATION,
     },
 )
 def baseline_elements(
@@ -287,6 +325,7 @@ def baseline_elements(
     amenities: gpd.GeoDataFrame,
     establishments: gpd.GeoDataFrame,
     right_of_way: gpd.GeoDataFrame,
+    transit_stops: gpd.GeoDataFrame,
 ) -> dict[str, gpd.GeoDataFrame]:
     """The datasets' tables."""
     return {
@@ -295,6 +334,7 @@ def baseline_elements(
         "reimagina_baseline_elements_amenities": amenities,
         "reimagina_baseline_elements_establishments": establishments,
         "reimagina_baseline_elements_right_of_way": right_of_way,
+        "reimagina_baseline_elements_transit_stops": transit_stops,
     }
 
 
@@ -335,7 +375,11 @@ BASELINE_ATTRIBUTES = {
         "streetlights": "number",
         "tree_coverage": "number",
     },
+    # Public transport stops (ingestion/transit.py).
+    "bus_stop": {"source": "text", "name": "text"},
+    "station": {"source": "text", "name": "text"},
 }
+TRANSIT_TYPES = ("bus_stop", "station")
 # Element type -> column of the write summary with its elements in the scenario.
 WRITTEN_COLUMNS = {
     "block": "blocks",
@@ -343,6 +387,8 @@ WRITTEN_COLUMNS = {
     "amenity": "amenities",
     "establishment": "establishments",
     "right_of_way": "rights_of_way",
+    "bus_stop": "bus_stops",
+    "station": "stations",
 }
 BASELINE_WRITE_DECLARATION = TableOutput(
     columns=[
@@ -350,7 +396,7 @@ BASELINE_WRITE_DECLARATION = TableOutput(
         for name, description in (
             (
                 "elements",
-                "Blocks, lots, amenities, establishments and streets written.",
+                "Blocks, lots, amenities, establishments, streets and stops written.",
             ),
             ("elements_created", "Elements new to the database."),
             ("attribute_values", "Attribute values written."),
@@ -379,9 +425,11 @@ BASELINE_WRITE_DECLARATION = TableOutput(
     description=(
         "Build a city's baseline from the data lake (reimagina_baseline) and write "
         "it into an existing baseline scenario of a project: elements, state and "
-        "attribute values of blocks, lots, amenities, establishments and streets "
+        "attribute values of blocks, lots, amenities, establishments, streets "
         "(right_of_way, from reimagina_baseline_streets; left out when the city "
-        "has none), in one transaction. Existing elements are reused "
+        "has none) and transit stops (bus_stop and station, from "
+        "reimagina_baseline_transit_stops; left out when the city has none), in "
+        "one transaction. Existing elements are reused "
         "unchanged; running it again replaces the scenario's rows. Missing "
         "attribute_catalog and indicator_catalog rows are added first; existing "
         "ones are left as they are and must be active. Compute indicators "
@@ -397,6 +445,7 @@ def baseline_write(
     amenities: gpd.GeoDataFrame,
     establishments: gpd.GeoDataFrame,
     right_of_way: gpd.GeoDataFrame,
+    transit_stops: gpd.GeoDataFrame,
 ) -> pd.DataFrame:
     """Final node: one summary row."""
     from reimagina_test_port.ingestion import baseline_writer
@@ -411,6 +460,11 @@ def baseline_write(
     # A city without streets writes none, so its database needs no right_of_way type.
     if right_of_way.empty:
         del tables["right_of_way"]
+    # Likewise a city without stops needs no bus_stop or station type.
+    for element_type in TRANSIT_TYPES:
+        stops = transit_stops[transit_stops["element_type"] == element_type]
+        if not stops.empty:
+            tables[element_type] = stops
     try:
         counts = baseline_writer.write_baseline(
             parameters.project_id,
