@@ -330,9 +330,19 @@ def write_group(
 ) -> pd.DataFrame:
     """Write one group of keys (built-form or accessibility) in its own transaction.
 
-    ``tables`` maps each element type written (``lot``, ``block``) to its values;
-    ``prepare`` runs on that transaction before the catalog check.
+    ``tables`` maps each element type written (``lot``, ``block``) to its values.
+    On that transaction, before the catalog check, the keys' missing
+    ``indicator_catalog`` rows are added (``catalogs.register_indicators``: a key
+    new to the plugin needs no new baseline), then ``prepare`` runs.
     """
+    from reimagina_test_port.ingestion import catalogs
+
+    def register(cur: Any) -> Any:
+        added = catalogs.register_indicators(cur, keys, tables)
+        if added:
+            log.info("indicator_catalog rows added: %d", added)
+        return prepare(cur) if prepare is not None else added
+
     with timed("prepare values", log):
         values = pd.concat(
             [
@@ -350,7 +360,7 @@ def write_group(
             full=parameters.full,
             job_run_id=parameters.job_run_id,
             dry_run=parameters.dry_run,
-            prepare=prepare,
+            prepare=register,
             log=log,
         )
     except writer.ScenarioNotFoundError as exc:

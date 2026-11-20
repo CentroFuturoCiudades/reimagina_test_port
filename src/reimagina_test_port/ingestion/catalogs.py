@@ -2,8 +2,10 @@
 
 ``attribute_catalog`` gets every attribute the baseline writes, and
 ``indicator_catalog`` every indicator the scenario writer computes on lots and
-blocks, and each composite of composite_config.yaml on its elements (the scenario
-writer also registers those, ``composites.catalog``). A row already there is left
+blocks, and each composite of composite_config.yaml on its elements. The scenario
+writer registers the rows of the keys it writes too (``register_indicators``,
+``composites.catalog``), so an indicator added to the plugin does not wait for the
+next baseline. A row already there is left
 as it is (``ON CONFLICT DO NOTHING``): the
 API's migrations own existing rows, so an existing enum without a value the
 baseline uses still fails the contract check. Types, units and names follow the
@@ -13,7 +15,7 @@ API's seed (alembic ``c8e1a4d92f37``) and ``urban_fabric.md``.
 fails, naming it, instead of being added here.
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 
 import psycopg
 from psycopg import sql
@@ -183,6 +185,28 @@ def indicator_rows() -> list[tuple[str, str, str, str | None, str, str]]:
         for element_type in INDICATOR_ELEMENT_TYPES
         for key, (name, unit, value_type, job_code) in INDICATORS.items()
     ] + composite_catalog.catalog_rows()
+
+
+def register_indicators(
+    cur: psycopg.Cursor, keys: Iterable[str], element_types: Iterable[str]
+) -> int:
+    """Add the missing ``indicator_catalog`` rows of ``keys`` (those of
+    ``INDICATORS``; composites register their own) on ``element_types``; returns
+    how many were added."""
+    rows = [
+        (element_type, key, *INDICATORS[key])
+        for element_type in element_types
+        if element_type in INDICATOR_ELEMENT_TYPES
+        for key in keys
+        if key in INDICATORS
+    ]
+    added = 0
+    for element_type, key, name, unit, value_type, job_code in rows:
+        cur.execute(
+            _INSERT_INDICATOR, (element_type, key, name, unit, value_type, job_code)
+        )
+        added += cur.fetchone() is not None
+    return added
 
 
 def upsert(
