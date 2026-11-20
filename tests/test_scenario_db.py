@@ -953,6 +953,8 @@ def new_tables(count: int = 4):
             "capacity": [1.0],
             "name": [None],
             "area_m2": [None],
+            # A clinic, not a park: no tree coverage.
+            "tree_coverage": [None],
         },
         geometry=[inside],
         crs=4326,
@@ -1053,8 +1055,8 @@ def test_write_new_baseline(new_baseline, dsn):
     first = write_new_baseline()
     # The blocks already exist: reused, not created. 23 lot and block values, 4 of
     # the amenity (no name) and 4 of the establishment (no workers). The catalogs
-    # get the 11 attributes they lacked (housing.floor_share, tree_coverage, the
-    # block's targets, 4 of the amenity and 3 of the establishment), block.density and the
+    # get the 12 attributes they lacked (housing.floor_share, tree_coverage, the
+    # block's targets, 5 of the amenity and 3 of the establishment), block.density and the
     # composites' keys (the scenario writer registers those too); the dry run
     # rolled its rows back.
     assert first == {
@@ -1062,7 +1064,7 @@ def test_write_new_baseline(new_baseline, dsn):
         "elements_created": 6,
         "attribute_values": 32,  # with the first lot's tree_coverage
         "elements_removed": 0,
-        "attributes_added": 11,
+        "attributes_added": 12,
         "indicators_added": 1 + len(composite_catalog.catalog_rows()),
         "by_type": {"block": 2, "lot": 4, "amenity": 1, "establishment": 1},
     }

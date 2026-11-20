@@ -53,6 +53,7 @@ def point_declaration(attributes: dict[str, str]) -> TableOutput:
         "capacity": Unit.COUNT,
         "num_workers": Unit.COUNT,
         "area_m2": Unit.SQUARE_METRE,
+        "tree_coverage": Unit.PERCENT,
     }
     return TableOutput(
         columns=[

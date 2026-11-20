@@ -219,6 +219,18 @@ def lot_table(
     return gpd.GeoDataFrame(frame, geometry=lots.geometry.to_numpy(), crs=4326)
 
 
+def park_tree_coverage(
+    amenities: gpd.GeoDataFrame, lots: gpd.GeoDataFrame
+) -> gpd.GeoDataFrame:
+    """``amenities`` with each park's ``tree_coverage``: its lot's, the park being
+    a point at its lot's center (the ULI's LPUGS read the park's NDVI; this is the
+    canopy instead). Other amenities, and parks of lots without one, have none."""
+    coverage = amenities["parent_id"].map(lots.set_index("id")["tree_coverage"])
+    return amenities.assign(
+        tree_coverage=coverage.where(amenities["category"] == "park").astype("float64")
+    )
+
+
 def build(
     city: CityPreset, workdir: Path, progress: Progress
 ) -> dict[str, gpd.GeoDataFrame | dict]:
@@ -342,7 +354,7 @@ def build(
     return {
         "blocks": block_table(blocks),
         "lots": lot_rows,
-        "amenities": amenities,
+        "amenities": park_tree_coverage(amenities, lot_rows),
         "establishments": establishments,
         "report": {
             "lots": keys_report,

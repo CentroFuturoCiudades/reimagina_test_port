@@ -163,6 +163,13 @@
               "unit": "score"
             },
             {
+              "description": "Gravity score for lpugs, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_lpugs",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
               "description": "Walking minutes to the nearest public_space.",
               "name": "distance_to_public_space",
               "nullable": true,
@@ -256,6 +263,13 @@
             {
               "description": "Walking minutes to the nearest transit_stop.",
               "name": "distance_to_transit_stop",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest lpugs.",
+              "name": "distance_to_lpugs",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -400,6 +414,13 @@
               "unit": "score"
             },
             {
+              "description": "Gravity score for lpugs, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_lpugs",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
               "description": "Walking minutes to the nearest public_space.",
               "name": "distance_to_public_space",
               "nullable": true,
@@ -493,6 +514,13 @@
             {
               "description": "Walking minutes to the nearest transit_stop.",
               "name": "distance_to_transit_stop",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest lpugs.",
+              "name": "distance_to_lpugs",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -607,6 +635,13 @@
               "nullable": true,
               "type": "number",
               "unit": "m2"
+            },
+            {
+              "description": "tree coverage",
+              "name": "tree_coverage",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
             }
           ],
           "geometry": "geometry",
@@ -960,6 +995,13 @@
               "nullable": true,
               "type": "number",
               "unit": "m2"
+            },
+            {
+              "description": "tree coverage",
+              "name": "tree_coverage",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
             }
           ],
           "geometry": "geometry",
@@ -1936,8 +1978,12 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Composite indicator ambient_environment per block: the weighted Mazziotta-Pareto index (positive) of parks, each normalised (AMPI or MPI) as composite_config.yaml says.",
+      "description": "Composite indicator ambient_environment per block: the weighted Mazziotta-Pareto index (positive) of parks, large_public_green_space, each normalised (AMPI or MPI) as composite_config.yaml says.",
       "inputs": {
+        "large_public_green_space": {
+          "arguments": {},
+          "output": "reimagina_composite_large_public_green_space_blocks"
+        },
         "parks": {
           "arguments": {},
           "output": "reimagina_composite_parks_blocks"
@@ -1971,6 +2017,13 @@
             {
               "description": "Composite index of parks, around 100.",
               "name": "parks",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Composite index of large_public_green_space, around 100.",
+              "name": "large_public_green_space",
               "nullable": true,
               "type": "number",
               "unit": "score"
@@ -2045,11 +2098,15 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Composite indicator built_environment per block: the weighted Mazziotta-Pareto index (positive) of parks, walkability, cycling_infrastructure, street_lighting, each normalised (AMPI or MPI) as composite_config.yaml says.",
+      "description": "Composite indicator built_environment per block: the weighted Mazziotta-Pareto index (positive) of parks, large_public_green_space, walkability, cycling_infrastructure, street_lighting, each normalised (AMPI or MPI) as composite_config.yaml says.",
       "inputs": {
         "cycling_infrastructure": {
           "arguments": {},
           "output": "reimagina_composite_cycling_infrastructure_blocks"
+        },
+        "large_public_green_space": {
+          "arguments": {},
+          "output": "reimagina_composite_large_public_green_space_blocks"
         },
         "parks": {
           "arguments": {},
@@ -2092,6 +2149,13 @@
             {
               "description": "Composite index of parks, around 100.",
               "name": "parks",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Composite index of large_public_green_space, around 100.",
+              "name": "large_public_green_space",
               "nullable": true,
               "type": "number",
               "unit": "score"
@@ -3166,6 +3230,122 @@
           "parameters"
         ],
         "title": "reimagina_composite_index_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "Composite indicator large_public_green_space per block: the weighted Mazziotta-Pareto index (positive) of lpugs_500m, lpugs_500m_pct, each normalised (AMPI or MPI) as composite_config.yaml says.",
+      "inputs": {
+        "population_access": {
+          "arguments": {},
+          "output": "reimagina_population_access_blocks"
+        }
+      },
+      "name": "reimagina_composite_large_public_green_space",
+      "outputs": {
+        "reimagina_composite_large_public_green_space_blocks": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "distance_m_lpugs from population_access, normalised (ampi) around 100.",
+              "name": "lpugs_500m",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "share_with_access_lpugs from population_access, normalised (ampi) around 100.",
+              "name": "lpugs_500m_pct",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Mazziotta-Pareto composite: the mean less its imbalance penalty (plus, if negative); null when fewer children than min_valid have a value.",
+              "name": "index",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Weighted mean of the children.",
+              "name": "mean",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Imbalance penalty: SD \u00d7 SD / mean.",
+              "name": "penalty",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Children with a value.",
+              "name": "n",
+              "nullable": true,
+              "type": "integer",
+              "unit": "count"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "ScenarioParameters": {
+            "additionalProperties": false,
+            "description": "Select a Reimagina scenario; forks fall back to their baseline.",
+            "properties": {
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id"
+            ],
+            "title": "ScenarioParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/ScenarioParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_composite_large_public_green_space_request",
         "type": "object"
       },
       "role": "metric",
@@ -4554,6 +4734,13 @@
               "nullable": true,
               "type": "number",
               "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_lpugs",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
             }
           ],
           "geometry": null,
@@ -4584,7 +4771,8 @@
                         "community_culture_recreation",
                         "police_station",
                         "fire_station",
-                        "transit_stop"
+                        "transit_stop",
+                        "lpugs"
                       ],
                       "type": "string"
                     },
@@ -4987,6 +5175,13 @@
               "unit": "m"
             },
             {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_lpugs",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
               "description": "Residents of lots within the type's coverage distance of one of its POIs.",
               "name": "population_with_access_public_space",
               "nullable": true,
@@ -5085,6 +5280,13 @@
               "unit": "count"
             },
             {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_lpugs",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
               "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
               "name": "share_with_access_public_space",
               "nullable": true,
@@ -5178,6 +5380,13 @@
             {
               "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
               "name": "share_with_access_transit_stop",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
+              "name": "share_with_access_lpugs",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -5308,6 +5517,13 @@
               "unit": "m"
             },
             {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_lpugs",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
               "description": "Residents of lots within the type's coverage distance of one of its POIs.",
               "name": "population_with_access_public_space",
               "nullable": true,
@@ -5401,6 +5617,13 @@
             {
               "description": "Residents of lots within the type's coverage distance of one of its POIs.",
               "name": "population_with_access_transit_stop",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_lpugs",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -5502,6 +5725,13 @@
               "nullable": true,
               "type": "number",
               "unit": null
+            },
+            {
+              "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
+              "name": "share_with_access_lpugs",
+              "nullable": true,
+              "type": "number",
+              "unit": null
             }
           ],
           "geometry": "geometry",
@@ -5532,7 +5762,8 @@
                         "community_culture_recreation",
                         "police_station",
                         "fire_station",
-                        "transit_stop"
+                        "transit_stop",
+                        "lpugs"
                       ],
                       "type": "string"
                     },
@@ -5938,7 +6169,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Compute a scenario's composite indicators and write each one's index to Reimagina's element_state_indicator_value as composite_<name> (composite_ambient_environment, composite_built_environment, composite_community_culture_recreation, composite_cycling_infrastructure, composite_daily_services, composite_economic_development, composite_employment, composite_health_education_care, composite_index, composite_mobility_transport, composite_parks, composite_public_transport, composite_safety, composite_social_infrastructure, composite_street_lighting, composite_walkability), on blocks, under the same rules as reimagina_scenario_indicators. Elements outside the composites' boundary get none. Other indicators are not touched. Their indicator_catalog and indicator_input rows are registered from the tree first, in the same transaction.",
+      "description": "Compute a scenario's composite indicators and write each one's index to Reimagina's element_state_indicator_value as composite_<name> (composite_ambient_environment, composite_built_environment, composite_community_culture_recreation, composite_cycling_infrastructure, composite_daily_services, composite_economic_development, composite_employment, composite_health_education_care, composite_index, composite_large_public_green_space, composite_mobility_transport, composite_parks, composite_public_transport, composite_safety, composite_social_infrastructure, composite_street_lighting, composite_walkability), on blocks, under the same rules as reimagina_scenario_indicators. Elements outside the composites' boundary get none. Other indicators are not touched. Their indicator_catalog and indicator_input rows are registered from the tree first, in the same transaction.",
       "inputs": {
         "composite_ambient_environment": {
           "arguments": {},
@@ -5975,6 +6206,10 @@
         "composite_index": {
           "arguments": {},
           "output": "reimagina_composite_index_blocks"
+        },
+        "composite_large_public_green_space": {
+          "arguments": {},
+          "output": "reimagina_composite_large_public_green_space_blocks"
         },
         "composite_mobility_transport": {
           "arguments": {},
@@ -6609,7 +6844,8 @@
                         "community_culture_recreation",
                         "police_station",
                         "fire_station",
-                        "transit_stop"
+                        "transit_stop",
+                        "lpugs"
                       ],
                       "type": "string"
                     },
