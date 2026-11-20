@@ -135,6 +135,28 @@ def entries(geometry: gpd.GeoSeries, network: StreetNetwork) -> pd.DataFrame:
     return frame[keep].drop(columns="outline").reset_index(drop=True)
 
 
+def lot_entries(
+    lots: gpd.GeoDataFrame, network: StreetNetwork, crs: str
+) -> pd.DataFrame:
+    return entries(
+        gpd.GeoSeries(lots.geometry.to_numpy(), crs=lots.crs).to_crs(crs), network
+    )
+
+
+def owned_by(table: pd.DataFrame, lots: gpd.GeoDataFrame) -> pd.DataFrame:
+    """``entries`` of ``lots`` from ``table``, entries keyed by lot ``id``
+    (reimagina_lot_entries): ``owner`` is the lot's position in ``lots``."""
+    owner = pd.Index(lots["id"]).get_indexer(table["id"])
+    found = owner >= 0
+    return (
+        table[found]
+        .drop(columns="id")
+        .assign(owner=owner[found])
+        .reindex(columns=["owner", "segment", "along_start", "along_end", "offset"])
+        .reset_index(drop=True)
+    )
+
+
 def _from_destinations(
     network: StreetNetwork, destinations: pd.DataFrame, max_distance: float
 ) -> np.ndarray:
@@ -213,13 +235,14 @@ def nearest_distances(
     network: StreetNetwork,
     crs: str,
     max_distance: float,
+    origins: pd.DataFrame | None = None,
 ) -> dict[str, np.ndarray]:
     """``{poi_type: metres}``: per lot, in order, the walk over ``network`` (in
     ``crs``) to the nearest POI of the type; NaN without geometry or without one
-    within ``max_distance``. The lots' entries are built once."""
-    origins = entries(
-        gpd.GeoSeries(lots.geometry.to_numpy(), crs=lots.crs).to_crs(crs), network
-    )
+    within ``max_distance``. ``origins`` is ``lot_entries`` of ``lots``, built here
+    when omitted."""
+    if origins is None:
+        origins = lot_entries(lots, network, crs)
     median_offset = origins.groupby("owner")["offset"].min().median()
     if median_offset > MAX_MEDIAN_OFFSET_M:
         msg = (

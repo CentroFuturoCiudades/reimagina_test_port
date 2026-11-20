@@ -10,7 +10,9 @@ from shapely.geometry import Point, box
 
 from reimagina_test_port.common import vocabulary
 from reimagina_test_port.indicators.population_access.access_calculation import (
+    lot_entries,
     nearest_distances,
+    owned_by,
     street_network,
 )
 from reimagina_test_port.indicators.population_access.nodes import KEYS
@@ -116,6 +118,31 @@ def test_polygons_are_entered_by_their_nearest_side():
     # To x=400, up the side street to the park's corner (y=50), 5 m in; the third
     # lot reaches the west side at y=210, its nearest outline point every 20 m.
     np.testing.assert_allclose(distance, [5 + 340 + 50 + 5, 5 + 230 + 50 + 5, 95])
+
+
+def test_shared_entries_follow_the_lot_ids():
+    lots = LOTS.assign(id=["a", "b", "c"])
+    network = street()
+    origins = lot_entries(lots, network, CRS)
+    # As reimagina_lot_entries hands them over: keyed by id, in another order.
+    table = (
+        origins.assign(id=lots["id"].to_numpy()[origins["owner"]])
+        .drop(columns="owner")
+        .iloc[::-1]
+    )
+    expected = nearest_distances(lots, {"x": POINT}, network, CRS, 10_000)["x"]
+    shared = nearest_distances(
+        lots, {"x": POINT}, network, CRS, 10_000, owned_by(table, lots)
+    )["x"]
+    np.testing.assert_array_equal(shared, expected)
+    # Lots in another order, one of them missing: each keeps its own entries.
+    some = lots.iloc[[2, 0]].reset_index(drop=True)
+    np.testing.assert_array_equal(
+        nearest_distances(
+            some, {"x": POINT}, network, CRS, 10_000, owned_by(table, some)
+        )["x"],
+        expected[[2, 0]],
+    )
 
 
 def test_network_in_another_crs_fails():
