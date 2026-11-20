@@ -407,6 +407,19 @@ of parks only, from `esp_pub`'s `Sup_M2`. It replaces the copy of that
 notebook's output exe_reimagina read (`pois_accesibilidad/pois_02002`), which
 also lost names and areas.
 
+Tlalpan's, `sigcdmx`, reads three SIG CDMX layers
+(`az://cleaned/por_estado/09_ciudad_de_mexico/012_tlalpan/sigcdmx/equipamiento/`:
+the GeoJSONs of exe_reimagina's `0_2_sigcdmx_data_prep.ipynb` in UTF-8,
+`areas_verdes` cut to Tlalpan) with that notebook's rules: `areas_verdes` by
+`categoria` (parks, gardens and squares: `park`, with `superficie` as
+`area_m2`), `servicios` by `TIPO` (parks, `sports`, `cultural_center`, `museum`,
+health and upper secondary) and `escuelas` by `nivel` (`daycare`, `preschool`,
+primary, secondary). The same `Layer` and `Rule` serve both normalizers; a
+layer names the column its rules match and its id column, and polygons become a
+point on them. Tlalpan takes `park`, `sports` and `cultural_center` from it, as
+Mexicali from IMIP: 142 parks (22 of `servicios`' 76 lie inside an
+`areas_verdes` one), 40 sports and 20 culture places; the DENUE has no parks.
+
 DENUE records are keyed `denue:<id>`, with `category`, `scian_code`
 (`codigo_act`), `num_workers` (the `per_ocu` range's midpoint; the top range, its
 floor; required, so an unknown range fails) and `name` (`nom_estab`);
