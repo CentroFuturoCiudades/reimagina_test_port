@@ -30,6 +30,8 @@ AMENITY_ATTRIBUTES = {
     "capacity": "number",
     "name": "text",
     "area_m2": "number",
+    # A park's: its lot's (baseline.park_tree_coverage); for the lpugs type.
+    "tree_coverage": "number",
 }
 ESTABLISHMENT_ATTRIBUTES = {
     "category": "text",
@@ -212,6 +214,7 @@ def amenity_table(
     from_denue.insert(0, "key", "denue:" + denue["id"].astype(str).str.strip())
     attributes = pd.concat([from_file, from_denue], ignore_index=True)
     attributes["capacity"] = float(city.default_capacity)
+    attributes["tree_coverage"] = float("nan")
     attributes = attributes[["key", *AMENITY_ATTRIBUTES]]
     points = gpd.GeoDataFrame(
         geometry=pd.concat(

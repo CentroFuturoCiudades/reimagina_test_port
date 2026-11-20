@@ -1142,3 +1142,23 @@ def test_cities_loads_every_yaml(tmp_path):
     write_city(tmp_path, "tijuana", rename)
     assert list(cities.load(tmp_path)) == ["tijuana"]
     assert cities.load(tmp_path)["tijuana"].lots_uri == CITIES["mexicali"].lots_uri
+
+
+def test_parks_take_their_lots_tree_coverage():
+    lots = gpd.GeoDataFrame(
+        {"id": ["a", "b"], "tree_coverage": [25.0, np.nan]},
+        geometry=[box(0, 0, 1, 1), box(2, 0, 3, 1)],
+        crs=4326,
+    )
+    amenities = gpd.GeoDataFrame(
+        {
+            "parent_id": ["a", "b", "a"],
+            "category": ["park", "park", "library"],
+        },
+        geometry=[Point(0.5, 0.5), Point(2.5, 0.5), Point(0.5, 0.5)],
+        crs=4326,
+    )
+    coverage = baseline.park_tree_coverage(amenities, lots)["tree_coverage"]
+    # A park takes its lot's; a lot without one, or another amenity, none.
+    assert coverage.iloc[0] == 25.0
+    assert coverage.iloc[1:].isna().all()

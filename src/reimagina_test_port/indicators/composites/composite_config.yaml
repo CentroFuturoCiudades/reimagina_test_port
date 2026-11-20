@@ -69,7 +69,8 @@
 #   every diversity, over ee468973 rewritten with them (19 November 2026); reachable
 #   jobs and job diversity, over ee468973 too (20 November 2026); public transport,
 #   over ee468973 with its stops (ingestion/transit.py) added in memory, before they
-#   were loaded (20 November 2026).
+#   were loaded (20 November 2026); large public green space, likewise with its 5
+#   parks (21 November 2026).
 #   Police and fire stations keep the ULI's until there are stations.
 # - The snapshot plugin has no land use or streets (they read the scenario from
 #   the database): its tree leaves them out, and the composites left empty.
@@ -432,6 +433,33 @@ trees:
                 method: ampi
                 reference: 0.125
                 goalposts: {min: 0, max: 1}
+          # Accesibilidad a grandes espacios públicos abiertos: ambient
+          # environment, built environment.
+          - name: large_public_green_space
+            label: Accesibilidad a grandes espacios públicos abiertos
+            phenomenon: positive
+            weight: 0.5
+            children:
+              # ULI lpugs: access to a large public green space within 500 m.
+              # GHSCI's is public open space of at least 1 ha with mean NDVI of
+              # at least 0.2; here a park of at least 1 ha whose lot has at least
+              # 20% tree canopy (the lpugs type of poi_catalog).
+              - name: lpugs_500m
+                source: population_access
+                variable: distance_m_lpugs
+                transform: {steps: [[500, 1]], beyond: 0}
+                polarity: positive
+                method: ampi
+                reference: 0.009
+                goalposts: {min: 0, max: 1}
+              # Percentage of population with access within 500 m.
+              - name: lpugs_500m_pct
+                source: population_access
+                variable: share_with_access_lpugs
+                polarity: positive
+                method: ampi
+                reference: 0.009
+                goalposts: {min: 0, max: 1}
 
       # -- Built environment ----------------------------------------------------
       - name: built_environment
@@ -440,6 +468,7 @@ trees:
         min_valid: 1
         children:
           - {ref: parks, weight: 0.5}
+          - {ref: large_public_green_space, weight: 0.5}
           - {ref: walkability, weight: 0.3333}
           - {ref: cycling_infrastructure, weight: 0.3333}
           - {ref: street_lighting, weight: 0.3333}

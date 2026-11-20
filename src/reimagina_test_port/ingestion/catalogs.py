@@ -51,6 +51,7 @@ ATTRIBUTES = {
     ("amenity", "category"): ("enum", AMENITY_CATEGORIES, None),
     ("amenity", "num_workers"): ("integer", None, None),
     ("amenity", "area_m2"): ("number", None, "m2"),
+    ("amenity", "tree_coverage"): ("number", None, "%"),
     ("establishment", "category"): ("enum", ESTABLISHMENT_CATEGORIES, None),
     ("establishment", "num_workers"): ("integer", None, None),
     ("right_of_way", "bands.use"): ("json", None, None),
