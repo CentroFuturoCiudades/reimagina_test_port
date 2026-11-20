@@ -111,6 +111,21 @@ sources:
     uri: az://sandbox/projects/EXE/cleaned/canopy_height/meta_canopy_height_02002.tif
     params:
       min_height_m: 2
+  # Public transport stops (ingestion/transit.py), as the ULI's pt_any
+  # (MX_Mexicali_2025_ULI.yml), pooled with OpenStreetMap's stops
+  # (osm_transit_stops): of IMIP's equipment category transp, only the local bus
+  # terminals (the ULI also took parking lots, depots and border crossings).
+  transit_stops:
+    uri: az://cleaned/por_estado/02_baja_california/002_mexicali/imip/equipamiento/transp.geoparquet
+    params:
+      source_name: IMIP
+      column: TIPO
+      include: ["TERMINALES LOCALES DE AUTOBUSES"]
+      name_column: NOMBRE
+  # OpenStreetMap's stops by GHSCI's pt_any tags, from Geofabrik's Mexico extract
+  # of 15 August 2026 (the ULI's), by scripts/osm_transit.py.
+  osm_transit_stops:
+    uri: az://sandbox/projects/EXE/cleaned/transporte/osm_transit_02002.parquet
 
 params:
   lots:   # exe_reimagina cities/mexicali.toml values

@@ -361,8 +361,26 @@ def write_sources(root: Path) -> dict[str, str]:
         dtype="uint8", crs=CRS, transform=from_origin(-10, 50, 1, 1),
     ) as raster:  # fmt: skip
         raster.write(canopy, 1)
+    # One IMIP local bus terminal and one freight terminal, left out; no OSM
+    # extract.
+    gpd.GeoDataFrame(
+        {
+            "OBJECTID": [1, 2],
+            "TIPO": [
+                "TERMINALES LOCALES DE AUTOBUSES",
+                "TERMINAL INTERIOR DE CARGA (CENTRAL DE SERVICIOS DE CARGA)",
+            ],
+            "NOMBRE": ["AUTOTRANSPORTES URBANOS", "TRANSPORTES HARF"],
+        },
+        geometry=[Point(5, 45), Point(70, 45)],
+        crs=CRS,
+    ).to_parquet(root / "transp.geoparquet")
     return {
         "tree_canopy": TreeCanopy(str(root / "canopy.tif")),
+        "transit_stops": replace(
+            CITIES["mexicali"].transit_stops, uri=str(root / "transp.geoparquet")
+        ),
+        "osm_transit_uri": None,
         "lots_uri": str(root / "lots" / "PREDIOS.shp"),
         "normativa_uri": str(root / "normativa.geojson"),
         "existing_land_use_uri": str(root / "existing_land_use.geojson"),
@@ -976,6 +994,10 @@ def test_baseline_metric(city, monkeypatch):
     assert len(tables["reimagina_baseline_elements_amenities"]) == 2
     assert len(tables["reimagina_baseline_elements_establishments"]) == 3
     assert len(tables["reimagina_baseline_elements_right_of_way"]) == 3
+    stops = tables["reimagina_baseline_elements_transit_stops"]
+    assert stops[["source_record_ref", "element_type"]].values.tolist() == [
+        ["IMIP:1", "bus_stop"]
+    ]
 
 
 # ------------------------------------------------------------------ city YAMLs
@@ -1011,6 +1033,10 @@ def test_mexicali_yaml():
         "imip/ciclovia_exist/ciclovia_exist.geojson"
     )
     assert city.bike_lanes.type_column == "TIPO"
+    # Transit stops: IMIP's local bus terminals, pooled with OpenStreetMap's.
+    assert city.transit_stops.uri.endswith("imip/equipamiento/transp.geoparquet")
+    assert city.transit_stops.include == ("TERMINALES LOCALES DE AUTOBUSES",)
+    assert city.osm_transit_uri.endswith("osm_transit_02002.parquet")
 
 
 def test_streets_are_optional(tmp_path):
@@ -1038,6 +1064,9 @@ def test_tlalpan_yaml():
     assert city.amenities_normalizer == "sigcdmx"
     assert city.amenity_file_categories == ("park", "sports", "cultural_center")
     assert city.tree_canopy.uri.endswith("meta_canopy_height_09.tif")
+    # No stops of its own: OpenStreetMap's alone.
+    assert city.transit_stops is None
+    assert city.osm_transit_uri.endswith("osm_transit_09012.parquet")
 
 
 def test_amenities_are_optional(tmp_path):

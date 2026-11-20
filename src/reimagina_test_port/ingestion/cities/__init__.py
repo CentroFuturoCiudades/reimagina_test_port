@@ -115,6 +115,22 @@ class TreeCanopy:
 
 
 @dataclass(frozen=True)
+class TransitStops:
+    """The city's own public transport stops (``sources.transit_stops``,
+    ingestion/transit.py)."""
+
+    uri: str
+    # The layer's source name, its id column, the column of its kind, the kinds
+    # kept (all when empty) and those taken as stations; its name column.
+    source_name: str = "IMIP"
+    id_column: str = "OBJECTID"
+    column: str = "TIPO"
+    include: tuple[str, ...] = ()
+    stations: tuple[str, ...] = ()
+    name_column: str | None = None
+
+
+@dataclass(frozen=True)
 class CityPreset:
     name: str
     # Lot id city key: uuid5(NS, f"{key}:lot:{cadastral key}").
@@ -175,6 +191,11 @@ class CityPreset:
     bike_lanes: BikeLanes | None = None
     # tree_coverage of lots and rights of way. None: not loaded.
     tree_canopy: TreeCanopy | None = None
+    # bus_stop and station elements (ingestion/transit.py): the city's own stops
+    # and OpenStreetMap's (sources.osm_transit_stops, scripts/osm_transit.py's
+    # extract). None: not loaded.
+    transit_stops: TransitStops | None = None
+    osm_transit_uri: str | None = None
 
     @property
     def cve_code(self) -> str:
@@ -347,6 +368,24 @@ def from_yaml(path: Path) -> CityPreset:
             min_height_m=float(options.optional("min_height_m", 2.0)),
         )
         options.done()
+    transit = None
+    if "transit_stops" in sources.values:
+        transit_uri, options = source("transit_stops")
+        name_column = options.optional("name_column", None)
+        transit = TransitStops(
+            transit_uri,
+            source_name=str(options.optional("source_name", "IMIP")),
+            id_column=str(options.optional("id_column", "OBJECTID")),
+            column=str(options.optional("column", "TIPO")),
+            include=tuple(map(str, options.optional("include", []))),
+            stations=tuple(map(str, options.optional("stations", []))),
+            name_column=None if name_column is None else str(name_column),
+        )
+        options.done()
+    osm_transit_uri = None
+    if "osm_transit_stops" in sources.values:
+        osm_transit_uri, options = source("osm_transit_stops")
+        options.done()
     if (lighting or bike_lanes) and network is None:
         msg = f"{path.name}: street_lighting and bike_lanes need sources.streets"
         raise CityConfigError(msg)
@@ -419,6 +458,8 @@ def from_yaml(path: Path) -> CityPreset:
         street_lighting=lighting,
         bike_lanes=bike_lanes,
         tree_canopy=canopy,
+        transit_stops=transit,
+        osm_transit_uri=osm_transit_uri,
         lot_max_distance_m=float(
             points.optional("lot_max_distance_m", default("lot_max_distance_m"))
         ),

@@ -76,6 +76,7 @@ def create_plugin() -> PluginDefinition:
             scenario_nodes.scenario_write,
             ingestion_nodes.baseline_dataset,
             ingestion_nodes.baseline_streets,
+            ingestion_nodes.baseline_transit_stops,
             ingestion_nodes.baseline_elements,
             ingestion_nodes.baseline_write,
             ingestion_nodes.street_network,

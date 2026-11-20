@@ -36,6 +36,7 @@ DESTINATION_TYPES = (
     "community_culture_recreation",
     "police_station",
     "fire_station",
+    "transit_stop",
 )
 
 # Metros de cobertura de cada tipo para las corridas sin base (snapshot): los
@@ -54,6 +55,7 @@ DESTINATION_COVERAGE_M = {
     "community_culture_recreation": 300,
     "police_station": 2_000,
     "fire_station": 3_000,
+    "transit_stop": 300,
 }
 
 
@@ -89,6 +91,7 @@ DESTINATION_ACCESSIBILITY_PARAMS = {
     },
     "police_station": {"radius": 2_000, "time": 25, "weight": _EQUAL_WEIGHT},
     "fire_station": {"radius": 3_000, "time": 40, "weight": _EQUAL_WEIGHT},
+    "transit_stop": {"radius": 500, "time": 5, "weight": _EQUAL_WEIGHT},
 }
 
 

@@ -61,6 +61,11 @@ sources:
     uri: az://sandbox/projects/EXE/cleaned/canopy_height/meta_canopy_height_09.tif
     params:
       min_height_m: 2
+  # Public transport stops (ingestion/transit.py), as the ULI's pt_any: no layer
+  # of its own, OpenStreetMap's alone, by GHSCI's tags, from Geofabrik's Mexico
+  # extract of 15 August 2026, by scripts/osm_transit.py.
+  osm_transit_stops:
+    uri: az://sandbox/projects/EXE/cleaned/transporte/osm_transit_09012.parquet
 
 params:
   lots:   # exe_reimagina cities/tlalpan.toml values

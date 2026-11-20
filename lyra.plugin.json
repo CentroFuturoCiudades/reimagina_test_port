@@ -156,6 +156,13 @@
               "unit": "score"
             },
             {
+              "description": "Gravity score for transit_stop, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_transit_stop",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
               "description": "Walking minutes to the nearest public_space.",
               "name": "distance_to_public_space",
               "nullable": true,
@@ -242,6 +249,13 @@
             {
               "description": "Walking minutes to the nearest fire_station.",
               "name": "distance_to_fire_station",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest transit_stop.",
+              "name": "distance_to_transit_stop",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -379,6 +393,13 @@
               "unit": "score"
             },
             {
+              "description": "Gravity score for transit_stop, as a 0-1 percentile rank among the run's blocks.",
+              "name": "accessibility_transit_stop",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
               "description": "Walking minutes to the nearest public_space.",
               "name": "distance_to_public_space",
               "nullable": true,
@@ -465,6 +486,13 @@
             {
               "description": "Walking minutes to the nearest fire_station.",
               "name": "distance_to_fire_station",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Walking minutes to the nearest transit_stop.",
+              "name": "distance_to_transit_stop",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -839,7 +867,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Return a city's baseline lots, blocks, amenities, establishments and streets as built from the data lake (reimagina_baseline, reimagina_baseline_streets). Nothing is written to Reimagina's database.",
+      "description": "Return a city's baseline lots, blocks, amenities, establishments, streets and transit stops as built from the data lake (reimagina_baseline, reimagina_baseline_streets, reimagina_baseline_transit_stops). Nothing is written to Reimagina's database.",
       "inputs": {
         "amenities": {
           "arguments": {},
@@ -860,6 +888,10 @@
         "right_of_way": {
           "arguments": {},
           "output": "reimagina_baseline_right_of_way"
+        },
+        "transit_stops": {
+          "arguments": {},
+          "output": "reimagina_baseline_transit_stops"
         }
       },
       "name": "reimagina_baseline_elements",
@@ -1201,6 +1233,54 @@
           ],
           "geometry": "geometry",
           "kind": "table"
+        },
+        "reimagina_baseline_elements_transit_stops": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "bus_stop or station.",
+              "name": "element_type",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Where the stop comes from: IMIP, OSM.",
+              "name": "source",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "The stop's name, when its source has one.",
+              "name": "name",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
         }
       },
       "request_schema": {
@@ -1352,7 +1432,100 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Build a city's baseline from the data lake (reimagina_baseline) and write it into an existing baseline scenario of a project: elements, state and attribute values of blocks, lots, amenities, establishments and streets (right_of_way, from reimagina_baseline_streets; left out when the city has none), in one transaction. Existing elements are reused unchanged; running it again replaces the scenario's rows. Missing attribute_catalog and indicator_catalog rows are added first; existing ones are left as they are and must be active. Compute indicators afterwards with reimagina_scenario_write.",
+      "description": "A city's public transport stops as bus_stop and station elements, as the ULI's pt_any: its own layer (sources.transit_stops; Mexicali: IMIP's equipment category transp without the freight terminals) pooled with OpenStreetMap's stops by GHSCI's tags (sources.osm_transit_stops, extracted by scripts/osm_transit.py), each at its own point. Empty without either source.",
+      "inputs": {},
+      "name": "reimagina_baseline_transit_stops",
+      "outputs": {
+        "reimagina_baseline_transit_stops": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "bus_stop or station.",
+              "name": "element_type",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Where the stop comes from: IMIP, OSM.",
+              "name": "source",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "The stop's name, when its source has one.",
+              "name": "name",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "BaselineParameters": {
+            "additionalProperties": false,
+            "description": "City whose baseline is built from the data lake.",
+            "properties": {
+              "city": {
+                "description": "City preset (ingestion/cities/<city>.yaml).",
+                "enum": [
+                  "mexicali",
+                  "tlalpan"
+                ],
+                "title": "City",
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "title": "BaselineParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/BaselineParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_baseline_transit_stops_request",
+        "type": "object"
+      },
+      "role": "dataset",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "Build a city's baseline from the data lake (reimagina_baseline) and write it into an existing baseline scenario of a project: elements, state and attribute values of blocks, lots, amenities, establishments, streets (right_of_way, from reimagina_baseline_streets; left out when the city has none) and transit stops (bus_stop and station, from reimagina_baseline_transit_stops; left out when the city has none), in one transaction. Existing elements are reused unchanged; running it again replaces the scenario's rows. Missing attribute_catalog and indicator_catalog rows are added first; existing ones are left as they are and must be active. Compute indicators afterwards with reimagina_scenario_write.",
       "inputs": {
         "amenities": {
           "arguments": {},
@@ -1373,6 +1546,10 @@
         "right_of_way": {
           "arguments": {},
           "output": "reimagina_baseline_right_of_way"
+        },
+        "transit_stops": {
+          "arguments": {},
+          "output": "reimagina_baseline_transit_stops"
         }
       },
       "name": "reimagina_baseline_write",
@@ -1380,7 +1557,7 @@
         "reimagina_baseline_write": {
           "columns": [
             {
-              "description": "Blocks, lots, amenities, establishments and streets written.",
+              "description": "Blocks, lots, amenities, establishments, streets and stops written.",
               "name": "elements",
               "nullable": false,
               "type": "integer",
@@ -1452,6 +1629,20 @@
             {
               "description": "Rights_of_way in the scenario after the write.",
               "name": "rights_of_way",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Bus_stops in the scenario after the write.",
+              "name": "bus_stops",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Stations in the scenario after the write.",
+              "name": "stations",
               "nullable": false,
               "type": "integer",
               "unit": "count"
@@ -2981,7 +3172,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Composite indicator mobility_transport per block: the weighted Mazziotta-Pareto index (positive) of daily_services, walkability, cycling_infrastructure, street_lighting, each normalised (AMPI or MPI) as composite_config.yaml says.",
+      "description": "Composite indicator mobility_transport per block: the weighted Mazziotta-Pareto index (positive) of daily_services, walkability, cycling_infrastructure, street_lighting, public_transport, each normalised (AMPI or MPI) as composite_config.yaml says.",
       "inputs": {
         "cycling_infrastructure": {
           "arguments": {},
@@ -2990,6 +3181,10 @@
         "daily_services": {
           "arguments": {},
           "output": "reimagina_composite_daily_services_blocks"
+        },
+        "public_transport": {
+          "arguments": {},
+          "output": "reimagina_composite_public_transport_blocks"
         },
         "street_lighting": {
           "arguments": {},
@@ -3049,6 +3244,13 @@
             {
               "description": "Composite index of street_lighting, around 100.",
               "name": "street_lighting",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Composite index of public_transport, around 100.",
+              "name": "public_transport",
               "nullable": true,
               "type": "number",
               "unit": "score"
@@ -3233,6 +3435,122 @@
           "parameters"
         ],
         "title": "reimagina_composite_parks_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
+      "description": "Composite indicator public_transport per block: the weighted Mazziotta-Pareto index (positive) of pt_any_300m, pt_any_300m_pct, each normalised (AMPI or MPI) as composite_config.yaml says.",
+      "inputs": {
+        "population_access": {
+          "arguments": {},
+          "output": "reimagina_population_access_blocks"
+        }
+      },
+      "name": "reimagina_composite_public_transport",
+      "outputs": {
+        "reimagina_composite_public_transport_blocks": {
+          "columns": [
+            {
+              "description": "id",
+              "name": "id",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "parent id",
+              "name": "parent_id",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "source record ref",
+              "name": "source_record_ref",
+              "nullable": true,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "distance_m_transit_stop from population_access, normalised (ampi) around 100.",
+              "name": "pt_any_300m",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "share_with_access_transit_stop from population_access, normalised (ampi) around 100.",
+              "name": "pt_any_300m_pct",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Mazziotta-Pareto composite: the mean less its imbalance penalty (plus, if negative); null when fewer children than min_valid have a value.",
+              "name": "index",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Weighted mean of the children.",
+              "name": "mean",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Imbalance penalty: SD \u00d7 SD / mean.",
+              "name": "penalty",
+              "nullable": true,
+              "type": "number",
+              "unit": "score"
+            },
+            {
+              "description": "Children with a value.",
+              "name": "n",
+              "nullable": true,
+              "type": "integer",
+              "unit": "count"
+            }
+          ],
+          "geometry": "geometry",
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "ScenarioParameters": {
+            "additionalProperties": false,
+            "description": "Select a Reimagina scenario; forks fall back to their baseline.",
+            "properties": {
+              "scenario_id": {
+                "description": "Reimagina scenario UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenario_id"
+            ],
+            "title": "ScenarioParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/ScenarioParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_composite_public_transport_request",
         "type": "object"
       },
       "role": "metric",
@@ -4229,6 +4547,13 @@
               "nullable": true,
               "type": "number",
               "unit": "m"
+            },
+            {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_transit_stop",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
             }
           ],
           "geometry": null,
@@ -4258,7 +4583,8 @@
                         "care",
                         "community_culture_recreation",
                         "police_station",
-                        "fire_station"
+                        "fire_station",
+                        "transit_stop"
                       ],
                       "type": "string"
                     },
@@ -4654,6 +4980,13 @@
               "unit": "m"
             },
             {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_transit_stop",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
               "description": "Residents of lots within the type's coverage distance of one of its POIs.",
               "name": "population_with_access_public_space",
               "nullable": true,
@@ -4745,6 +5078,13 @@
               "unit": "count"
             },
             {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_transit_stop",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
               "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
               "name": "share_with_access_public_space",
               "nullable": true,
@@ -4831,6 +5171,13 @@
             {
               "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
               "name": "share_with_access_fire_station",
+              "nullable": true,
+              "type": "number",
+              "unit": null
+            },
+            {
+              "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
+              "name": "share_with_access_transit_stop",
               "nullable": true,
               "type": "number",
               "unit": null
@@ -4954,6 +5301,13 @@
               "unit": "m"
             },
             {
+              "description": "Walk over the road network to the nearest POI of the type; for a block, its lots' average weighted by population. Null beyond 10 km or if not measured.",
+              "name": "distance_m_transit_stop",
+              "nullable": true,
+              "type": "number",
+              "unit": "m"
+            },
+            {
               "description": "Residents of lots within the type's coverage distance of one of its POIs.",
               "name": "population_with_access_public_space",
               "nullable": true,
@@ -5040,6 +5394,13 @@
             {
               "description": "Residents of lots within the type's coverage distance of one of its POIs.",
               "name": "population_with_access_fire_station",
+              "nullable": true,
+              "type": "number",
+              "unit": "count"
+            },
+            {
+              "description": "Residents of lots within the type's coverage distance of one of its POIs.",
+              "name": "population_with_access_transit_stop",
               "nullable": true,
               "type": "number",
               "unit": "count"
@@ -5134,6 +5495,13 @@
               "nullable": true,
               "type": "number",
               "unit": null
+            },
+            {
+              "description": "Share (0-1) of the residents within the type's coverage distance of one of its POIs ('Percentage of population with access'). Null without residents.",
+              "name": "share_with_access_transit_stop",
+              "nullable": true,
+              "type": "number",
+              "unit": null
             }
           ],
           "geometry": "geometry",
@@ -5163,7 +5531,8 @@
                         "care",
                         "community_culture_recreation",
                         "police_station",
-                        "fire_station"
+                        "fire_station",
+                        "transit_stop"
                       ],
                       "type": "string"
                     },
@@ -5569,7 +5938,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Compute a scenario's composite indicators and write each one's index to Reimagina's element_state_indicator_value as composite_<name> (composite_ambient_environment, composite_built_environment, composite_community_culture_recreation, composite_cycling_infrastructure, composite_daily_services, composite_economic_development, composite_employment, composite_health_education_care, composite_index, composite_mobility_transport, composite_parks, composite_safety, composite_social_infrastructure, composite_street_lighting, composite_walkability), on blocks, under the same rules as reimagina_scenario_indicators. Elements outside the composites' boundary get none. Other indicators are not touched. Their indicator_catalog and indicator_input rows are registered from the tree first, in the same transaction.",
+      "description": "Compute a scenario's composite indicators and write each one's index to Reimagina's element_state_indicator_value as composite_<name> (composite_ambient_environment, composite_built_environment, composite_community_culture_recreation, composite_cycling_infrastructure, composite_daily_services, composite_economic_development, composite_employment, composite_health_education_care, composite_index, composite_mobility_transport, composite_parks, composite_public_transport, composite_safety, composite_social_infrastructure, composite_street_lighting, composite_walkability), on blocks, under the same rules as reimagina_scenario_indicators. Elements outside the composites' boundary get none. Other indicators are not touched. Their indicator_catalog and indicator_input rows are registered from the tree first, in the same transaction.",
       "inputs": {
         "composite_ambient_environment": {
           "arguments": {},
@@ -5614,6 +5983,10 @@
         "composite_parks": {
           "arguments": {},
           "output": "reimagina_composite_parks_blocks"
+        },
+        "composite_public_transport": {
+          "arguments": {},
+          "output": "reimagina_composite_public_transport_blocks"
         },
         "composite_safety": {
           "arguments": {},
@@ -6235,7 +6608,8 @@
                         "care",
                         "community_culture_recreation",
                         "police_station",
-                        "fire_station"
+                        "fire_station",
+                        "transit_stop"
                       ],
                       "type": "string"
                     },

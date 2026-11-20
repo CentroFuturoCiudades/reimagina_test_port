@@ -100,8 +100,8 @@ _ATTRIBUTES_QUERY = sql.SQL(
 ).format(**_TABLES)
 
 # Accessibility destinations: the poi_catalog rules of the active types. read_pois
-# evaluates them (common.conditions) over the present amenity and establishment
-# elements, with the effective values of the keys the rules read.
+# evaluates them (common.conditions) over the present amenity, establishment and
+# transit stop elements, with the effective values of the keys the rules read.
 _POI_RULES_QUERY = sql.SQL(
     "SELECT poi_type, rule_criteria FROM {poi_catalog} "
     "WHERE status = 'active' ORDER BY poi_type"
@@ -235,14 +235,14 @@ def _matches(rules: dict[str, dict[str, Any]], element: dict[str, Any]) -> list[
 
 
 def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
-    """Present amenities and establishments, one row per poi_catalog type whose
-    rule they meet: id, poi_type, capacity, category, element_type, num_workers,
-    geometry."""
+    """Present amenities, establishments and transit stops (bus_stop, station),
+    one row per poi_catalog type whose rule they meet: id, poi_type, capacity,
+    category, element_type, num_workers, geometry."""
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
         params = {
             "scenario": scenario_id,
             "baseline": _baseline_id(cur, scenario_id),
-            "types": ["amenity", "establishment"],
+            "types": ["amenity", "establishment", "bus_stop", "station"],
         }
         rules = _destination_rules(cur)
         own: set[str] = set()
@@ -254,9 +254,9 @@ def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
                 logger.warning(
                     "%s reads its parent's %s", poi_type, sorted(parent_keys)
                 )
-        # category also gives the subcategory of the diversity sets, and
-        # num_workers the reachable jobs.
-        params["keys"] = sorted(own | {"category", "num_workers"})
+        # category also gives the subcategory of the diversity sets, num_workers
+        # the reachable jobs; a transit stop has no category, only its source.
+        params["keys"] = sorted(own | {"category", "num_workers", "source"})
         cur.execute(_POI_ELEMENTS_QUERY, params)
         elements = cur.fetchall()
         cur.execute(_POI_ATTRIBUTES_QUERY, params)

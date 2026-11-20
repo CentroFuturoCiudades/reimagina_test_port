@@ -67,7 +67,9 @@
 #   2026), the first baseline with it. The leaves whose destinations changed
 #   with the categories (fresh food, education, health, manufacturing) and
 #   every diversity, over ee468973 rewritten with them (19 November 2026); reachable
-#   jobs and job diversity, over ee468973 too (20 November 2026).
+#   jobs and job diversity, over ee468973 too (20 November 2026); public transport,
+#   over ee468973 with its stops (ingestion/transit.py) added in memory, before they
+#   were loaded (20 November 2026).
 #   Police and fire stations keep the ULI's until there are stations.
 # - The snapshot plugin has no land use or streets (they read the scenario from
 #   the database): its tree leaves them out, and the composites left empty.
@@ -325,6 +327,31 @@ trees:
           - {ref: walkability, weight: 0.3333}
           - {ref: cycling_infrastructure, weight: 0.3333}
           - {ref: street_lighting, weight: 0.3333}
+          # Acceso al transporte público: mobility and transport only.
+          - name: public_transport
+            label: Acceso al transporte público
+            phenomenon: positive
+            children:
+              # ULI public_transport (pt_any): a stop within 300 m. The stops are
+              # the transit_stop type's (ingestion/transit.py): IMIP's local bus
+              # terminals and OpenStreetMap's stops, 36 in Mexicali, so few blocks
+              # have one that close.
+              - name: pt_any_300m
+                source: population_access
+                variable: distance_m_transit_stop
+                transform: {soft_threshold: 300}
+                polarity: positive
+                method: ampi
+                reference: 0.013
+                goalposts: {min: 0, max: 1}
+              # Percentage of population with access within 300 m.
+              - name: pt_any_300m_pct
+                source: population_access
+                variable: share_with_access_transit_stop
+                polarity: positive
+                method: ampi
+                reference: 0.011
+                goalposts: {min: 0, max: 1}
 
       # -- Economic development -------------------------------------------------
       - name: economic_development
