@@ -129,7 +129,6 @@ def reachable(
 def lot_entries(
     lots: gpd.GeoDataFrame, network: StreetNetwork, crs: str
 ) -> pd.DataFrame:
-    """``entries`` of ``lots`` in ``crs``: the same for every set, so built once."""
     return entries(
         gpd.GeoSeries(lots.geometry.to_numpy(), crs=lots.crs).to_crs(crs), network
     )
