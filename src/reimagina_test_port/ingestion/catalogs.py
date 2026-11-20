@@ -26,6 +26,7 @@ from reimagina_test_port.indicators.population_access.nodes import (
     ACCESS_KEYS,
     DISTANCE_KEYS,
     DIVERSITY_KEYS,
+    REACHABLE_JOBS_KEY,
 )
 from reimagina_test_port.ingestion.crosswalk import (
     AMENITY_CATEGORIES,
@@ -90,6 +91,8 @@ INDICATORS = {
         key: (f"Diversidad de {key[10:]} a 500 m", None, "number", "diversity")
         for key in DIVERSITY_KEYS
     },
+    "diversity_jobs": ("Diversidad de empleos a 500 m", None, "number", "diversity"),
+    REACHABLE_JOBS_KEY: ("Empleos alcanzables a 500 m", None, "number", "diversity"),
     "net_residential_density": (
         "Densidad residencial neta",
         "viv/ha",

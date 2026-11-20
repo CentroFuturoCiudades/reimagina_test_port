@@ -339,6 +339,7 @@ def seed_catalog(conn) -> None:
         *accessibility_nodes.SCORE_KEYS,
         *population_access_nodes.KEYS,
         *population_access_nodes.DIVERSITY_KEYS,
+        population_access_nodes.REACHABLE_JOBS_KEY,
         *land_use_calculation.KEYS,
         *streets_calculation.KEYS,
     ]
@@ -476,6 +477,13 @@ def test_pois_fall_back_to_baseline(dsn):
     ]
     # Each row carries its element's category.
     assert baseline["category"].tolist() == ["health_center", "pharmacy", "pharmacy"]
+    # And its type; the seed has no num_workers, so they are missing.
+    assert baseline["element_type"].tolist() == [
+        "amenity",
+        "establishment",
+        "establishment",
+    ]
+    assert baseline["num_workers"].isna().all()
     assert baseline.crs == "EPSG:4326"
     # Fork: SHOP gains a park, the clinic is hidden by all-NULL rows and the
     # pharmacy is deleted. "park" (no outputs) and inactive types are ignored.
