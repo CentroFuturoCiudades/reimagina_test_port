@@ -1303,7 +1303,12 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch, offline_network):
             "FROM reimagina_urbano.attribute_catalog WHERE key = 'tree_coverage' "
             "ORDER BY 1"
         ).fetchall()
-    assert catalog == [("lot", "number", "%"), ("right_of_way", "number", "%")]
+    # A park's too (its lot's): the amenity has the key, as a percentage.
+    assert catalog == [
+        ("amenity", "number", "%"),
+        ("lot", "number", "%"),
+        ("right_of_way", "number", "%"),
+    ]
 
 
 # ------------------------------------------------------------------ street network
