@@ -110,12 +110,12 @@ CVEGEO = ["020020001001a007", "020020001001a008"]
 # IMIP layer -> its name column (None: esp_pub has none).
 IMIP_NAMES = {
     "edu_basica": "NOM_ESC", "edu_sup": "NOM_ESC", "med_sup": "NOM_ESC",
-    "deporte": "NOMBRE", "cult_rec": "NOMBRE", "esp_pub": None,
+    "deporte": "NOMBRE", "cult_rec": "NOMBRE", "esp_pub": None, "admon_pub": "NOMBRE",
 }  # fmt: skip
 
 
 def write_imip(folder: Path, **layers: tuple[list, list, list]) -> None:
-    """IMIP's six layers, empty unless given as (OBJECTID, TIPO, points)."""
+    """IMIP's seven layers, empty unless given as (OBJECTID, TIPO, points)."""
     folder.mkdir()
     for name, name_column in IMIP_NAMES.items():
         ids, tipos, geometry = layers.get(name, ([], [], []))
@@ -174,6 +174,10 @@ def test_imip_normalizer(tmp_path):
         esp_pub=([1, 2, 3], ["PARQUE URBANO", "GLORIETAS", "ESPACIO DEPORTIVO"],
                  [Point(0, 0), Point(1, 0), Point(2, 0)]),
         deporte=([9], ["UNIDAD DEPORTIVA"], [Point(0, 0)]),
+        admon_pub=([4, 5, 6],
+                   ["INSTALACIONES POLICIALES", "ESTACION DE BOMBEROS MUNICIPAL",
+                    "OFICINAS DE GOBIERNO"],
+                   [Point(i, 0) for i in range(3)]),
     )  # fmt: skip
     raw = raw_amenities.imip(tmp_path / "imip")
     raw_amenities.check(raw)
@@ -185,8 +189,12 @@ def test_imip_normalizer(tmp_path):
         "esp_pub:1": "park",
         "esp_pub:3": "sports",
         "deporte:9": "sports",
+        # The ULI's police and fire stations; other offices are left out.
+        "admon_pub:4": "police_station",
+        "admon_pub:5": "fire_station",
     }
     assert table.loc["edu_basica:1", "name"] == "edu_basica 1"
+    assert table.loc["admon_pub:4", "name"] == "admon_pub 4"
     assert table.loc["esp_pub:1", "area_m2"] == 1500
     assert pd.isna(table.loc["esp_pub:1", "name"])
     assert pd.isna(table.loc["deporte:9", "area_m2"])
@@ -1015,6 +1023,9 @@ def test_mexicali_yaml():
     assert city.floor_share_by_land_use["mixed_use"] == 80
     assert city.amenities_uri.endswith("imip/equipamiento")
     assert city.amenities_normalizer == "imip"
+    assert city.amenity_file_categories == (
+        "park", "sports", "cultural_center", "police_station", "fire_station",
+    )  # fmt: skip
     assert str(city.existing_land_use_uri).endswith(
         "uso_de_suelo/usos_de_suelo_finales.geojson"
     )
