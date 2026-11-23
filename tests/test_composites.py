@@ -447,7 +447,7 @@ def test_the_write_reads_every_composite():
     _, names = nodes.composite_outputs()
     assert {k: v.output for k, v in write.items()} == {
         f"composite_{name}": f"reimagina_composite_{name}_blocks" for name in names
-    }
+    } | {"calibration": "reimagina_scenario_composite_calibration"}
     assert "composites" in manifests["reimagina_scenario_write"].inputs
 
 

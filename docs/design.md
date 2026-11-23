@@ -212,6 +212,28 @@ keeping only the elements whose representative point lies inside, before
 normalising, so the others are in no output and no statistic. Without it, every
 element gets composites.
 
+A leaf's AMPI reference, compress stats and, for a count (no transform,
+goalposts other than 0-1), goalposts come from its project, not the YAML
+(`composites/calibration.py`). In the scenario graph every composite depends on
+`reimagina_composite_calibration`: on a baseline it computes them over the
+baseline's elements (inside the boundary), after its indicators: the reference
+is the transformed leaf's average, compress takes its mean, SD, minimum and
+maximum, and a count's max is the 99th percentile of the (compressed) leaf
+rounded up to 1, 2 or 5 × 10^k. `reimagina_scenario_composite_calibration`
+saves them as `<prefix>/<project_id>.json` (`REIMAGINA_CALIBRATION_PREFIX`, by
+default `az://sandbox/projects/EXE/cleaned/composite_calibration`), overwriting
+it, and points the baseline's `scenario_file` row of kind
+`composite_calibration` at it; `reimagina_scenario_composites` depends on it, so
+a failed upload fails the job. A fork reads its project's file and never
+computes one: B and C score against the same values (a baseline with forks is
+not recomputed). A fork of a project without one fails, rather than be scored
+against another city: run `reimagina_scenario_composite_calibration` on its
+baseline first. A leaf without a value on the baseline (no police station) is
+left missing in the project's composites, even where a fork gives it one, until
+the baseline has values; the tree and the weights are the YAML's for every
+project.
+The snapshot graph has no calibration: it uses the YAML's.
+
 `reimagina_scenario_composites` writes each composite's `index` as
 `composite_<name>` on the config's elements, through the writer below, and
 `reimagina_scenario_write` runs it with the other two writes. Elements outside

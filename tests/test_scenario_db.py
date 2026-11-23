@@ -4,7 +4,9 @@ REIMAGINA_TEST_DSN points to a server where the user may create databases; each
 test creates and drops its own. See docs/verification.md for the container.
 """
 
+import hashlib
 import importlib.util
+import json
 import logging
 import os
 from collections.abc import Iterator
@@ -22,10 +24,12 @@ from psycopg import conninfo, sql
 from shapely.geometry import LineString, box
 
 from reimagina_test_port import plugin
-from reimagina_test_port.common import schema
+from reimagina_test_port.common import lake, schema
 from reimagina_test_port.indicators.accessibility import model as accessibility
 from reimagina_test_port.indicators.accessibility import nodes as accessibility_nodes
+from reimagina_test_port.indicators.composites import calibration as calibrations
 from reimagina_test_port.indicators.composites import catalog as composite_catalog
+from reimagina_test_port.indicators.composites import composite_metric
 from reimagina_test_port.indicators.land_use import calculation as land_use_calculation
 from reimagina_test_port.indicators.population_access import (
     nodes as population_access_nodes,
@@ -145,6 +149,17 @@ CREATE TABLE element_state_indicator_value (
     updated_at timestamptz NOT NULL DEFAULT NOW(),
     PRIMARY KEY (scenario_id, element_id, indicator_id)
 );
+CREATE TABLE scenario_file (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    scenario_id uuid NOT NULL REFERENCES scenarios (id) ON DELETE CASCADE,
+    kind text NOT NULL,
+    uri text NOT NULL,
+    content_hash text,
+    job_run_id uuid REFERENCES job_run (id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT NOW(),
+    updated_at timestamptz NOT NULL DEFAULT NOW(),
+    UNIQUE (scenario_id, kind)
+);
 INSERT INTO attribute_catalog (element_type, key, value_type) VALUES
     ('lot', 'land_use', 'enum'), ('lot', 'cos', 'number'),
     ('lot', 'num_levels', 'integer'), ('lot', 'area', 'number'),
@@ -223,10 +238,12 @@ def network_uri(tmp_path) -> str:
 
 
 @pytest.fixture
-def dsn(monkeypatch, network_uri) -> Iterator[str]:
+def dsn(monkeypatch, network_uri, tmp_path) -> Iterator[str]:
     admin_dsn = os.environ.get("REIMAGINA_TEST_DSN")
     if not admin_dsn:
         pytest.skip("REIMAGINA_TEST_DSN is not set")
+    # A baseline's write saves its composite calibration: here, not the lake.
+    monkeypatch.setenv(calibrations.PREFIX_ENV, str(tmp_path / "calibration"))
     name = f"reimagina_test_{uuid4().hex[:12]}"
     with psycopg.connect(admin_dsn, autocommit=True) as conn:
         conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
@@ -868,6 +885,105 @@ def test_composites_register_their_catalog_rows(dsn):
     assert sorted(inputs) == sorted(composite_catalog.input_pairs())
     values = stored(dsn, BASELINE)
     assert any(key == "composite_index" for _, key in values)
+
+
+def calibration_table(scenario_id: str) -> pd.DataFrame:
+    runner = LocalRunner.from_definitions(
+        {"reimagina-test-port": plugin.create_plugin()}
+    )
+    name = composite_metric.CALIBRATION
+    return runner.run(name, {"parameters": {"scenario_id": scenario_id}})[name]
+
+
+def calibration_row(dsn: str, scenario_id: str):
+    with psycopg.connect(dsn) as conn:
+        return conn.execute(
+            "SELECT uri, content_hash, job_run_id::text "
+            "FROM reimagina_urbano.scenario_file "
+            "WHERE scenario_id = %s AND kind = 'composite_calibration'",
+            (scenario_id,),
+        ).fetchone()
+
+
+def test_a_baseline_saves_its_calibration_and_forks_read_it(dsn):
+    uri = calibrations.calibration_uri(PROJECT)
+    # Before the baseline has one, a fork fails: no scoring against another city.
+    for name in (composite_metric.CALIBRATION, "reimagina_scenario_composites"):
+        with pytest.raises(GraphExecutionError) as failure:
+            run_metric(name, FORK)
+        assert failure.value.node == composite_metric.CALIBRATION
+        assert isinstance(failure.value.__cause__, MetricInputError)
+        assert "no composite calibration" in str(failure.value.__cause__)
+    # A dry run saves nothing.
+    run_metric("reimagina_scenario_composites", BASELINE, dry_run=True)
+    assert calibration_row(dsn, BASELINE) is None and not Path(uri).exists()
+
+    job = str(uuid4())
+    with psycopg.connect(dsn) as conn:
+        conn.execute("INSERT INTO reimagina_urbano.job_run VALUES (%s)", (job,))
+    saved = run_metric(
+        "reimagina_scenario_composite_calibration", BASELINE, job_run_id=job
+    )
+    assert saved["saved"] and saved["uri"] == uri
+    text = Path(uri).read_text(encoding="utf-8")
+    document = json.loads(text)
+    assert document["project_id"] == PROJECT
+    assert document["baseline_scenario_id"] == BASELINE
+    assert len(document["leaves"]) == saved["leaves"] > 0
+    digest = hashlib.sha256(text.encode()).hexdigest()
+    assert calibration_row(dsn, BASELINE) == (uri, digest, job)
+    assert calibration_row(dsn, FORK) is None  # forks get no row of their own
+    fork = run_metric("reimagina_scenario_composite_calibration", FORK)
+    assert not fork["saved"] and fork["uri"] == uri
+
+    # The fork reads the project's file and never computes its own: a value
+    # changed in the file is the fork's.
+    leaf = next(iter(document["leaves"]))
+    document["leaves"][leaf]["reference"] = 12345.0
+    Path(uri).write_text(json.dumps(document), encoding="utf-8")
+    table = calibration_table(FORK)
+    assert set(table["origin"]) == {uri}
+    assert calibrations.from_table(table) == document["leaves"]
+    # Running the baseline again recomputes and overwrites it.
+    run_metric("reimagina_scenario_composite_calibration", BASELINE)
+    assert (
+        json.loads(Path(uri).read_text(encoding="utf-8"))["leaves"][leaf]["reference"]
+        != 12345.0
+    )
+
+
+def test_the_baseline_average_of_a_calibrated_leaf_scores_100(dsn):
+    table = calibration_table(BASELINE)
+    assert set(table["origin"]) == {calibrations.COMPUTED}
+    values = calibrations.from_table(table)
+    _, composites, _ = composite_metric.check_tree(composite_metric.load_config())
+    node, leaf = next(
+        (node, child)
+        for node in composites
+        for child in node["children"]
+        if child.get("name") in values and "transform" not in child
+        and not child.get("compress")
+    )  # fmt: skip
+    runner = LocalRunner.from_definitions(
+        {"reimagina-test-port": plugin.create_plugin()}
+    )
+    name = f"reimagina_composite_{node['name']}"
+    scores = runner.run(name, {"parameters": {"scenario_id": BASELINE}})[
+        f"{name}_blocks"
+    ][leaf["name"]]
+    assert scores.dropna().mean() == pytest.approx(100)
+
+
+def test_a_failed_calibration_upload_fails_the_composites_write(dsn, monkeypatch):
+    def fail(*args, **kwargs):
+        raise OSError("the lake is down")
+
+    monkeypatch.setattr(lake, "upload", fail)
+    with pytest.raises(GraphExecutionError) as failure:
+        run_metric("reimagina_scenario_composites", BASELINE)
+    assert failure.value.node == "reimagina_scenario_composite_calibration"
+    assert calibration_row(dsn, BASELINE) is None
+    assert not any(key.startswith("composite_") for _, key in stored(dsn, BASELINE))
 
 
 def test_write_checks_the_indicator_catalog(dsn):

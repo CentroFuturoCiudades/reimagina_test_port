@@ -3,7 +3,8 @@
 From reimagina-lyra ``ingestion/lake.py``. Authenticates with
 ``DefaultAzureCredential``: the worker's managed identity, or ``az login``
 locally. Local paths are accepted too. Everything reads, except ``upload`` (the
-street network's H5 and its OSM cache), which overwrites a file only when told to.
+street network's H5 and its OSM cache, a project's composite calibration), which
+overwrites a file only when told to.
 """
 
 import shutil
@@ -87,6 +88,14 @@ def upload(path: Path, uri: str, *, overwrite: bool = False) -> str:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, target)
     return uri
+
+
+def read_text(uri: str) -> str:
+    """A text file from the lake or a local path."""
+    if uri.startswith("az://"):
+        with filesystem().open(uri, "r", encoding="utf-8") as file:
+            return file.read()
+    return Path(uri).read_text(encoding="utf-8")
 
 
 def read_parquet(uri: str, columns: list[str]) -> pd.DataFrame:

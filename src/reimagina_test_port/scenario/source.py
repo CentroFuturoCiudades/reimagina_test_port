@@ -35,6 +35,7 @@ _TABLES = {
         "attribute_catalog",
         "element_state_attribute_value",
         "poi_catalog",
+        "scenario_file",
     )
 }
 
@@ -164,6 +165,25 @@ _ROAD_NETWORK_QUERY = sql.SQL(
 _BASELINE_QUERY = sql.SQL(
     "SELECT parent_scenario_id::text FROM {scenarios} "
     "WHERE id = %s::uuid AND deleted_at IS NULL"
+).format(**_TABLES)
+
+
+_PROJECT_QUERY = sql.SQL(
+    "SELECT project_id::text, parent_scenario_id::text FROM {scenarios} "
+    "WHERE id = %s::uuid AND deleted_at IS NULL"
+).format(**_TABLES)
+
+# A file of the scenario's project: its own row, else its project's baseline's.
+_PROJECT_FILE_QUERY = sql.SQL(
+    """
+    SELECT f.uri FROM {scenarios} s
+    JOIN {scenarios} b ON b.project_id = s.project_id AND b.deleted_at IS NULL
+         AND (b.id = s.id OR b.parent_scenario_id IS NULL)
+    JOIN {scenario_file} f ON f.scenario_id = b.id AND f.kind = %(kind)s
+    WHERE s.id = %(scenario)s::uuid AND s.deleted_at IS NULL
+    ORDER BY (b.id = s.id) DESC, f.updated_at DESC
+    LIMIT 1
+    """
 ).format(**_TABLES)
 
 
@@ -339,6 +359,27 @@ def read_road_network_uri(scenario_id: str) -> str | None:
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
         _baseline_id(cur, scenario_id)
         cur.execute(_ROAD_NETWORK_QUERY, (scenario_id,))
+        row = cur.fetchone()
+    return None if row is None else row[0]
+
+
+def read_project(scenario_id: str) -> tuple[str, str | None]:
+    """The scenario's project and its parent scenario (None: a baseline)."""
+    with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
+        cur.execute(_PROJECT_QUERY, (scenario_id,))
+        row = cur.fetchone()
+    if row is None:
+        msg = f"Scenario {scenario_id!r} does not exist."
+        raise ScenarioNotFoundError(msg)
+    return row[0], row[1]
+
+
+def read_project_file(scenario_id: str, kind: str) -> str | None:
+    """The URI of the scenario's ``kind`` file in scenario_file: its own, else
+    its project baseline's; None when neither has one."""
+    with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
+        _baseline_id(cur, scenario_id)
+        cur.execute(_PROJECT_FILE_QUERY, {"scenario": scenario_id, "kind": kind})
         row = cur.fetchone()
     return None if row is None else row[0]
 

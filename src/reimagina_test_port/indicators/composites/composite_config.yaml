@@ -35,6 +35,12 @@
 # Normalised scores sit around 100: AMPI puts the reference at 100 and moves 60
 # points across the goalposts; MPI puts the mean at 100 and 10 points per SD.
 #
+# A project's baseline replaces the references, the compress stats and the
+# goalposts of counts (no transform, goalposts other than 0-1) with its own, and
+# its forks read them (calibration.py, reimagina_composite_calibration); a fork
+# of a project without one fails, and a leaf without a value on the baseline is
+# left missing. The values below are only the snapshot graph's.
+#
 # The plugin registers each composite's composite_<name> key and its inputs in
 # indicator_catalog / indicator_input before writing (composites/catalog.py): a
 # composite added here needs no migration.
