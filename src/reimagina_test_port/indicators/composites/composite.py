@@ -11,6 +11,7 @@ indicators feed which composite is ``composite_config.yaml``;
     compress_outliers       pull >2 SD values toward 2-3 SD
     compression_parameters  stats for compress_outliers
     fixed_compression       compress's stats from a leaf, if it fixes them
+    transform_indicator     a leaf's transform
     normalize_indicators    one indicator -> normalised Series
     build_composite         normalised Series -> Mazziotta-Pareto composite
 """
@@ -90,6 +91,23 @@ def compress_outliers(values, mean, sd, minimum, maximum):
 # Indicator normalisation
 
 
+def transform_indicator(values, transform=None):
+    """A leaf's ``transform`` over its values (none: the values, as floats)."""
+    x = pd.to_numeric(values, errors="coerce").astype("float64")
+    if not transform:
+        return x
+    if "soft_threshold" in transform:
+        return soft_threshold(
+            x,
+            float(transform["soft_threshold"]),
+            float(transform.get("k", 5.0)),
+        )
+    if "steps" in transform:
+        steps = [[float(d), float(s)] for d, s in transform["steps"]]
+        return stepped_score(x, steps, float(transform.get("beyond", 0.0)))
+    raise ValueError("transform needs 'soft_threshold' or 'steps'.")
+
+
 def normalize_indicators(
     values,
     polarity="positive",
@@ -106,21 +124,7 @@ def normalize_indicators(
     ``compress`` is false, true (the stats of ``values`` themselves) or the stats
     to compress with, {mean, sd, minimum, maximum}: fixed, a scenario's extreme
     values don't change the others' scores."""
-    x = pd.to_numeric(values, errors="coerce").astype("float64")
-
-    if transform:
-        if "soft_threshold" in transform:
-            x = soft_threshold(
-                x,
-                float(transform["soft_threshold"]),
-                float(transform.get("k", 5.0)),
-            )
-        elif "steps" in transform:
-            steps = [[float(d), float(s)] for d, s in transform["steps"]]
-            x = stepped_score(x, steps, float(transform.get("beyond", 0.0)))
-        else:
-            raise ValueError("transform needs 'soft_threshold' or 'steps'.")
-
+    x = transform_indicator(values, transform)
     fixed = fixed_compression(compress)
     if fixed is not None:
         x = compress_outliers(x, **fixed)

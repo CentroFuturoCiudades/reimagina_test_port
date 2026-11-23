@@ -5,9 +5,12 @@ reimagina_scenario_indicators, reimagina_scenario_accessibility,
 reimagina_scenario_population_access, reimagina_scenario_poi_diversity,
 reimagina_scenario_land_use,
 reimagina_scenario_streets, reimagina_scenario_composites and
-reimagina_scenario_write."""
+reimagina_scenario_write; and reimagina_composite_calibration, the composites'
+project calibration, which reimagina_scenario_composite_calibration saves."""
 
+import hashlib
 import inspect
+import json
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -28,6 +31,7 @@ from lyra.sdk import (
 from lyra.sdk.errors import MetricInputError
 from pydantic import Field
 
+from reimagina_test_port.common import lake
 from reimagina_test_port.common.nodes import column, timed
 from reimagina_test_port.common.schema import (
     ATTRIBUTES,
@@ -544,6 +548,181 @@ def composite_values(tables: dict[str, gpd.GeoDataFrame]) -> pd.DataFrame:
     return result
 
 
+def composite_calibration():
+    """reimagina_composite_calibration: on a baseline, each leaf's reference,
+    compress stats and count goalposts over its elements (composites/
+    calibration.py); on a fork, its project's, read from the JSON the baseline's
+    scenario_file row points to, never computed. A fork whose project has none
+    fails: it would be scored against another city."""
+    from reimagina_test_port.indicators.composites import calibration as calibrations
+    from reimagina_test_port.indicators.composites.composite_metric import (
+        BOUNDARY,
+        CALIBRATION,
+        check_tree,
+        leaf_sources,
+        load_config,
+        tree_leaves,
+    )
+
+    element, composites, boundary = check_tree(load_config())
+    sources = leaf_sources(composites, element)
+    leaves = tree_leaves(composites)
+    inputs = sources | ({"boundary": Dependency(BOUNDARY)} if boundary else {})
+
+    def error(field: str, message: str) -> MetricInputError:
+        return MetricInputError(CALIBRATION, field, message)
+
+    def handler(**arguments: Any) -> pd.DataFrame:
+        scenario_id = arguments["parameters"].scenario_id
+        log = arguments["context"].logger
+        try:
+            _, parent = source.read_project(scenario_id)
+            if parent is None:
+                tables = {key: arguments[key] for key in sources}
+                with timed("composite calibration", log):
+                    values = calibrations.calibrate(
+                        leaves, tables, arguments.get("boundary")
+                    )
+                return calibrations.to_table(values, calibrations.COMPUTED)
+            uri = source.read_project_file(scenario_id, calibrations.KIND)
+        except source.ScenarioNotFoundError as exc:
+            raise error("parameters.scenario_id", str(exc)) from exc
+        if uri is None:
+            raise error(
+                "scenario_file",
+                f"The project of scenario {scenario_id} has no composite "
+                f"calibration (scenario_file kind {calibrations.KIND}): run "
+                "reimagina_scenario_composite_calibration on its baseline first.",
+            )
+        try:
+            values = calibrations.from_document(json.loads(lake.read_text(uri)))
+        except (OSError, ValueError, TypeError) as exc:
+            raise error("scenario_file", f"{uri}: {exc}") from exc
+        log.info("composite calibration: %s", uri)
+        return calibrations.to_table(values, uri)
+
+    # Lyra binds dependencies by argument name: one per source the leaves read.
+    handler.__signature__ = inspect.Signature(
+        [
+            inspect.Parameter(key, inspect.Parameter.KEYWORD_ONLY)
+            for key in ["parameters", *inputs, "context"]
+        ]
+    )
+    handler.__annotations__ = {"parameters": ScenarioParameters, "context": RunContext}
+    return metric(
+        name=CALIBRATION,
+        description=(
+            "The composites' calibration of a scenario's project: on a baseline, "
+            "each leaf's AMPI reference (its transformed average), compress stats "
+            "and, for counts, goalposts, over its "
+            f"{element}{' inside the boundary' if boundary else ''}; on a fork, "
+            "the baseline's, read from the JSON its scenario_file row "
+            f"(kind {calibrations.KIND}) points to; a fork whose project has "
+            "none fails."
+        ),
+        inputs=inputs,
+        outputs={CALIBRATION: calibrations.DECLARATION},
+    )(handler)
+
+
+CALIBRATION_WRITE_DECLARATION = TableOutput(
+    columns=[
+        TableColumn(
+            name="uri",
+            type="string",
+            unit=None,
+            description="The project's calibration JSON; missing without one.",
+        ),
+        TableColumn(
+            name="leaves", type="integer", unit=Unit.COUNT, description="Leaves set."
+        ),
+        TableColumn(
+            name="saved",
+            type="boolean",
+            unit=None,
+            description="Whether this run uploaded it and pointed scenario_file at it.",
+        ),
+        TableColumn(
+            name="dry_run",
+            type="boolean",
+            unit=None,
+            description="Whether nothing was uploaded or written.",
+        ),
+    ]
+)
+
+
+def composite_calibration_write():
+    """reimagina_scenario_composite_calibration: a baseline's calibration saved
+    as the project's JSON in the lake (overwritten) and its scenario_file row; a
+    fork saves nothing. The composites' write depends on it: if the upload
+    fails, so does the job."""
+    from reimagina_test_port.indicators.composites import calibration as calibrations
+    from reimagina_test_port.indicators.composites.composite_metric import (
+        CALIBRATION,
+        composite_outputs,
+    )
+
+    element, _ = composite_outputs()
+    node = "reimagina_scenario_composite_calibration"
+
+    @metric(
+        name=node,
+        description=(
+            "Save a baseline's composite calibration (reimagina_composite_"
+            "calibration) as its project's JSON in the lake, overwriting it, and "
+            "point the baseline's scenario_file row (kind "
+            f"{calibrations.KIND}) at it. A fork saves nothing: it reads its "
+            "project's. A dry run saves nothing either."
+        ),
+        inputs={"calibration": Dependency(CALIBRATION)},
+        outputs={node: CALIBRATION_WRITE_DECLARATION},
+    )
+    def handler(
+        parameters: WriteParameters, calibration: pd.DataFrame, context: RunContext
+    ) -> pd.DataFrame:
+        try:
+            project_id, parent = source.read_project(parameters.scenario_id)
+        except source.ScenarioNotFoundError as exc:
+            raise MetricInputError(node, "parameters.scenario_id", str(exc)) from exc
+        values = calibrations.from_table(calibration)
+        saved = parent is None and not parameters.dry_run
+        if parent is None:
+            uri = calibrations.calibration_uri(project_id)
+        else:
+            origins = calibration["origin"].dropna()
+            uri = origins.iloc[0] if len(origins) and origins.iloc[0] else None
+        if saved:
+            document = calibrations.document(
+                values, project_id, parameters.scenario_id, element
+            )
+            text = json.dumps(document, indent=2, sort_keys=True)
+            path = context.temp_dir / f"{project_id}.json"
+            path.write_text(text, encoding="utf-8")
+            with timed("upload composite calibration", context.logger):
+                lake.upload(path, uri, overwrite=True)
+            writer.write_scenario_file(
+                parameters.scenario_id,
+                calibrations.KIND,
+                uri,
+                content_hash=hashlib.sha256(text.encode()).hexdigest(),
+                job_run_id=parameters.job_run_id,
+            )
+            context.logger.info("composite calibration saved: %s", uri)
+        return pd.DataFrame(
+            [
+                {
+                    "uri": uri,
+                    "leaves": len(values),
+                    "saved": saved,
+                    "dry_run": parameters.dry_run,
+                }
+            ]
+        )
+
+    return handler
+
+
 def composites_write():
     """reimagina_scenario_composites: every composite of composite_config.yaml,
     its index under composite_<name>, in its own transaction. The composites'
@@ -560,6 +739,8 @@ def composites_write():
     key = {name: composite_key(name) for name in names}
     inputs = {key[n]: Dependency(output_name(n, element)) for n in names}
     keys = dict.fromkeys(inputs, "number")
+    # Only so that a failed save of the calibration fails the write.
+    inputs["calibration"] = Dependency("reimagina_scenario_composite_calibration")
 
     def handler(**arguments: Any) -> pd.DataFrame:
         tables = {name: arguments[key[name]] for name in names}
@@ -589,7 +770,8 @@ def composites_write():
             "reimagina_scenario_indicators. Elements outside the composites' "
             "boundary get none. Other indicators are not touched. Their "
             "indicator_catalog and indicator_input rows are registered from the "
-            "tree first, in the same transaction."
+            "tree first, in the same transaction. Runs after the project's "
+            "calibration is saved (reimagina_scenario_composite_calibration)."
         ),
         inputs=inputs,
         outputs={"reimagina_scenario_composites": WRITE_DECLARATION},

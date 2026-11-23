@@ -3,7 +3,10 @@
 leaves read and the outputs of its child composites. Lyra then runs the tree
 bottom-up: a composite runs once its children have. With a ``boundary`` (a
 GeoParquet URL) in the config, every composite also depends on
-reimagina_composite_boundary and keeps only the elements inside it."""
+reimagina_composite_boundary and keeps only the elements inside it. In the
+scenario graph every composite also depends on reimagina_composite_calibration:
+its leaves take their project's reference, compress stats and goalposts
+(calibration.py) instead of the YAML's."""
 
 import copy
 import inspect
@@ -30,6 +33,7 @@ from reimagina_test_port.common import lake
 from reimagina_test_port.common.nodes import column, timed
 from reimagina_test_port.common.schema import IDENTITY, UNITS, identity_columns
 from reimagina_test_port.indicators.accessibility.nodes import ACCESSIBILITY_KEYS
+from reimagina_test_port.indicators.composites import calibration as calibrations
 from reimagina_test_port.indicators.composites.composite import (
     build_composite,
     normalize_indicators,
@@ -67,9 +71,10 @@ COMPOSITE_KEYS = {"name", "label", "phenomenon", "min_valid", "weight", "childre
 RESULT = ["index", "mean", "penalty", "n"]
 # Child names become output columns and handler arguments: none of these.
 RESERVED = {*RESULT, *IDENTITY, "geometry", *SOURCES, "parameters", "context",
-            "location", "bounds", "boundary"}  # fmt: skip
+            "location", "bounds", "boundary", "calibration"}  # fmt: skip
 NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 BOUNDARY = "reimagina_composite_boundary"
+CALIBRATION = "reimagina_composite_calibration"
 
 
 class CompositeConfigError(ValueError):
@@ -246,6 +251,21 @@ def composite_inputs(node: dict, element: str) -> dict[str, Dependency]:
     return inputs
 
 
+def tree_leaves(composites: list[dict]) -> list[dict]:
+    """The leaves of ``composites`` (check_tree's), each once."""
+    return [
+        c for node in composites for c in node["children"] if not reads_composite(c)
+    ]
+
+
+def leaf_sources(composites: list[dict], element: str) -> dict[str, Dependency]:
+    """One dependency per indicator source the leaves read."""
+    return {
+        leaf["source"]: Dependency(f"{SOURCES[leaf['source']][0]}_{element}")
+        for leaf in tree_leaves(composites)
+    }
+
+
 def by_id(table: pd.DataFrame, key: str, ids: pd.Series) -> pd.Series:
     """``table[key]`` in the order of ``ids``; ids it lacks are missing."""
     values = pd.Series(table[key].to_numpy(), index=table["id"].astype(str))
@@ -268,15 +288,15 @@ def composite_table(
     node: dict,
     tables: dict[str, gpd.GeoDataFrame],
     boundary: gpd.GeoDataFrame | None = None,
+    calibration: dict[str, dict] | None = None,
 ) -> gpd.GeoDataFrame:
     """Each child's score (leaves normalised, child composites' index), then
     the Mazziotta-Pareto composite, per element of the first input. With a
     boundary, only the elements whose representative point lies inside it, so
-    the others are out of any normalisation statistics (compress: true) too."""
-    grain = next(iter(tables.values()))
-    if boundary is not None:
-        area = boundary.to_crs(grain.crs).geometry.union_all()
-        grain = grain[grain.geometry.representative_point().within(area)]
+    the others are out of any normalisation statistics (compress: true) too.
+    With a ``calibration`` (by leaf name), a leaf takes its values from it, and
+    one it lacks (no value on the baseline) is missing, never the YAML's."""
+    grain = calibrations.inside(next(iter(tables.values())), boundary)
     result = grain[IDENTITY + ["geometry"]].reset_index(drop=True)
     ids = result["id"].astype(str)
     scores = []
@@ -286,7 +306,11 @@ def composite_table(
             score = by_id(tables[name], "index", ids)
         else:
             values = by_id(tables[child["source"]], child["variable"], ids)
-            score = normalize_indicators(values, **leaf_arguments(child))
+            if calibration is not None and name not in calibration:
+                score = pd.Series(float("nan"), index=values.index)
+            else:
+                leaf = calibrations.calibrated(child, calibration or {})
+                score = normalize_indicators(values, **leaf_arguments(leaf))
         result[name] = score.to_numpy()
         scores.append(score.rename(name))
     combined = build_composite(
@@ -341,16 +365,25 @@ def composite_metric(
     element: str,
     parameters_type: type[MetricParameters],
     boundary: bool,
+    calibration: bool = False,
 ):
     """The Lyra metric of one composite."""
     children = composite_inputs(node, element)
     inputs = children | ({"boundary": Dependency(BOUNDARY)} if boundary else {})
+    if calibration:
+        inputs["calibration"] = Dependency(CALIBRATION)
     output = output_name(node["name"], element)
 
     def handler(**arguments: Any) -> gpd.GeoDataFrame:
         tables = {key: arguments[key] for key in children}
+        calibrated = arguments.get("calibration")
         with timed(f"composite {node['name']}", arguments["context"].logger):
-            return composite_table(node, tables, arguments.get("boundary"))
+            return composite_table(
+                node,
+                tables,
+                arguments.get("boundary"),
+                None if calibrated is None else calibrations.from_table(calibrated),
+            )
 
     # Lyra binds dependencies by argument name: one per input of this composite.
     handler.__signature__ = inspect.Signature(
@@ -367,7 +400,8 @@ def composite_metric(
             f"Composite indicator {node['name']} per {element[:-1]}: the weighted "
             f"Mazziotta-Pareto index ({node.get('phenomenon', 'positive')}) of "
             f"{names}, each normalised (AMPI or MPI) as composite_config.yaml "
-            f"says{', inside its boundary' if boundary else ''}."
+            f"says{', inside its boundary' if boundary else ''}"
+            f"{', with its project calibration' if calibration else ''}."
         ),
         inputs=inputs,
         outputs={output: composite_declaration(node)},
@@ -433,16 +467,21 @@ def composite_metrics(
     parameters_type: type[MetricParameters],
     config: dict | None = None,
     missing: Collection[str] = (),
+    calibration: bool = False,
 ) -> list:
     """One metric per composite of ``config`` (by default composite_config.yaml),
     and the boundary dataset when it names one. ``missing`` names the sources
-    this graph lacks: their leaves are left out (``without_sources``)."""
+    this graph lacks: their leaves are left out (``without_sources``). With
+    ``calibration``, each composite depends on reimagina_composite_calibration,
+    which the graph defines."""
     element, composites, boundary = check_tree(
         without_sources(load_config() if config is None else config, missing)
     )
     nodes = [boundary_dataset(boundary, parameters_type)] if boundary else []
     return nodes + [
-        composite_metric(node, element, parameters_type, boundary is not None)
+        composite_metric(
+            node, element, parameters_type, boundary is not None, calibration
+        )
         for node in composites
     ]
 

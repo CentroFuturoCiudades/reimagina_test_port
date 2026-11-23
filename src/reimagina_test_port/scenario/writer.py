@@ -56,6 +56,7 @@ _TABLES = {
         "element_state",
         "element_state_indicator_value",
         "job_run",
+        "scenario_file",
     )
 }
 
@@ -449,3 +450,50 @@ def _refresh_statistics(conn: psycopg.Connection, log: Any) -> None:
             )
     except psycopg.Error as error:
         log.warning("ANALYZE of the indicator values failed: %s", error)
+
+
+_SCENARIO_FILE_QUERY = sql.SQL(
+    """
+    INSERT INTO {scenario_file} (scenario_id, kind, uri, content_hash, job_run_id)
+    SELECT %(scenario)s::uuid, %(kind)s, %(uri)s, %(hash)s, j.id
+    FROM (SELECT 1) one
+    LEFT JOIN {job_run} j ON j.id = %(job_run)s::uuid
+    ON CONFLICT (scenario_id, kind) DO UPDATE
+    SET uri = EXCLUDED.uri,
+        content_hash = EXCLUDED.content_hash,
+        job_run_id = EXCLUDED.job_run_id
+    """
+).format(**_TABLES)
+
+
+def write_scenario_file(
+    scenario_id: str,
+    kind: str,
+    uri: str,
+    *,
+    content_hash: str | None = None,
+    job_run_id: str | None = None,
+) -> None:
+    """Point the scenario's ``kind`` row of scenario_file at ``uri`` (one per
+    kind: it replaces the previous). ``job_run_id`` is recorded only when that
+    job_run exists."""
+    with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                "SELECT 1 FROM {scenarios} WHERE id = %s::uuid AND deleted_at IS NULL"
+            ).format(**_TABLES),
+            (scenario_id,),
+        )
+        if cur.fetchone() is None:
+            msg = f"Scenario {scenario_id!r} does not exist."
+            raise ScenarioNotFoundError(msg)
+        cur.execute(
+            _SCENARIO_FILE_QUERY,
+            {
+                "scenario": scenario_id,
+                "kind": kind,
+                "uri": uri,
+                "hash": content_hash,
+                "job_run": job_run_id,
+            },
+        )
