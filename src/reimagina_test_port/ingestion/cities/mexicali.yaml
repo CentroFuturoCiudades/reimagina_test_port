@@ -47,13 +47,12 @@ sources:
   # One source per kind: these categories come only from the amenities file, the
   # rest (schools, health, care...) only from the DENUE. IMIP covers parks, sports
   # and culture far better (366 sports and 339 culture places, against 18 and 47);
-  # the DENUE has schools with their SCIAN level and workers. Police and fire
-  # stations: admon_pub's (27 and 10), as the ULI's.
+  # the DENUE has schools with their SCIAN level and workers.
   amenities:
     uri: az://cleaned/por_estado/02_baja_california/002_mexicali/imip/equipamiento
     params:
       normalizer: imip
-      categories: [park, sports, cultural_center, police_station, fire_station]
+      categories: [park, sports, cultural_center]
   denue:   # INEGI DENUE 05_2025 as published: amenities and establishments by the SCIAN crosswalk
     uri: az://raw/inegi/denue/02_baja_california/denue_02_0525_csv/conjunto_de_datos/denue_inegi_02_.csv
     params: {municipio: Mexicali, encoding: latin-1}
