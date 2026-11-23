@@ -109,7 +109,7 @@ def leaf_arguments(leaf: dict) -> dict[str, Any]:
         "goalposts": leaf.get("goalposts"),
         "mean": leaf.get("mean"),
         "sd": leaf.get("sd"),
-        "compress": bool(leaf.get("compress", False)),
+        "compress": leaf.get("compress", False),
     }
 
 
@@ -272,7 +272,7 @@ def composite_table(
     """Each child's score (leaves normalised, child composites' index), then
     the Mazziotta-Pareto composite, per element of the first input. With a
     boundary, only the elements whose representative point lies inside it, so
-    the others are out of any normalisation statistics (compress) too."""
+    the others are out of any normalisation statistics (compress: true) too."""
     grain = next(iter(tables.values()))
     if boundary is not None:
         area = boundary.to_crs(grain.crs).geometry.union_all()

@@ -10,6 +10,7 @@ indicators feed which composite is ``composite_config.yaml``;
     stepped_score           distance -> score by a step ladder
     compress_outliers       pull >2 SD values toward 2-3 SD
     compression_parameters  stats for compress_outliers
+    fixed_compression       compress's stats from a leaf, if it fixes them
     normalize_indicators    one indicator -> normalised Series
     build_composite         normalised Series -> Mazziotta-Pareto composite
 """
@@ -56,6 +57,20 @@ def compression_parameters(values):
     }
 
 
+COMPRESSION_KEYS = ("mean", "sd", "minimum", "maximum")
+
+
+def fixed_compression(compress):
+    """``compress``'s stats when it fixes them ({mean, sd, minimum, maximum}),
+    None when it is a plain true or false."""
+    if compress is None or isinstance(compress, bool):
+        return None
+    if not isinstance(compress, dict) or set(compress) != set(COMPRESSION_KEYS):
+        msg = f"compress must be true, false or {{{', '.join(COMPRESSION_KEYS)}}}."
+        raise ValueError(msg)
+    return {key: float(compress[key]) for key in COMPRESSION_KEYS}
+
+
 def compress_outliers(values, mean, sd, minimum, maximum):
     x = pd.to_numeric(values, errors="coerce").astype("float64")
     out = x.copy()
@@ -86,7 +101,11 @@ def normalize_indicators(
     sd=None,
     compress=False,
 ):
-    """Transform, orient, normalise one indicator. Returns a Series."""
+    """Transform, orient, normalise one indicator. Returns a Series.
+
+    ``compress`` is false, true (the stats of ``values`` themselves) or the stats
+    to compress with, {mean, sd, minimum, maximum}: fixed, a scenario's extreme
+    values don't change the others' scores."""
     x = pd.to_numeric(values, errors="coerce").astype("float64")
 
     if transform:
@@ -102,7 +121,10 @@ def normalize_indicators(
         else:
             raise ValueError("transform needs 'soft_threshold' or 'steps'.")
 
-    if compress:
+    fixed = fixed_compression(compress)
+    if fixed is not None:
+        x = compress_outliers(x, **fixed)
+    elif compress:
         x = compress_outliers(x, **compression_parameters(x))
 
     sign = 1.0 if polarity == "positive" else -1.0

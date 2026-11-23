@@ -22,6 +22,7 @@ from reimagina_test_port.indicators.built_form.nodes import built_form_metrics
 from reimagina_test_port.indicators.composites import composite_metric as nodes
 from reimagina_test_port.indicators.composites.composite import (
     build_composite,
+    compression_parameters,
     normalize_indicators,
     soft_threshold,
     stepped_score,
@@ -63,6 +64,27 @@ def test_mazziotta_pareto():
     assert build_composite([a, b], min_valid=1)["index"].iloc[2] == 110
     weighted = build_composite([a, b], weights=[3, 1])
     assert weighted["mean"].iloc[0] == pytest.approx(105)
+
+
+def test_fixed_compression_ignores_a_scenarios_extremes():
+    baseline = pd.Series([float(v) for v in range(1, 41)] + [400.0])
+    scenario = baseline.copy()
+    scenario.iloc[0] = 50_000.0  # one block edited to an extreme
+    leaf = {"reference": 20, "goalposts": {"min": 0, "max": 400}}
+    fixed = {**leaf, "compress": compression_parameters(baseline)}
+    before = normalize_indicators(baseline, **fixed)
+    after = normalize_indicators(scenario, **fixed)
+    # The blocks that didn't change keep their score, the outlier too.
+    assert after.iloc[1:].tolist() == before.iloc[1:].tolist()
+    assert after.iloc[-1] < normalize_indicators(baseline, **leaf).iloc[-1]
+    # compress: true takes the stats from the scenario: everyone's score moves.
+    own = {**leaf, "compress": True}
+    moved = normalize_indicators(scenario, **own) != normalize_indicators(
+        baseline, **own
+    )
+    assert moved.iloc[1:].any()
+    with pytest.raises(ValueError, match="compress must be"):
+        normalize_indicators(baseline, **leaf, compress={"mean": 1, "sd": 1})
 
 
 TEST_CONFIG = Path(__file__).with_name("composite_test_config.yaml")
@@ -225,6 +247,8 @@ def health(config):
         (lambda c: health(c).update(min_valid=3), "min_valid must be"),
         (lambda c: health(c).update(children=[]), "a composite needs children"),
         (lambda c: health(c).update(phenomenon="neutral"), "phenomenon must be"),
+        (lambda c: health(c)["children"][0].update(compress={"mean": 0.5}),
+         "compress must be"),
     ],
 )  # fmt: skip
 def test_config_errors_name_the_node(change, message):
