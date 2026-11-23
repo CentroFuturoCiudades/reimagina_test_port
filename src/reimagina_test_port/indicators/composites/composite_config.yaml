@@ -19,7 +19,10 @@
 #   transform  optional, before normalising: {soft_threshold: distance, k: 5}
 #              in the variable's unit (closer is better, 0-1) or
 #              {steps: [[limit, score], ...], beyond: 0}
-#   compress   optional: pull values beyond 2 SD toward 2-3 SD
+#   compress   optional: pull values beyond 2 SD toward 2-3 SD, with fixed stats
+#              {mean, sd, minimum, maximum} of the transformed variable; `true`
+#              takes them from the scenario itself, so a scenario's extreme
+#              values would change the other elements' scores
 #   polarity   positive (more is better) or negative
 #   method     ampi (needs reference and goalposts {min, max}) or mpi (mean, sd)
 #   weight     its weight in its composite (default 1)
@@ -70,7 +73,8 @@
 #   jobs and job diversity, over ee468973 too (20 November 2026); public transport,
 #   over ee468973 with its stops (ingestion/transit.py) added in memory, before they
 #   were loaded (20 November 2026); large public green space, likewise with its 5
-#   parks (21 November 2026).
+#   parks (21 November 2026). The compress stats, over ee468973 as recomputed on
+#   21 November 2026: its blocks with a value (population SD).
 #   Police and fire stations keep the ULI's until there are stations.
 # - The snapshot plugin has no land use or streets (they read the scenario from
 #   the database): its tree leaves them out, and the composites left empty.
@@ -286,7 +290,7 @@ trees:
               - name: net_residential_density
                 source: land_use
                 variable: net_residential_density
-                compress: true
+                compress: {mean: 69.14, sd: 147.07, minimum: 0.0507, maximum: 13094.2}
                 polarity: positive
                 method: ampi
                 reference: 65.27
@@ -389,7 +393,7 @@ trees:
               - name: reachable_jobs
                 source: diversity
                 variable: reachable_jobs
-                compress: true
+                compress: {mean: 342.08, sd: 322.23, minimum: 0, maximum: 3594.44}
                 polarity: positive
                 method: ampi
                 reference: 342.1
