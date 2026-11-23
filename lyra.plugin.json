@@ -902,6 +902,180 @@
       "spatial_inputs": {}
     },
     {
+      "description": "Add to an existing baseline scenario, with forks or not, from the same build as reimagina_baseline_write (reimagina_baseline and reimagina_baseline_transit_stops; not the streets): insert the elements of element_types (amenities and establishments of categories, if given) it lacks, with their state and attributes, and add or update update_attributes on the elements it has. Nothing else is changed; forks see the new elements through the baseline. Elements whose lot the baseline lacks are left out. One row per element type, attribute and outcome. Compute indicators afterwards with reimagina_scenario_write, the baseline first.",
+      "inputs": {
+        "amenities": {
+          "arguments": {},
+          "output": "reimagina_baseline_amenities"
+        },
+        "blocks": {
+          "arguments": {},
+          "output": "reimagina_baseline_blocks"
+        },
+        "establishments": {
+          "arguments": {},
+          "output": "reimagina_baseline_establishments"
+        },
+        "lots": {
+          "arguments": {},
+          "output": "reimagina_baseline_lots"
+        },
+        "transit_stops": {
+          "arguments": {},
+          "output": "reimagina_baseline_transit_stops"
+        }
+      },
+      "name": "reimagina_baseline_append",
+      "outputs": {
+        "reimagina_baseline_append": {
+          "columns": [
+            {
+              "description": "Element type.",
+              "name": "element_type",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "The attribute updated; empty for inserted elements.",
+              "name": "attribute",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Elements: inserted, already_present (the baseline has it), missing_parent (the baseline lacks its lot: left out), parent_deleted_in_fork (inserted, on a lot a fork deleted). Attributes: added, updated, unchanged, absent (the baseline lacks the element).",
+              "name": "outcome",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Rows.",
+              "name": "count",
+              "nullable": false,
+              "type": "integer",
+              "unit": "count"
+            },
+            {
+              "description": "Up to five of their source_record_ref, comma-separated.",
+              "name": "examples",
+              "nullable": false,
+              "type": "string",
+              "unit": null
+            },
+            {
+              "description": "Whether the changes were rolled back.",
+              "name": "dry_run",
+              "nullable": false,
+              "type": "boolean",
+              "unit": null
+            }
+          ],
+          "geometry": null,
+          "kind": "table"
+        }
+      },
+      "request_schema": {
+        "$defs": {
+          "BaselineAppendParameters": {
+            "additionalProperties": false,
+            "description": "What to add to an existing baseline scenario, forks or not.",
+            "properties": {
+              "categories": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Only amenities and establishments of these categories (e.g. police_station, fire_station); all when unset.",
+                "title": "Categories"
+              },
+              "city": {
+                "description": "City preset (ingestion/cities/<city>.yaml).",
+                "enum": [
+                  "mexicali",
+                  "tlalpan"
+                ],
+                "title": "City",
+                "type": "string"
+              },
+              "dry_run": {
+                "default": false,
+                "description": "Compute and count the rows, then roll back.",
+                "title": "Dry Run",
+                "type": "boolean"
+              },
+              "element_types": {
+                "default": [],
+                "description": "Element types whose missing elements are inserted: amenity, establishment, bus_stop, station.",
+                "items": {
+                  "enum": [
+                    "amenity",
+                    "establishment",
+                    "bus_stop",
+                    "station"
+                  ],
+                  "type": "string"
+                },
+                "title": "Element Types",
+                "type": "array"
+              },
+              "project_id": {
+                "description": "Project UUID.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Project Id",
+                "type": "string"
+              },
+              "scenario_id": {
+                "description": "Baseline scenario UUID of the project; it may have forks.",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "title": "Scenario Id",
+                "type": "string"
+              },
+              "update_attributes": {
+                "default": [],
+                "description": "Attributes added or updated on the elements the baseline already has, as <element_type>.<key> (e.g. amenity.tree_coverage, a park's canopy).",
+                "items": {
+                  "type": "string"
+                },
+                "title": "Update Attributes",
+                "type": "array"
+              }
+            },
+            "required": [
+              "city",
+              "project_id",
+              "scenario_id"
+            ],
+            "title": "BaselineAppendParameters",
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "$ref": "#/$defs/BaselineAppendParameters"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "reimagina_baseline_append_request",
+        "type": "object"
+      },
+      "role": "metric",
+      "spatial_inputs": {}
+    },
+    {
       "description": "Return a city's baseline lots, blocks, amenities, establishments, streets and transit stops as built from the data lake (reimagina_baseline, reimagina_baseline_streets, reimagina_baseline_transit_stops). Nothing is written to Reimagina's database.",
       "inputs": {
         "amenities": {
