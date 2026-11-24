@@ -64,8 +64,9 @@ The plugin exposes `reimagina_lot_built_form`, `reimagina_built_form`,
 `reimagina_accessibility`, `reimagina_baseline_elements` (`{"city": "mexicali"}`:
 a city's baseline lots and blocks from the data lake, not written),
 `reimagina_baseline_write` (`city`, `project_id`, `scenario_id`, `dry_run`:
-writes them into a baseline scenario; see [design](design.md#baseline-writer))
-and, deployed only, `reimagina_scenario_indicators` (built-form),
+writes them into a baseline scenario; see [design](design.md#baseline-writer)),
+`reimagina_baseline_append` (adds missing elements and given attributes to a
+baseline, forks or not) and, deployed only, `reimagina_scenario_indicators` (built-form),
 `reimagina_scenario_accessibility` and `reimagina_scenario_write` (both, each
 in its own transaction), which write to Reimagina's database (`dry_run`,
 `job_run_id` and `full` are optional; see [design](design.md#writer)).

@@ -1,7 +1,7 @@
 """Lyra nodes that build a city's baseline from the data lake and write it into a
 Reimagina baseline scenario: reimagina_baseline, reimagina_baseline_elements and
-reimagina_baseline_write. The elements are blocks, lots, amenities,
-establishments, rights of way (reimagina_baseline_streets, over the street
+reimagina_baseline_write; reimagina_baseline_append adds to an existing one. The
+elements are blocks, lots, amenities, establishments, rights of way (reimagina_baseline_streets, over the street
 network) and public transport stops (reimagina_baseline_transit_stops). Its street network: reimagina_street_network,
 reimagina_street_network_tables and reimagina_street_network_write
 (ingestion/network.py)."""
@@ -481,6 +481,201 @@ def baseline_write(
     by_type = counts.pop("by_type")
     written = {name: by_type.get(t, 0) for t, name in WRITTEN_COLUMNS.items()}
     return pd.DataFrame([{**counts, **written, "dry_run": parameters.dry_run}])
+
+
+# ------------------------------------------------------------------------ append
+
+APPEND_TYPES = ("amenity", "establishment", *TRANSIT_TYPES)
+AppendType = Literal[APPEND_TYPES]  # ty: ignore[invalid-type-form]
+# Its inputs without the streets: appending needs no street fit.
+APPEND_INPUTS = {
+    name: dependency
+    for name, dependency in BASELINE_INPUTS.items()
+    if name != "right_of_way"
+}
+
+
+class BaselineAppendParameters(BaselineParameters):
+    """What to add to an existing baseline scenario, forks or not."""
+
+    project_id: str = Field(pattern=UUID_PATTERN, description="Project UUID.")
+    scenario_id: str = Field(
+        pattern=UUID_PATTERN,
+        description="Baseline scenario UUID of the project; it may have forks.",
+    )
+    element_types: list[AppendType] = Field(
+        default=[],
+        description=(
+            "Element types whose missing elements are inserted: amenity, "
+            "establishment, bus_stop, station."
+        ),
+    )
+    categories: list[str] | None = Field(
+        default=None,
+        description=(
+            "Only amenities and establishments of these categories (e.g. "
+            "police_station, fire_station); all when unset."
+        ),
+    )
+    update_attributes: list[str] = Field(
+        default=[],
+        description=(
+            "Attributes added or updated on the elements the baseline already has, "
+            "as <element_type>.<key> (e.g. amenity.tree_coverage, a park's canopy)."
+        ),
+    )
+    dry_run: bool = Field(
+        default=False, description="Compute and count the rows, then roll back."
+    )
+
+
+APPEND_DECLARATION = TableOutput(
+    columns=[
+        TableColumn(
+            name="element_type", type="string", unit=None, description="Element type."
+        ),
+        TableColumn(
+            name="attribute",
+            type="string",
+            unit=None,
+            description="The attribute updated; empty for inserted elements.",
+        ),
+        TableColumn(
+            name="outcome",
+            type="string",
+            unit=None,
+            description=(
+                "Elements: inserted, already_present (the baseline has it), "
+                "missing_parent (the baseline lacks its lot: left out), "
+                "parent_deleted_in_fork (inserted, on a lot a fork deleted). "
+                "Attributes: added, updated, unchanged, absent (the baseline lacks "
+                "the element)."
+            ),
+        ),
+        TableColumn(name="count", type="integer", unit=Unit.COUNT, description="Rows."),
+        TableColumn(
+            name="examples",
+            type="string",
+            unit=None,
+            description="Up to five of their source_record_ref, comma-separated.",
+        ),
+        TableColumn(
+            name="dry_run",
+            type="boolean",
+            unit=None,
+            description="Whether the changes were rolled back.",
+        ),
+    ]
+)
+
+
+def _append_error(field: str, message: str) -> MetricInputError:
+    return MetricInputError("reimagina_baseline_append", f"parameters.{field}", message)
+
+
+def _of_categories(
+    table: gpd.GeoDataFrame, categories: list[str] | None
+) -> gpd.GeoDataFrame:
+    if categories is None:
+        return table
+    return table[table["category"].isin(categories)]
+
+
+@metric(
+    name="reimagina_baseline_append",
+    description=(
+        "Add to an existing baseline scenario, with forks or not, from the same "
+        "build as reimagina_baseline_write (reimagina_baseline and "
+        "reimagina_baseline_transit_stops; not the streets): insert the elements "
+        "of element_types (amenities and establishments of categories, if given) "
+        "it lacks, with their state and attributes, and add or update "
+        "update_attributes on the elements it has. Nothing else is changed; forks "
+        "see the new elements through the baseline. Elements whose lot the "
+        "baseline lacks are left out. One row per element type, attribute and "
+        "outcome. Compute indicators afterwards with reimagina_scenario_write, "
+        "the baseline first."
+    ),
+    inputs=APPEND_INPUTS,
+    outputs={"reimagina_baseline_append": APPEND_DECLARATION},
+)
+def baseline_append(
+    parameters: BaselineAppendParameters,
+    lots: gpd.GeoDataFrame,
+    blocks: gpd.GeoDataFrame,
+    amenities: gpd.GeoDataFrame,
+    establishments: gpd.GeoDataFrame,
+    transit_stops: gpd.GeoDataFrame,
+    context: RunContext,
+) -> pd.DataFrame:
+    """Final node: the outcomes."""
+    from reimagina_test_port.ingestion import baseline_writer
+    from reimagina_test_port.ingestion.crosswalk import CATEGORIES
+
+    known = {c for categories in CATEGORIES.values() for c in categories}
+    if unknown := sorted(set(parameters.categories or []) - known):
+        raise _append_error("categories", f"Unknown categories {unknown}.")
+    available = {
+        "block": blocks,
+        "lot": lots,
+        "amenity": amenities,
+        "establishment": establishments,
+        **{
+            element_type: transit_stops[transit_stops["element_type"] == element_type]
+            for element_type in TRANSIT_TYPES
+        },
+    }
+    tables = {}
+    for element_type in parameters.element_types:
+        table = available[element_type]
+        if element_type in ("amenity", "establishment"):
+            table = _of_categories(table, parameters.categories)
+        if not table.empty:
+            tables[element_type] = table
+    updates: dict[str, tuple[gpd.GeoDataFrame, list[str]]] = {}
+    for name in parameters.update_attributes:
+        element_type, _, key = name.partition(".")
+        if element_type not in available or not key:
+            raise _append_error(
+                "update_attributes",
+                f"{name!r} is not <element_type>.<key> of {sorted(available)}.",
+            )
+        updates.setdefault(element_type, (available[element_type], []))[1].append(key)
+    if not tables and not updates:
+        raise _append_error(
+            "element_types", "Nothing to add: give element_types or update_attributes."
+        )
+    try:
+        result = baseline_writer.append_baseline(
+            parameters.project_id,
+            parameters.scenario_id,
+            tables,
+            BASELINE_ATTRIBUTES,
+            updates=updates,
+            dry_run=parameters.dry_run,
+        )
+    except baseline_writer.BaselineScenarioError as exc:
+        raise _append_error("scenario_id", str(exc)) from exc
+    context.logger.info(
+        "Catalog rows added: %d attributes, %d indicators",
+        result["attributes_added"],
+        result["indicators_added"],
+    )
+    rows = pd.DataFrame(
+        result["outcomes"],
+        columns=["element_type", "attribute", "outcome", "count", "examples"],
+    )
+    for row in rows.itertuples():
+        context.logger.info(
+            "%s %s %s: %d (%s)",
+            row.element_type,
+            row.attribute or "",
+            row.outcome,
+            row.count,
+            ", ".join(row.examples),
+        )
+    return rows.assign(
+        examples=rows["examples"].map(", ".join), dry_run=parameters.dry_run
+    )
 
 
 # ------------------------------------------------------------------ street network

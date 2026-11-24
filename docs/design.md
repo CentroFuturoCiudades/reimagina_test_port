@@ -621,6 +621,22 @@ rows, removing elements no longer present and their indicator values. Then
 `reimagina_scenario_write` computes the baseline's indicators, and after it
 each fork's.
 
+`reimagina_baseline_append(city, project_id, scenario_id, element_types,
+categories, update_attributes, dry_run)` adds to an existing baseline instead,
+forks or not, from the same build without the streets (no street fit). Of
+`element_types` (`amenity`, `establishment`, `bus_stop`, `station`; amenities and
+establishments of `categories`, if given) it inserts the elements the baseline
+lacks, with their state and attributes; those it has (deleted or not) are
+`already_present`, and those whose lot it lacks are left out as
+`missing_parent` (another project may have other lots). `update_attributes`
+(`<element_type>.<key>`, e.g. `amenity.tree_coverage`) are `added` or `updated`
+on the elements it already has, never cleared. Nothing else changes: lots keep
+their land use, forks keep their rows and see the new elements through the
+baseline (`parent_deleted_in_fork` counts those on a lot some fork deleted). It
+returns one row per element type, attribute and outcome, with up to five
+`source_record_ref` as examples; then `reimagina_scenario_write`, the baseline
+first and then each fork.
+
 Moving the edits of the old baseline's forks is a one-off migration,
 `scripts/migrate_fork_edits.py SOURCE_FORK TARGET_FORK [--apply]`: each edited
 lot is matched to the new lot with the largest overlap (IoU >= 0.9); blocks and

@@ -1440,6 +1440,239 @@ def test_baseline_write_metric(new_baseline, dsn, monkeypatch, offline_network):
     ]
 
 
+# ------------------------------------------------------------------------ append
+
+APPEND_PARK = "d0000000-0000-0000-0000-000000000002"
+APPEND_FIRE = "d0000000-0000-0000-0000-000000000003"
+APPEND_STOP = "d0000000-0000-0000-0000-000000000004"
+
+
+def append_tables() -> dict[str, gpd.GeoDataFrame]:
+    """new_tables' four lots and its clinic, plus a park on the second lot, a fire
+    station on the fourth and a bus stop."""
+    tables = new_tables()
+    extra = gpd.GeoDataFrame(
+        {
+            "id": [APPEND_PARK, APPEND_FIRE],
+            "parent_id": [NEW_LOTS[1], NEW_LOTS[3]],
+            "source_record_ref": ["IMIP:esp_pub:1", "IMIP:admon_pub:5"],
+            "category": ["park", "fire_station"],
+            "scian_code": [None, None],
+            "num_workers": [None, None],
+            "capacity": [1.0, 1.0],
+            "name": [None, "Bomberos"],
+            "area_m2": [2000.0, None],
+            "tree_coverage": [35.0, None],
+        },
+        geometry=[lot_box(1).centroid, lot_box(3).centroid],
+        crs=4326,
+    )
+    tables["amenity"] = pd.concat([tables["amenity"], extra], ignore_index=True)
+    tables["bus_stop"] = gpd.GeoDataFrame(
+        {
+            "id": [APPEND_STOP],
+            "parent_id": [None],
+            "source_record_ref": ["IMIP:1"],
+            "element_type": ["bus_stop"],
+            "source": ["IMIP"],
+            "name": ["AUTOTRANSPORTES URBANOS"],
+        },
+        geometry=gpd.points_from_xy([0.0005], [0.002]),
+        crs=4326,
+    )
+    # The lots' canopy, to update: the first lot's changes, the third gets one.
+    tables["lot"] = tables["lot"].assign(tree_coverage=[20.0, None, 5.0, 7.0])
+    return tables
+
+
+@pytest.fixture
+def forked_baseline(new_baseline, dsn):
+    """new_baseline with three lots and a fork that deletes the second."""
+    write_new_baseline(count=3)
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            "INSERT INTO reimagina_urbano.scenarios VALUES (%s, %s, %s, NULL)",
+            (NEW_FORK, PROJECT, NEW_BASELINE),
+        )
+        conn.execute("SET search_path = reimagina_urbano, public")
+        add_state(conn, NEW_FORK, NEW_LOTS[1], deleted=True)
+    return NEW_BASELINE
+
+
+def append(**options) -> dict:
+    tables = append_tables()
+    return baseline_writer.append_baseline(
+        PROJECT,
+        NEW_BASELINE,
+        {t: tables[t] for t in ("amenity", "bus_stop")},
+        ingestion_nodes.BASELINE_ATTRIBUTES,
+        updates={
+            "lot": (tables["lot"], ["tree_coverage"]),
+            "amenity": (tables["amenity"], ["tree_coverage"]),
+        },
+        **options,
+    )
+
+
+def outcomes(result: dict) -> list[tuple]:
+    return [
+        (r["element_type"], r["attribute"], r["outcome"], r["count"], r["examples"])
+        for r in result["outcomes"]
+    ]
+
+
+def test_append_to_a_baseline_with_forks(forked_baseline, dsn):
+    before = counts(dsn, NEW_BASELINE)
+    fork_before = counts(dsn, NEW_FORK)
+    expected = [
+        ("amenity", None, "inserted", 1, ["IMIP:esp_pub:1"]),
+        ("amenity", None, "already_present", 1, ["denue:11"]),
+        # The baseline has three lots: the fire station's is not one.
+        ("amenity", None, "missing_parent", 1, ["IMIP:admon_pub:5"]),
+        # The fork deleted the park's lot; the park is there still.
+        ("amenity", None, "parent_deleted_in_fork", 1, ["IMIP:esp_pub:1"]),
+        # Updates concern the elements the baseline had: the park is new.
+        ("amenity", "tree_coverage", "absent", 1, ["IMIP:esp_pub:1"]),
+        ("bus_stop", None, "inserted", 1, ["IMIP:1"]),
+        ("lot", "tree_coverage", "added", 1, ["1-A-2"]),
+        ("lot", "tree_coverage", "updated", 1, ["1-A-0"]),
+        ("lot", "tree_coverage", "absent", 1, ["1-A-3"]),
+    ]
+    assert "public_space" not in set(scenario.read_pois(NEW_FORK)["poi_type"])
+    dry = append(dry_run=True)
+    assert outcomes(dry) == expected
+    assert counts(dsn, NEW_BASELINE) == before
+    result = append()
+    assert outcomes(result) == expected
+    # The stops' source and name join the catalog; the amenity's keys were there.
+    assert (result["attributes_added"], result["indicators_added"]) == (2, 0)
+    # Two elements: the park with category, capacity, area and canopy, the stop
+    # with source and name; one lot value added.
+    assert counts(dsn, NEW_BASELINE) == (before[0] + 2, before[1] + 7)
+    assert counts(dsn, NEW_FORK) == fork_before
+    with psycopg.connect(dsn) as conn:
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM reimagina_urbano.elements WHERE id = %s",
+                (APPEND_FIRE,),
+            ).fetchone()[0]
+            == 0
+        )
+        parent = conn.execute(
+            "SELECT parent_element_id::text FROM reimagina_urbano.element_state "
+            "WHERE scenario_id = %s AND element_id = %s",
+            (NEW_BASELINE, APPEND_PARK),
+        ).fetchone()[0]
+    assert parent == NEW_LOTS[1]
+    lots = by_id(
+        scenario.read_scenario(NEW_BASELINE, ["land_use", "tree_coverage"])["lot"]
+    )
+    assert lots[NEW_LOTS[0]]["tree_coverage"] == 20
+    assert lots[NEW_LOTS[2]]["tree_coverage"] == 5
+    # Nothing else changed.
+    assert lots[NEW_LOTS[0]]["land_use"] == "single_family"
+    # The fork sees the new park through the baseline.
+    assert "public_space" in set(scenario.read_pois(NEW_FORK)["poi_type"])
+    # Again: nothing new.
+    again = {(r[0], r[1], r[2]): r[3] for r in outcomes(append())}
+    assert again == {
+        ("amenity", None, "already_present"): 2,
+        ("amenity", None, "missing_parent"): 1,
+        ("amenity", "tree_coverage", "unchanged"): 1,
+        ("bus_stop", None, "already_present"): 1,
+        ("lot", "tree_coverage", "unchanged"): 2,
+        ("lot", "tree_coverage", "absent"): 1,
+    }
+    assert counts(dsn, NEW_BASELINE) == (before[0] + 2, before[1] + 7)
+
+
+def test_append_needs_a_baseline_and_known_attributes(forked_baseline):
+    tables = append_tables()
+    with pytest.raises(baseline_writer.BaselineScenarioError, match="is a fork"):
+        baseline_writer.append_baseline(
+            PROJECT,
+            NEW_FORK,
+            {"amenity": tables["amenity"]},
+            ingestion_nodes.BASELINE_ATTRIBUTES,
+        )
+    with pytest.raises(baseline_writer.BaselineScenarioError, match="no attributes"):
+        baseline_writer.append_baseline(
+            PROJECT,
+            NEW_BASELINE,
+            {},
+            ingestion_nodes.BASELINE_ATTRIBUTES,
+            updates={"lot": (tables["lot"], ["canopy"])},
+        )
+
+
+def test_baseline_append_metric(forked_baseline, dsn, monkeypatch):
+    from reimagina_test_port.ingestion import baseline, streets, transit
+
+    tables = append_tables()
+    monkeypatch.setattr(
+        baseline,
+        "build",
+        lambda *_: {
+            "lots": tables["lot"],
+            "blocks": tables["block"],
+            "amenities": tables["amenity"],
+            "establishments": tables["establishment"],
+            "report": {},
+        },
+    )
+    monkeypatch.setattr(transit, "build", lambda *_: tables["bus_stop"])
+
+    def no_streets(*_):
+        raise AssertionError("appending does not fit the streets")
+
+    monkeypatch.setattr(streets, "build", no_streets)
+    runner = LocalRunner.from_definitions(
+        {"reimagina-test-port": plugin.create_plugin()}
+    )
+    parameters = {
+        "city": "mexicali",
+        "project_id": PROJECT,
+        "scenario_id": NEW_BASELINE,
+        "element_types": ["amenity"],
+        "categories": ["fire_station", "park"],
+        "update_attributes": ["lot.tree_coverage"],
+        "dry_run": True,
+    }
+    result = runner.run("reimagina_baseline_append", {"parameters": parameters})
+    rows = result["reimagina_baseline_append"]
+    assert rows[["element_type", "attribute", "outcome", "count"]].fillna(
+        "-"
+    ).values.tolist() == [
+        ["amenity", "-", "inserted", 1],
+        ["amenity", "-", "missing_parent", 1],
+        ["amenity", "-", "parent_deleted_in_fork", 1],
+        ["lot", "tree_coverage", "added", 1],
+        ["lot", "tree_coverage", "updated", 1],
+        ["lot", "tree_coverage", "absent", 1],
+    ]
+    assert rows["examples"].iloc[1] == "IMIP:admon_pub:5"
+    assert rows["dry_run"].all()
+    with psycopg.connect(dsn) as conn:
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM reimagina_urbano.elements WHERE id = %s",
+                (APPEND_PARK,),
+            ).fetchone()[0]
+            == 0
+        )
+    for field, value in (
+        ("categories", ["fire"]),
+        ("update_attributes", ["tree_coverage"]),
+        ("element_types", []),
+    ):
+        bad = {**parameters, field: value}
+        if field == "element_types":
+            bad["update_attributes"] = []
+        with pytest.raises(GraphExecutionError) as failure:
+            runner.run("reimagina_baseline_append", {"parameters": bad})
+        assert isinstance(failure.value.__cause__, MetricInputError)
+
+
 # ------------------------------------------------------------------ street network
 
 

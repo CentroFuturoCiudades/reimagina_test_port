@@ -81,6 +81,7 @@ def create_plugin() -> PluginDefinition:
             ingestion_nodes.baseline_transit_stops,
             ingestion_nodes.baseline_elements,
             ingestion_nodes.baseline_write,
+            ingestion_nodes.baseline_append,
             ingestion_nodes.street_network,
             ingestion_nodes.street_network_tables,
             ingestion_nodes.street_network_write,
