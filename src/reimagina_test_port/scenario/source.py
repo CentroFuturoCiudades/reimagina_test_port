@@ -113,26 +113,32 @@ _POI_COVERAGE_QUERY = sql.SQL(
     "WHERE status = 'active' AND params ->> 'coverage_m' IS NOT NULL"
 ).format(**_TABLES)
 
-# Also read_elements' query, for other point and line elements (%(types)s).
+# read_pois' and read_elements' query, for point and line elements (%(types)s).
 # Starts from those attribute values and only then looks up their state, instead
 # of resolving every element of the scenario first. Capacity stays NULL, as
-# before: the model counts each destination once.
-_POI_VALUES = """
+# before: the model counts each destination once. One row per element, its values
+# in arrays: read apart, the elements' lookup of the values took the primary key
+# instead of (attribute_id, scenario_id), 0.9 s against 0.02 s in Mexicali.
+_POI_QUERY = sql.SQL(
+    """
     WITH value AS (
-        SELECT DISTINCT ON (v.element_id, v.attribute_id)
-               v.element_id, ac.key, ac.value_type::text AS value_type,
-               v.value_num, v.value_text, v.value_json
-        FROM {element_state_attribute_value} v
-        JOIN {attribute_catalog} ac ON ac.id = v.attribute_id
-        WHERE v.scenario_id IN (%(scenario)s::uuid, %(baseline)s::uuid)
-          AND ac.element_type::text = ANY(%(types)s)
-          AND ac.key = ANY(%(keys)s)
-        ORDER BY v.element_id, v.attribute_id, (v.scenario_id = %(scenario)s::uuid) DESC
-    )
-"""
-_POI_ELEMENTS_QUERY = sql.SQL(
-    _POI_VALUES
-    + """,
+        SELECT element_id, array_agg(key) AS keys,
+               array_agg(value_type) AS value_types, array_agg(value_num) AS nums,
+               array_agg(value_text) AS texts, array_agg(value_json) AS jsons
+        FROM (
+            SELECT DISTINCT ON (v.element_id, v.attribute_id)
+                   v.element_id, ac.key, ac.value_type::text AS value_type,
+                   v.value_num, v.value_text, v.value_json
+            FROM {element_state_attribute_value} v
+            JOIN {attribute_catalog} ac ON ac.id = v.attribute_id
+            WHERE v.scenario_id IN (%(scenario)s::uuid, %(baseline)s::uuid)
+              AND ac.element_type::text = ANY(%(types)s)
+              AND ac.key = ANY(%(keys)s)
+            ORDER BY v.element_id, v.attribute_id,
+                     (v.scenario_id = %(scenario)s::uuid) DESC
+        ) effective
+        GROUP BY element_id
+    ),
     state AS (
         SELECT DISTINCT ON (es.element_id) es.element_id, es.geometry, es.deleted_at
         FROM {element_state} es
@@ -141,18 +147,13 @@ _POI_ELEMENTS_QUERY = sql.SQL(
         ORDER BY es.element_id, (es.scenario_id = %(scenario)s::uuid) DESC
     )
     SELECT st.element_id::text AS id, e.type::text AS type,
-           ST_AsBinary(st.geometry) AS geometry
+           ST_AsBinary(st.geometry) AS geometry,
+           v.keys, v.value_types, v.nums, v.texts, v.jsons
     FROM state st
     JOIN {elements} e ON e.id = st.element_id
+    JOIN value v ON v.element_id = st.element_id
     WHERE st.deleted_at IS NULL AND e.deleted_at IS NULL
     ORDER BY 1
-    """
-).format(**_TABLES)
-_POI_ATTRIBUTES_QUERY = sql.SQL(
-    _POI_VALUES
-    + """
-    SELECT element_id::text, key, value_type, value_num, value_text, value_json
-    FROM value
     """
 ).format(**_TABLES)
 
@@ -254,6 +255,21 @@ def _matches(rules: dict[str, dict[str, Any]], element: dict[str, Any]) -> list[
     return matched
 
 
+def _elements(
+    cur: psycopg.Cursor, params: dict[str, Any]
+) -> tuple[list[tuple[str, str, Any]], dict[str, dict[str, Any]]]:
+    """``_POI_QUERY``: (id, type, geometry) per element and its values by key."""
+    cur.execute(_POI_QUERY, params)
+    elements, attributes = [], {}
+    for element_id, element_type, geometry, *values in cur.fetchall():
+        elements.append((element_id, element_type, geometry))
+        attributes[element_id] = {
+            key: decode_value(value_type, num, text, js)
+            for key, value_type, num, text, js in zip(*values, strict=True)
+        }
+    return elements, attributes
+
+
 def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
     """Present amenities, establishments and transit stops (bus_stop, station),
     one row per poi_catalog type whose rule they meet: id, poi_type, capacity,
@@ -277,16 +293,7 @@ def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
         # category also gives the subcategory of the diversity sets, num_workers
         # the reachable jobs; a transit stop has no category, only its source.
         params["keys"] = sorted(own | {"category", "num_workers", "source"})
-        cur.execute(_POI_ELEMENTS_QUERY, params)
-        elements = cur.fetchall()
-        cur.execute(_POI_ATTRIBUTES_QUERY, params)
-        attribute_rows = cur.fetchall()
-
-    attributes: dict[str, dict[str, Any]] = {}
-    for element_id, key, value_type, num, text, js in attribute_rows:
-        attributes.setdefault(element_id, {})[key] = decode_value(
-            value_type, num, text, js
-        )
+        elements, attributes = _elements(cur, params)
     rows = [
         (
             element_id,
@@ -330,15 +337,8 @@ def read_elements(
             "types": element_types,
             "keys": keys,
         }
-        cur.execute(_POI_ELEMENTS_QUERY, params)
-        elements = pd.DataFrame(cur.fetchall(), columns=["id", "type", "geometry"])
-        cur.execute(_POI_ATTRIBUTES_QUERY, params)
-        attribute_rows = cur.fetchall()
-    attributes: dict[str, dict[str, Any]] = {}
-    for element_id, key, value_type, num, text, js in attribute_rows:
-        attributes.setdefault(element_id, {})[key] = decode_value(
-            value_type, num, text, js
-        )
+        rows, attributes = _elements(cur, params)
+    elements = pd.DataFrame(rows, columns=["id", "type", "geometry"])
     table = elements[["id", "type"]].copy()
     for key in keys:
         table[key] = pd.Series(
