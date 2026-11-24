@@ -655,6 +655,19 @@ def test_write_registers_missing_indicator_keys(dsn):
     assert stored(dsn, BASELINE)[(BLOCK, "distance_m_health")][0] > 0
 
 
+def test_register_indicators_counts_the_rows_added(dsn):
+    keys, types = ["distance_m_health", "population", "unknown"], ["lot", "block"]
+    with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM reimagina_urbano.indicator_catalog "
+            "WHERE key = 'distance_m_health'"
+        )
+        # Sent together: only the two missing rows count; unknown keys are skipped.
+        assert catalogs.register_indicators(cur, keys, types) == 2
+        assert catalogs.register_indicators(cur, keys, types) == 0
+        assert catalogs.register_indicators(cur, [], types) == 0
+
+
 def test_write_population_access(dsn):
     with psycopg.connect(dsn) as conn:
         conn.execute(

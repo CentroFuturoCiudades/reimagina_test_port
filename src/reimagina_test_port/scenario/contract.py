@@ -8,7 +8,8 @@ compatible value type and, for enums, the values it uses; otherwise it fails
 and names what to add, instead of silently skipping keys.
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any
 
 import psycopg
 from psycopg import sql
@@ -70,3 +71,18 @@ def check(
         msg = f"{SCHEMA}.{table} does not match the plugin: " + "; ".join(problems)
         raise ContractError(msg)
     return {key: (rows[key][0], rows[key][1]) for key in keys}
+
+
+def returned(
+    cur: psycopg.Cursor, query: sql.Composable, rows: Sequence[Sequence[Any]]
+) -> list[tuple[Any, ...] | None]:
+    """``query`` once per row of ``rows``, sent together (one round trip, not one
+    each: from a worker far from the database that took seconds per write); what
+    each returned, None for nothing."""
+    if not rows:
+        return []
+    cur.executemany(query, rows, returning=True)
+    results = [cur.fetchone()]
+    while cur.nextset():
+        results.append(cur.fetchone())
+    return results
