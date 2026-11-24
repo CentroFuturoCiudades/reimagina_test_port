@@ -113,7 +113,7 @@ def read_layers(
 PUBLIC_SPACES = ("JARDIN VECINAL", "PARQUE DE BARRIO", "PARQUE URBANO")
 # exe_reimagina ``cleaning/equipamientos/mexicali/2_equip_for_exe.ipynb``
 # (CATEGORY_CONFIG): its layers and TIPO filters, with the categories of
-# crosswalk.AMENITY_CATEGORIES. Two changes: esp_pub's sports spaces are sports (exe
+# crosswalk.AMENITY_CATEGORIES, plus admon_pub's police and fire stations. Two changes: esp_pub's sports spaces are sports (exe
 # counted them as parks), and edu_sup's universities are left out (neither the
 # indicators sheet nor denue_crosswalk.xlsx counts them). Rows no rule matches are left out (edu_basica's CENDI
 # and telesecundarias; esp_pub's medians, roundabouts...).
@@ -140,6 +140,15 @@ IMIP_LAYERS = {
             Rule("sports", ("ESPACIO DEPORTIVO",)),
         ),
         area_column="Sup_M2",
+    ),
+    # Public administration: police and fire stations, as the ULI's
+    # (MX_Mexicali_2025_ULI.yml's police and fire destinations).
+    "admon_pub": Layer(
+        (
+            Rule("police_station", ("INSTALACIONES POLICIALES",)),
+            Rule("fire_station", ("ESTACION DE BOMBEROS MUNICIPAL",)),
+        ),
+        name_column="NOMBRE",
     ),
 }
 
