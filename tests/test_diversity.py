@@ -8,6 +8,7 @@ import pytest
 from lyra.sdk import LocalRunner
 from shapely.geometry import Point, box
 
+from reimagina_test_port.indicators.population_access import diversity_calculation
 from reimagina_test_port.indicators.population_access.access_calculation import (
     entries,
     street_network,
@@ -107,6 +108,25 @@ def test_reached_adds_up_the_weights():
     np.testing.assert_array_equal(totals, [15.0, 0.0, 0.0])
     np.testing.assert_array_equal(counts, [[2, 1], [0, 1], [0, 0]])
     np.testing.assert_array_equal(measured, [True, True, False])
+
+
+def test_chunks_do_not_change_what_is_reached(monkeypatch):
+    # POIs out of order along the street, two at a time, in 500 m cells: each
+    # chunk searches only the nodes its POIs reach.
+    lots = gpd.GeoDataFrame(
+        geometry=[Point(x, 10) for x in range(100, 3000, 200)], crs=CRS
+    )
+    pois = points(*[(x, 5) for x in (2950, 120, 1980, 990, 2400, 40, 1510, 630)])
+    types = ["a", "b", "c", "a", "b", "c", "a", "b"]
+    weights = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
+    whole = reached(lots, pois, types, street(), CRS, 700, weights=weights)
+    monkeypatch.setattr(diversity_calculation, "CHUNK", 2)
+    monkeypatch.setattr(diversity_calculation, "CELL_M", 500.0)
+    chunked = reached(lots, pois, types, street(), CRS, 700, weights=weights)
+    for a, b in zip(whole, chunked, strict=True):
+        np.testing.assert_array_equal(a, b)
+    # Within 700 m along a single street: every lot reaches some POI.
+    assert (whole[0].sum(axis=1) > 0).all()
 
 
 def test_blocks_average_their_lots_weighted_by_population():
