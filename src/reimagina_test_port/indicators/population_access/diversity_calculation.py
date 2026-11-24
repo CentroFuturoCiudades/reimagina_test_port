@@ -23,7 +23,8 @@ from collections.abc import Iterator, Sequence
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-from scipy.sparse import coo_matrix
+import shapely
+from scipy.sparse import coo_matrix, csr_matrix
 from scipy.sparse.csgraph import dijkstra
 
 from reimagina_test_port.indicators.population_access.access_calculation import (
@@ -35,6 +36,8 @@ from reimagina_test_port.indicators.population_access.access_calculation import 
 
 # POIs per Dijkstra call; each returns a dense row over every node.
 CHUNK = 256
+# Side of the grid cells that group the POIs of a chunk.
+CELL_M = 1_000.0
 
 
 def reachable(
@@ -46,6 +49,20 @@ def reachable(
     """Pairs of ``origin`` and ``destination`` owners whose walk is within
     ``radius``, for ``CHUNK`` destinations at a time: one Dijkstra per destination,
     up to ``radius``, from a node of its own joined to its entries' nodes."""
+    for origin, destination in _pairs(origins, destinations, network, radius):
+        yield pd.DataFrame(
+            {"origin": origin, "destination": destination}
+        ).drop_duplicates(ignore_index=True)
+
+
+def _pairs(
+    origins: pd.DataFrame,
+    destinations: pd.DataFrame,
+    network: StreetNetwork,
+    radius: float,
+) -> Iterator[tuple[np.ndarray, np.ndarray]]:
+    """``reachable``'s pairs as (origin, destination) arrays, possibly repeated:
+    a pair joined through several nodes comes once per node."""
     owners = np.unique(destinations["owner"])
     source = network.nodes + np.searchsorted(owners, destinations["owner"])
     segment = destinations["segment"].to_numpy()
@@ -65,6 +82,8 @@ def reachable(
         .groupby(["source", "node"], as_index=False)["cost"]
         .min()
     )
+    # Each destination's first entry: where it is, to chunk them by place.
+    located = segment[np.unique(source, return_index=True)[1]]
     size = network.nodes + len(owners)
     graph = coo_matrix(
         (
@@ -98,6 +117,10 @@ def reachable(
         .groupby(["node", "origin"], as_index=False)["cost"]
         .min()
     )
+    # Sorted by node: the ends of node n are rows first[n]:first[n + 1].
+    end_origin = ends["origin"].to_numpy()
+    end_cost = ends["cost"].to_numpy()
+    first_end = np.searchsorted(ends["node"].to_numpy(), np.arange(network.nodes + 1))
     # A POI on the same segment is reached along it, without going to a node.
     same = origins.merge(destinations, on="segment", suffixes=("", "_poi"))
     direct = (
@@ -105,29 +128,38 @@ def reachable(
         + same["offset"]
         + same["offset_poi"]
     )
-    same = same.loc[direct <= radius, ["owner", "owner_poi"]].set_axis(
-        ["origin", "destination"], axis=1
-    )
+    same = same.loc[direct <= radius]
+    same_origin = same["owner"].to_numpy()
+    same_destination = same["owner_poi"].to_numpy()
+    # Destinations near each other share a chunk, so the nodes the chunk reaches
+    # are few: in grid cells of CELL_M by the first node of their first entry.
+    xy = np.zeros((network.nodes, 2))
+    xy[network.start] = shapely.get_coordinates(shapely.get_point(network.segments, 0))
+    xy[network.end] = shapely.get_coordinates(shapely.get_point(network.segments, -1))
+    cell = np.floor(xy[network.start[located]] / CELL_M)
+    order = np.lexsort((cell[:, 1], cell[:, 0]))
     for first in range(0, len(owners), CHUNK):
-        sources = network.nodes + np.arange(first, min(first + CHUNK, len(owners)))
-        walk = dijkstra(graph, directed=True, indices=sources, limit=radius)
-        row, node = np.nonzero(np.isfinite(walk[:, : network.nodes]))
-        near = pd.DataFrame(
-            {
-                "destination": owners[first + row],
-                "node": node,
-                "walk": walk[row, node],
-            }
-        ).merge(ends, on="node")
-        chunk = owners[first : first + CHUNK]
-        yield pd.concat(
-            [
-                near.loc[
-                    near["walk"] + near["cost"] <= radius, ["origin", "destination"]
-                ],
-                same[same["destination"].isin(chunk)],
-            ]
-        ).drop_duplicates(ignore_index=True)
+        chunk = order[first : first + CHUNK]
+        sources = network.nodes + chunk
+        # Only the nodes some destination of the chunk reaches are searched: a
+        # dense row over every node took most of the time.
+        nearest = dijkstra(
+            graph, directed=True, indices=sources, limit=radius, min_only=True
+        )
+        nodes = np.flatnonzero(np.isfinite(nearest[: network.nodes]))
+        walk = dijkstra(graph, directed=True, indices=sources, limit=radius)[:, nodes]
+        row, column = np.nonzero(np.isfinite(walk))
+        node = nodes[column]
+        # Each (destination, node) reached, joined to that node's ends.
+        start, count = first_end[node], np.diff(first_end)[node]
+        pair = np.repeat(np.arange(len(node)), count)
+        end = np.arange(len(pair)) - np.repeat(np.cumsum(count) - count - start, count)
+        near = walk[row[pair], column[pair]] + end_cost[end] <= radius
+        direct = np.isin(same_destination, owners[chunk])
+        yield (
+            np.concatenate([end_origin[end[near]], same_origin[direct]]),
+            np.concatenate([owners[chunk[row[pair[near]]]], same_destination[direct]]),
+        )
 
 
 def reached(
@@ -156,31 +188,31 @@ def reached(
     if len(pois) == 0:
         return counts, totals, measured
     place, places = pd.factorize(pois.to_wkb())
-    rows = pd.DataFrame(
-        {
-            "destination": place,
-            "kind": kind,
-            "weight": 0.0
-            if weights is None
-            else pd.to_numeric(pd.Series(weights), errors="coerce")
-            .fillna(0.0)
-            .to_numpy(),
-        }
+    weight = (
+        np.zeros(len(place))
+        if weights is None
+        else pd.to_numeric(pd.Series(weights), errors="coerce").fillna(0.0).to_numpy()
     )
-    # POIs reached by lot and type, added up a chunk of places at a time.
-    for pairs in reachable(
+    # Per place, its POIs by type and their weights: one column per type, then one.
+    by_place = np.zeros((len(places), len(kinds) + 1))
+    np.add.at(by_place, (place, kind), 1)
+    np.add.at(by_place, (place, len(kinds)), weight)
+    # POIs reached by lot and type, added up a chunk of places at a time: the lots x
+    # places matrix of the pairs, each once, times by_place.
+    for origin, destination in _pairs(
         origins,
         entries(gpd.GeoSeries.from_wkb(places, crs=pois.crs).to_crs(crs), network),
         network,
         radius,
     ):
-        found = pairs.merge(rows, on="destination")
-        origin = found["origin"].to_numpy()
-        counts += np.bincount(
-            origin * len(kinds) + found["kind"].to_numpy(),
-            minlength=counts.size,
-        ).reshape(counts.shape)
-        totals += np.bincount(origin, found["weight"], minlength=len(lots))
+        hits = csr_matrix(
+            (np.ones(len(origin)), (origin, destination)),
+            shape=(len(lots), len(places)),
+        )
+        hits.data[:] = 1
+        found = hits @ by_place
+        counts += found[:, :-1]
+        totals += found[:, -1]
     return counts, totals, measured
 
 
