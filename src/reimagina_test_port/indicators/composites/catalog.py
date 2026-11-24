@@ -25,6 +25,7 @@ from reimagina_test_port.indicators.composites.composite_metric import (
     load_config,
     reads_composite,
 )
+from reimagina_test_port.scenario.contract import returned
 from reimagina_test_port.scenario.source import SCHEMA
 
 JOB_CODE = "composites"
@@ -140,9 +141,7 @@ def register(cur: psycopg.Cursor, config: dict | None = None) -> dict[str, int]:
     counts = dict.fromkeys(
         ("added", "updated", "deprecated", "inputs_added", "inputs_removed"), 0
     )
-    for row in rows:
-        cur.execute(_UPSERT, row)
-        result = cur.fetchone()
+    for result in returned(cur, _UPSERT, rows):
         if result is not None:
             counts["added" if result[0] else "updated"] += 1
     cur.execute(_DEPRECATE, (JOB_CODE, [row[1] for row in rows]))

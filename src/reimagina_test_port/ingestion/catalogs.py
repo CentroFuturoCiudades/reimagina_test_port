@@ -34,7 +34,7 @@ from reimagina_test_port.ingestion.crosswalk import (
     AMENITY_CATEGORIES,
     ESTABLISHMENT_CATEGORIES,
 )
-from reimagina_test_port.scenario.contract import ContractError
+from reimagina_test_port.scenario.contract import ContractError, returned
 from reimagina_test_port.scenario.source import SCHEMA
 
 # (element_type, key) -> (value_type, enum_values, unit), where the plugin's kind
@@ -201,13 +201,7 @@ def register_indicators(
         for key in keys
         if key in INDICATORS
     ]
-    added = 0
-    for element_type, key, name, unit, value_type, job_code in rows:
-        cur.execute(
-            _INSERT_INDICATOR, (element_type, key, name, unit, value_type, job_code)
-        )
-        added += cur.fetchone() is not None
-    return added
+    return sum(row is not None for row in returned(cur, _INSERT_INDICATOR, rows))
 
 
 def upsert(
