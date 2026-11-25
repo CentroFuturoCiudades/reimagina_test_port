@@ -66,20 +66,13 @@
 #     residents, X being the type's coverage_m in poi_catalog.
 # - Blocks without residents have no distance: their leaves, and the composites
 #   that need them, are left missing.
-# - Weights follow the ULI's: each indicator weighs the same in its domain, and
-#   one in k domains counts 1/k in each (a third in each of three). The ULI
-#   scores indicators straight in their domains; here they are grouped in core
-#   measures, so a core measure weighs its indicators' count over its domains
-#   (daily services: 4 / 3; health, education and care: 6), and its leaves
-#   share it as indicators. A pair of «distance to X» and «share with access to
-#   X» is one ULI indicator: each leaf weighs 0.5. Walkability is one indicator,
-#   as the ULI's walkability index, whatever its components. A core measure in
-#   several domains is defined in its first and reused in the others with
-#   `ref`, with the same weight.
-# - Each domain is `flatten: true`: like the ULI's, it combines its core
-#   measures' leaves (each at its weight in the domain), with one imbalance
-#   penalty over them, not its core measures' indices. The core measures are
-#   still computed and written, to show them.
+# - Weights, as the ULI's: each indicator weighs 1 in its domain, or 1/k in each
+#   of k domains. A core measure weighs its indicators over its domains (daily
+#   services: 4 / 3), defined in its first domain and reused with `ref`. A pair
+#   «distance to X» + «share with access to X» is one indicator (0.5 each), and
+#   walkability is one.
+# - Domains are `flatten: true`: one imbalance penalty over their core measures'
+#   leaves. Core measures are computed only to show them.
 # - AMPI reference: the ULI's is the study region average. Here it is the
 #   average of the transformed indicator over Base Mexicali's blocks
 #   (510bff7c, November 2026), fixed so that a scenario is scored against the
