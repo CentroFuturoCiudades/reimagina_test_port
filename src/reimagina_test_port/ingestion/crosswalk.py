@@ -11,7 +11,7 @@ other, never both.
 A category is the finest kind of place the platform tells apart (a bakery, a
 daycare, a library), the one attribute that says what a place is: ``poi_catalog``
 rules and the diversity sets group categories, and a place counts in every group
-that lists its category (a preschool is both education and care).
+that lists its category (a school of several levels counts in each level).
 """
 
 import csv
@@ -23,10 +23,12 @@ import pandas as pd
 PATH = Path(__file__).with_name("crosswalk.csv")
 
 AMENITY_CATEGORIES = (
-    "preschool", "primary_education", "secondary_education", "tertiary_education",
-    "special_education", "health_center", "clinic", "hospital", "residence",
-    "daycare", "community_food", "community_center", "religious", "cultural_center",
-    "museum", "library", "sports", "park", "police_station", "fire_station",
+    "preschool", "primary_education", "secondary_education", "upper_secondary_education",
+    "tertiary_education", "multilevel_school", "special_education", "health_center",
+    "clinic", "specialist_clinic", "hospital", "residence", "daycare",
+    "social_assistance", "community_food", "community_center", "religious",
+    "cultural_center", "museum", "library", "sports", "park", "police_station",
+    "fire_station",
 )  # fmt: skip
 ESTABLISHMENT_CATEGORIES = (
     "supermarket", "convenience_store", "grocery", "butcher", "poultry", "fishmonger",

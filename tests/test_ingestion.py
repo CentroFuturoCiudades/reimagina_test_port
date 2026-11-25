@@ -275,18 +275,32 @@ def test_crosswalk_longest_prefix_and_other() -> None:
 
 
 def test_crosswalk_education_and_care() -> None:
-    # Each level of education is its own category, as the workbook groups them
-    # (media superior is tertiary; universities, 611312, are other); care splits
-    # into special education, daycare, community food and residences; the rest of
-    # 6242 is a community centre. An industrial bakery stays manufacturing.
-    codes = pd.Series(["611112", "611182", "611132", "611162", "611312", "624212",
-                       "624232", "813210", "624412", "623311", "311811",
-                       "311812"])  # fmt: skip
+    # As the ULI: media superior is upper secondary, universities and higher
+    # technical schools are tertiary and a school of several levels has its own
+    # category; care is 623 and 624 (daycare, residences, community food, the rest
+    # of 6242 a community centre, 6241 social assistance). An industrial bakery
+    # stays manufacturing.
+    codes = pd.Series(["611112", "611182", "611132", "611162", "611312", "611211",
+                       "611172", "624212", "624232", "624122", "813210", "624412",
+                       "623311", "311811", "311812"])  # fmt: skip
     expect_equal(
         crosswalk.classify(codes)["category"].tolist(),
-        ["preschool", "special_education", "secondary_education", "tertiary_education",
-         "other", "community_food", "community_center", "religious", "daycare",
-         "residence", "manufacturing", "bakery"],
+        ["preschool", "special_education", "secondary_education",
+         "upper_secondary_education", "tertiary_education", "tertiary_education",
+         "multilevel_school", "community_food", "community_center",
+         "social_assistance", "religious", "daycare", "residence", "manufacturing",
+         "bakery"],
+    )  # fmt: skip
+
+
+def test_crosswalk_health_as_uli() -> None:
+    # Primary care is general consulting rooms and their clinics; specialists,
+    # dentists and laboratories are specialist clinics. 468413 is a petrol station.
+    codes = pd.Series(["621111", "621116", "621113", "621212", "621511", "468413"])
+    expect_equal(
+        crosswalk.classify(codes)["category"].tolist(),
+        ["health_center", "clinic", "specialist_clinic", "specialist_clinic",
+         "specialist_clinic", "petrol_station"],
     )  # fmt: skip
 
 

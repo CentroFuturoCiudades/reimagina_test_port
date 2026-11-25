@@ -373,12 +373,13 @@ A category is the finest kind of place the platform tells apart (a bakery, a
 daycare, a library), and the only attribute that says what a place is: there is
 no separate subcategory. `poi_catalog` rules and the diversity sets
 (`population_access/nodes.py`) group categories, and a place counts in every
-group that lists its category: a preschool is both education and care.
+group that lists its category, and in every diversity subcategory that lists it:
+a school of several levels counts as preschool, primary and secondary.
 
 Each name comes from a source: the workbook's functional categories where one is
 a single kind of place (`primary_education`, `secondary_education`,
-`tertiary_education`, `hospital`, `basic_household_goods`, `financial`,
-`manufacturing`), else the kinds the indicators sheet lists («Subvariables»,
+`upper_secondary_education`, `tertiary_education`, `hospital`,
+`basic_household_goods`, `financial`, `manufacturing`), else the kinds the indicators sheet lists («Subvariables»,
 column H): `supermarket`, `grocery` (abarroterías), `butcher`, `poultry`,
 `fishmonger`, `greengrocer` (fruterías and verdulerías, both 461130), `bakery`,
 `tortilleria`, `convenience_store`, `petrol_station`, `preschool`, `health_center`,
@@ -389,8 +390,17 @@ kinds the workbook's descriptions name: `special_education`, `daycare`,
 `dairy` (46114, 46115, in its fresh food) and `cinema` (512130, in its cultural
 facilities). `other_food` is the rest of its food retail (4611).
 
-Media superior (61115–61116) is `tertiary_education`, the workbook's
-*Tertiary/vocational education*; neither it nor the sheet counts universities.
+The categories follow the ULI's (`MX_Mexicali_2025_ULI.yml`, its DENUE
+destinations), so both measure the same places. Media superior (61115–61116) is
+`upper_secondary_education`; `tertiary_education` is higher technical schools and
+universities (6112, 6113), commercial and secretarial schools (61141) and trades
+schools (61151); schools of several levels (61117) are `multilevel_school`, which
+counts in each level. Primary care is `health_center` (general consulting rooms,
+621111/2) and `clinic` (their clinics, 621115/6); specialist, dental and optometry
+consulting rooms, other outpatient centres and laboratories (621113/4, 62121,
+62132, 62139, 62149, 62151) are `specialist_clinic`. Care is 623 and 624:
+`residence`, `daycare`, `community_food`, `community_center` and, for the rest of
+624 (6241), `social_assistance`. Petrol stations are 468411 and 468413.
 Only traditional bakeries (311812) are `bakery`; the industrial 311811 stays
 `manufacturing`. Public sports clubs and gyms, museums and libraries (51912,
 51921, codes the workbook does not list; the API's rules already read them) are
@@ -420,7 +430,7 @@ Mexicali's normalizer, `imip`, reads IMIP's equipment layers
 with exe_reimagina's `2_equip_for_exe.ipynb` rules: five of its 15 layers,
 `edu_basica` split by `TIPO` (primary `primary_education`, preschool `preschool`,
 general and technical secondary `secondary_education`; CENDI and telesecundaria
-left out), `med_sup` `tertiary_education` (`edu_sup`, universities, is left out),
+left out), `med_sup` `upper_secondary_education` (`edu_sup`, universities, is left out),
 `deporte`
 `sports`, `cult_rec` `cultural_center`, and `esp_pub` filtered to
 neighbourhood gardens and parks (`park`) and sports spaces

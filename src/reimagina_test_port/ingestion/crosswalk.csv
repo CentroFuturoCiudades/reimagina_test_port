@@ -3,20 +3,29 @@ scian_prefix,element,category,note
 61112,amenity,primary_education,Primaria
 61113,amenity,secondary_education,Secundaria general
 61114,amenity,secondary_education,Secundaria técnica
-61115,amenity,tertiary_education,Media técnica terminal (the workbook's Tertiary/vocational education)
-61116,amenity,tertiary_education,Media superior (the workbook's Tertiary/vocational education)
+61115,amenity,upper_secondary_education,Media técnica terminal (the ULI's secondary and upper secondary)
+61116,amenity,upper_secondary_education,Media superior (the ULI's secondary and upper secondary)
+61117,amenity,multilevel_school,"Escuelas que combinan diversos niveles de educación (the ULI counts them in each level)"
 61118,amenity,special_education,Educación para necesidades especiales
+6112,amenity,tertiary_education,Técnica superior (the ULI's tertiary and vocational education)
+6113,amenity,tertiary_education,Educación superior (universidades)
+61141,amenity,tertiary_education,Escuelas comerciales y secretariales (the ULI's tertiary and vocational education)
+61151,amenity,tertiary_education,Escuelas de oficios (the ULI's tertiary and vocational education)
 621111,amenity,health_center,Consultorios de medicina general privados
 621112,amenity,health_center,Consultorios de medicina general públicos
-62121,amenity,health_center,Consultorios dentales
-62132,amenity,health_center,Consultorios de optometría
-62139,amenity,health_center,"Otros consultorios (nutriólogos, dietistas y otros)"
-62149,amenity,health_center,Otros centros para pacientes que no requieren hospitalización
+621113,amenity,specialist_clinic,Consultorios de medicina especializada privados
+621114,amenity,specialist_clinic,Consultorios de medicina especializada públicos
+62121,amenity,specialist_clinic,Consultorios dentales
+62132,amenity,specialist_clinic,Consultorios de optometría
+62139,amenity,specialist_clinic,"Otros consultorios (nutriólogos, dietistas y otros)"
+62149,amenity,specialist_clinic,Otros centros para pacientes que no requieren hospitalización
+62151,amenity,specialist_clinic,Laboratorios médicos y de diagnóstico (the ULI's specialist and diagnostic clinics)
 621115,amenity,clinic,Clínicas de consultorios médicos privadas
 621116,amenity,clinic,Clínicas de consultorios médicos públicas
 622,amenity,hospital,Hospitales
 623,amenity,residence,Residencias de asistencia social y para el cuidado de la salud
 6244,amenity,daycare,Guarderías
+6241,amenity,social_assistance,Orientación y trabajo social (the rest of the ULI's 624)
 62421,amenity,community_food,Servicios de alimentación comunitarios
 6242,amenity,community_center,"Alimentación, refugio y emergencia comunitarios"
 6243,amenity,community_center,Capacitación para el trabajo de personas desempleadas
@@ -39,6 +48,7 @@ scian_prefix,element,category,note
 311812,establishment,bakery,Panificación tradicional (panaderías; the industrial 311811 stays manufacturing)
 311830,establishment,tortilleria,Tortillas de maíz y molienda de nixtamal
 468411,establishment,petrol_station,Gasolina y diésel
+468413,establishment,petrol_station,Otros combustibles (the ULI's petrol stations)
 466111,establishment,basic_household_goods,Muebles para el hogar
 466112,establishment,basic_household_goods,Electrodomésticos menores y aparatos de línea blanca
 466114,establishment,basic_household_goods,"Cristalería, loza y utensilios de cocina"
