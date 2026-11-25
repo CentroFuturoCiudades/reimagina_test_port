@@ -31,6 +31,9 @@
 #   phenomenon positive (higher index is better) or negative
 #   min_valid  how many children must have a value (default: all)
 #   weight     its weight in its parent (default 1)
+#   flatten    optional, true: combine the child composites' leaves (each child's
+#              weight shared among its leaves as their weights say) instead of
+#              their indices, with one penalty; their children must be leaves
 #
 # Normalised scores sit around 100: AMPI puts the reference at 100 and moves 60
 # points across the goalposts; MPI puts the mean at 100 and 10 points per SD.
@@ -73,6 +76,10 @@
 #   as the ULI's walkability index, whatever its components. A core measure in
 #   several domains is defined in its first and reused in the others with
 #   `ref`, with the same weight.
+# - Each domain is `flatten: true`: like the ULI's, it combines its core
+#   measures' leaves (each at its weight in the domain), with one imbalance
+#   penalty over them, not its core measures' indices. The core measures are
+#   still computed and written, to show them.
 # - AMPI reference: the ULI's is the study region average. Here it is the
 #   average of the transformed indicator over Base Mexicali's blocks
 #   (510bff7c, November 2026), fixed so that a scenario is scored against the
@@ -103,6 +110,7 @@ trees:
         label: Infraestructura social
         phenomenon: positive
         min_valid: 1
+        flatten: true
         children:
           # Acceso a servicios diarios: social infrastructure, mobility and
           # transport, economic development.
@@ -356,6 +364,7 @@ trees:
         label: Movilidad y transporte
         phenomenon: positive
         min_valid: 1
+        flatten: true
         children:
           - {ref: daily_services, weight: 1.3333}
           - {ref: walkability, weight: 0.3333}
@@ -394,6 +403,7 @@ trees:
         label: Desarrollo económico
         phenomenon: positive
         min_valid: 1
+        flatten: true
         children:
           - {ref: daily_services, weight: 1.3333}
           # Acceso a fuentes de empleo.
@@ -447,6 +457,7 @@ trees:
         label: Entorno medioambiental
         phenomenon: positive
         min_valid: 1
+        flatten: true
         children:
           # Acceso a parques: ambient environment, built environment.
           - name: parks
@@ -508,6 +519,7 @@ trees:
         label: Ambiente construido
         phenomenon: positive
         min_valid: 1
+        flatten: true
         children:
           - {ref: parks, weight: 0.5}
           - {ref: large_public_green_space, weight: 0.5}
@@ -520,6 +532,7 @@ trees:
         label: Seguridad y protección
         phenomenon: positive
         min_valid: 1
+        flatten: true
         children:
           # Presencia de infraestructura ciclista: safety, mobility and
           # transport, built environment. Each a share (0-1) of the street

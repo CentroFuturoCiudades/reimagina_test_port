@@ -311,6 +311,38 @@ def test_a_composite_reused_by_two_indices():
     assert out["index"].tolist() == pytest.approx(expected.tolist(), nan_ok=True)
 
 
+def test_a_flattened_composite_combines_its_childrens_leaves():
+    config = dag()
+    config["trees"][1]["flatten"] = True  # care: ref health (weight 2), school
+    runner = snapshot_runner(config)
+    care = runner.run("reimagina_composite_care", PARAMS)[
+        "reimagina_composite_care_blocks"
+    ].set_index("id")
+    health_table = (
+        runner.run("reimagina_composite_health", PARAMS)[
+            "reimagina_composite_health_blocks"
+        ]
+        .set_index("id")
+        .reindex(care.index)
+    )
+    # The child's column is still its index, to show it.
+    assert care["health"].tolist() == pytest.approx(
+        health_table["index"].tolist(), nan_ok=True
+    )
+    # The index: health's leaves, sharing its weight 2 as their own weights say,
+    # and school, with one penalty over them all.
+    leaves = health(config)["children"]
+    total = sum(float(leaf.get("weight", 1)) for leaf in leaves)
+    expected = build_composite(
+        [health_table[leaf["name"]] for leaf in leaves] + [care["school"]],
+        weights=[2 * float(leaf.get("weight", 1)) / total for leaf in leaves] + [1],
+    )
+    assert care["index"].tolist() == pytest.approx(
+        expected["index"].tolist(), nan_ok=True
+    )
+    assert care["n"].max() == len(leaves) + 1
+
+
 @pytest.mark.parametrize(
     ("change", "message"),
     [
@@ -326,6 +358,9 @@ def test_a_composite_reused_by_two_indices():
         (lambda c: c.update(trees=[]), "trees must list"),
         (lambda c: c["trees"].append({"name": "lone", "source": "accessibility"}),
          "a tree's root must be a composite"),
+        (lambda c: c["trees"][1].update(flatten="yes"), "flatten must be true or false"),
+        (lambda c: c["trees"][0].update(flatten=True),
+         "index > proximity: a flattened composite's children must have only leaves"),
     ],
 )  # fmt: skip
 def test_dag_errors(change, message):
