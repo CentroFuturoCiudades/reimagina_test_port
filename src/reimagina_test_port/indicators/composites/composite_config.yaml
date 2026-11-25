@@ -63,9 +63,16 @@
 #     residents, X being the type's coverage_m in poi_catalog.
 # - Blocks without residents have no distance: their leaves, and the composites
 #   that need them, are left missing.
-# - A core measure in several domains counts an equal share of its weight in
-#   each, as the ULI does (a third in each of three): it is defined in its
-#   first domain and reused in the others with `ref`.
+# - Weights follow the ULI's: each indicator weighs the same in its domain, and
+#   one in k domains counts 1/k in each (a third in each of three). The ULI
+#   scores indicators straight in their domains; here they are grouped in core
+#   measures, so a core measure weighs its indicators' count over its domains
+#   (daily services: 4 / 3; health, education and care: 6), and its leaves
+#   share it as indicators. A pair of «distance to X» and «share with access to
+#   X» is one ULI indicator: each leaf weighs 0.5. Walkability is one indicator,
+#   as the ULI's walkability index, whatever its components. A core measure in
+#   several domains is defined in its first and reused in the others with
+#   `ref`, with the same weight.
 # - AMPI reference: the ULI's is the study region average. Here it is the
 #   average of the transformed indicator over Base Mexicali's blocks
 #   (510bff7c, November 2026), fixed so that a scenario is scored against the
@@ -102,10 +109,11 @@ trees:
           - name: daily_services
             label: Acceso a servicios diarios
             phenomenon: positive
-            weight: 0.3333
+            weight: 1.3333
             children:
               # ULI fresh_food: fresh food within 300 m.
               - name: fresh_food
+                weight: 0.5
                 source: population_access
                 variable: distance_m_fresh_food
                 transform: {soft_threshold: 300}
@@ -115,6 +123,7 @@ trees:
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 300 m.
               - name: fresh_food_pct
+                weight: 0.5
                 source: population_access
                 variable: share_with_access_fresh_food
                 polarity: positive
@@ -123,6 +132,7 @@ trees:
                 goalposts: {min: 0, max: 1}
               # ULI convenience: convenience stores within 300 m.
               - name: convenience
+                weight: 0.5
                 source: population_access
                 variable: distance_m_convenience_store
                 transform: {soft_threshold: 300}
@@ -132,6 +142,7 @@ trees:
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 300 m.
               - name: convenience_pct
+                weight: 0.5
                 source: population_access
                 variable: share_with_access_convenience_store
                 polarity: positive
@@ -141,6 +152,7 @@ trees:
               # ULI petrol_250m: a disamenity, 250 m or more from a petrol
               # station scores 1.
               - name: petrol_250m
+                weight: 0.5
                 source: population_access
                 variable: distance_m_petrol_station
                 transform: {steps: [[250, 0]], beyond: 1}
@@ -150,6 +162,7 @@ trees:
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 250 m (a disamenity: fewer is better).
               - name: petrol_250m_pct
+                weight: 0.5
                 source: population_access
                 variable: share_with_access_petrol_station
                 polarity: negative
@@ -170,10 +183,12 @@ trees:
           - name: health_education_care
             label: Acceso a salud, educación y cuidados
             phenomenon: positive
+            weight: 6
             children:
               # ULI primary_school, over every level: the sheet's «Access to
               # educational services» (preschool to tertiary) within 300 m.
               - name: education
+                weight: 0.5
                 source: population_access
                 variable: distance_m_education
                 transform: {soft_threshold: 300}
@@ -183,6 +198,7 @@ trees:
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 300 m.
               - name: education_pct
+                weight: 0.5
                 source: population_access
                 variable: share_with_access_education
                 polarity: positive
@@ -191,6 +207,7 @@ trees:
                 goalposts: {min: 0, max: 1}
               # ULI primary_healthcare: health care within 300 m.
               - name: primary_healthcare
+                weight: 0.5
                 source: population_access
                 variable: distance_m_health
                 transform: {soft_threshold: 300}
@@ -200,6 +217,7 @@ trees:
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 300 m.
               - name: primary_healthcare_pct
+                weight: 0.5
                 source: population_access
                 variable: share_with_access_health
                 polarity: positive
@@ -208,6 +226,7 @@ trees:
                 goalposts: {min: 0, max: 1}
               # ULI care_support: care services within 300 m.
               - name: care_support
+                weight: 0.5
                 source: population_access
                 variable: distance_m_care
                 transform: {soft_threshold: 300}
@@ -217,6 +236,7 @@ trees:
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 300 m.
               - name: care_support_pct
+                weight: 0.5
                 source: population_access
                 variable: share_with_access_care
                 polarity: positive
@@ -255,9 +275,11 @@ trees:
           - name: community_culture_recreation
             label: Acceso a espacios comunitarios, culturales y recreativos
             phenomenon: positive
+            weight: 2
             children:
               # ULI ccr_any: community, culture and recreation within 300 m.
               - name: ccr_any
+                weight: 0.5
                 source: population_access
                 variable: distance_m_community_culture_recreation
                 transform: {soft_threshold: 300}
@@ -267,6 +289,7 @@ trees:
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 300 m.
               - name: ccr_any_pct
+                weight: 0.5
                 source: population_access
                 variable: share_with_access_community_culture_recreation
                 polarity: positive
@@ -334,10 +357,10 @@ trees:
         phenomenon: positive
         min_valid: 1
         children:
-          - {ref: daily_services, weight: 0.3333}
+          - {ref: daily_services, weight: 1.3333}
           - {ref: walkability, weight: 0.3333}
-          - {ref: cycling_infrastructure, weight: 0.3333}
-          - {ref: street_lighting, weight: 0.3333}
+          - {ref: cycling_infrastructure, weight: 0.6667}
+          - {ref: street_lighting, weight: 1}
           # Acceso al transporte público: mobility and transport only.
           - name: public_transport
             label: Acceso al transporte público
@@ -348,6 +371,7 @@ trees:
               # terminals and OpenStreetMap's stops, 36 in Mexicali, so few blocks
               # have one that close.
               - name: pt_any_300m
+                weight: 0.5
                 source: population_access
                 variable: distance_m_transit_stop
                 transform: {soft_threshold: 300}
@@ -357,6 +381,7 @@ trees:
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 300 m.
               - name: pt_any_300m_pct
+                weight: 0.5
                 source: population_access
                 variable: share_with_access_transit_stop
                 polarity: positive
@@ -370,14 +395,16 @@ trees:
         phenomenon: positive
         min_valid: 1
         children:
-          - {ref: daily_services, weight: 0.3333}
+          - {ref: daily_services, weight: 1.3333}
           # Acceso a fuentes de empleo.
           - name: employment
             label: Acceso a fuentes de empleo
             phenomenon: positive
+            weight: 3
             children:
               # ULI manufacturing_1000m: binary access within 1 km.
               - name: manufacturing_1000m
+                weight: 0.5
                 source: population_access
                 variable: distance_m_manufacturing
                 transform: {steps: [[1000, 1]], beyond: 0}
@@ -387,6 +414,7 @@ trees:
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 1000 m.
               - name: manufacturing_1000m_pct
+                weight: 0.5
                 source: population_access
                 variable: share_with_access_manufacturing
                 polarity: positive
@@ -428,6 +456,7 @@ trees:
             children:
               # ULI parks: a park or public open space within 300 m.
               - name: public_open_space
+                weight: 0.5
                 source: population_access
                 variable: distance_m_public_space
                 transform: {soft_threshold: 300}
@@ -437,6 +466,7 @@ trees:
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 300 m.
               - name: public_open_space_pct
+                weight: 0.5
                 source: population_access
                 variable: share_with_access_public_space
                 polarity: positive
@@ -455,6 +485,7 @@ trees:
               # at least 0.2; here a park of at least 1 ha whose lot has at least
               # 20% tree canopy (the lpugs type of poi_catalog).
               - name: lpugs_500m
+                weight: 0.5
                 source: population_access
                 variable: distance_m_lpugs
                 transform: {steps: [[500, 1]], beyond: 0}
@@ -464,6 +495,7 @@ trees:
                 goalposts: {min: 0, max: 1}
               # Percentage of population with access within 500 m.
               - name: lpugs_500m_pct
+                weight: 0.5
                 source: population_access
                 variable: share_with_access_lpugs
                 polarity: positive
@@ -480,8 +512,8 @@ trees:
           - {ref: parks, weight: 0.5}
           - {ref: large_public_green_space, weight: 0.5}
           - {ref: walkability, weight: 0.3333}
-          - {ref: cycling_infrastructure, weight: 0.3333}
-          - {ref: street_lighting, weight: 0.3333}
+          - {ref: cycling_infrastructure, weight: 0.6667}
+          - {ref: street_lighting, weight: 1}
 
       # -- Safety ---------------------------------------------------------------
       - name: safety
@@ -495,7 +527,7 @@ trees:
           - name: cycling_infrastructure
             label: Presencia de infraestructura ciclista
             phenomenon: positive
-            weight: 0.3333
+            weight: 0.6667
             children:
               # Bicycle lanes coverage: streets with a bike lane, shared or
               # protected.
@@ -520,7 +552,7 @@ trees:
           - name: street_lighting
             label: Seguridad personal y vial (alumbrado público)
             phenomenon: positive
-            weight: 0.3333
+            weight: 1
             # Police and fire stations have no source yet: the lighting alone
             # scores the measure until they do.
             min_valid: 1
