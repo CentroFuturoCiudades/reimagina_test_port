@@ -140,13 +140,15 @@ _POI_QUERY = sql.SQL(
         GROUP BY element_id
     ),
     state AS (
-        SELECT DISTINCT ON (es.element_id) es.element_id, es.geometry, es.deleted_at
+        SELECT DISTINCT ON (es.element_id)
+               es.element_id, es.parent_element_id, es.geometry, es.deleted_at
         FROM {element_state} es
         WHERE es.scenario_id IN (%(scenario)s::uuid, %(baseline)s::uuid)
           AND es.element_id IN (SELECT element_id FROM value)
         ORDER BY es.element_id, (es.scenario_id = %(scenario)s::uuid) DESC
     )
     SELECT st.element_id::text AS id, e.type::text AS type,
+           COALESCE(st.parent_element_id, e.parent_element_id)::text AS parent_id,
            ST_AsBinary(st.geometry) AS geometry,
            v.keys, v.value_types, v.nums, v.texts, v.jsons
     FROM state st
@@ -257,12 +259,13 @@ def _matches(rules: dict[str, dict[str, Any]], element: dict[str, Any]) -> list[
 
 def _elements(
     cur: psycopg.Cursor, params: dict[str, Any]
-) -> tuple[list[tuple[str, str, Any]], dict[str, dict[str, Any]]]:
-    """``_POI_QUERY``: (id, type, geometry) per element and its values by key."""
+) -> tuple[list[tuple[str, str, str | None, Any]], dict[str, dict[str, Any]]]:
+    """``_POI_QUERY``: (id, type, parent_id, geometry) per element and its values
+    by key."""
     cur.execute(_POI_QUERY, params)
     elements, attributes = [], {}
-    for element_id, element_type, geometry, *values in cur.fetchall():
-        elements.append((element_id, element_type, geometry))
+    for element_id, element_type, parent_id, geometry, *values in cur.fetchall():
+        elements.append((element_id, element_type, parent_id, geometry))
         attributes[element_id] = {
             key: decode_value(value_type, num, text, js)
             for key, value_type, num, text, js in zip(*values, strict=True)
@@ -273,7 +276,7 @@ def _elements(
 def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
     """Present amenities, establishments and transit stops (bus_stop, station),
     one row per poi_catalog type whose rule they meet: id, poi_type, capacity,
-    category, element_type, num_workers, geometry."""
+    category, element_type, num_workers, parent_id (its lot), geometry."""
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
         params = {
             "scenario": scenario_id,
@@ -301,9 +304,10 @@ def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
             values.get("category"),
             element_type,
             values.get("num_workers"),
+            parent_id,
             geometry,
         )
-        for element_id, element_type, geometry in elements
+        for element_id, element_type, parent_id, geometry in elements
         for values in [attributes.get(element_id, {})]
         for poi_type in _matches(rules, {**values, "type": element_type})
     ]
@@ -315,6 +319,7 @@ def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
             "category",
             "element_type",
             "num_workers",
+            "parent_id",
             "geometry",
         ],
     )
@@ -338,7 +343,7 @@ def read_elements(
             "keys": keys,
         }
         rows, attributes = _elements(cur, params)
-    elements = pd.DataFrame(rows, columns=["id", "type", "geometry"])
+    elements = pd.DataFrame(rows, columns=["id", "type", "parent_id", "geometry"])
     table = elements[["id", "type"]].copy()
     for key in keys:
         table[key] = pd.Series(
