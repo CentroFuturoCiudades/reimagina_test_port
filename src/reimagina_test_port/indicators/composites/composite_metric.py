@@ -67,7 +67,9 @@ LEAF_KEYS = {
     "name", "source", "variable", "polarity", "method", "transform", "reference",
     "goalposts", "mean", "sd", "compress", "weight",
 }  # fmt: skip
-COMPOSITE_KEYS = {"name", "label", "phenomenon", "min_valid", "weight", "children"}
+COMPOSITE_KEYS = {
+    "name", "label", "phenomenon", "min_valid", "weight", "children", "flatten",
+}  # fmt: skip
 RESULT = ["index", "mean", "penalty", "n"]
 # Child names become output columns and handler arguments: none of these.
 RESERVED = {*RESULT, *IDENTITY, "geometry", *SOURCES, "parameters", "context",
@@ -184,6 +186,8 @@ def check_tree(config: dict) -> tuple[str, list[dict], str | None]:
                 fail(where, "a composite needs children")
             if node.get("phenomenon", "positive") not in ("positive", "negative"):
                 fail(where, "phenomenon must be positive or negative")
+            if not isinstance(node.get("flatten", False), bool):
+                fail(where, "flatten must be true or false")
             required = min_valid(node)
             if required is not None and not 1 <= required <= len(children):
                 fail(where, f"min_valid must be 'all' or 1-{len(children)}")
@@ -215,6 +219,17 @@ def check_tree(config: dict) -> tuple[str, list[dict], str | None]:
             fail(where, f"no composite named {target!r} to reuse")
         if target in RESERVED:
             fail(where, f"{target!r} can't be a column; rename that composite")
+    # A flattened composite reads its child composites' leaves: they must be leaves.
+    for name, node in defined.items():
+        if node.get("flatten"):
+            for child in node["children"]:
+                if reads_composite(child) and any(
+                    reads_composite(c) for c in defined[child_name(child)]["children"]
+                ):
+                    fail(
+                        f"{name} > {child_name(child)}",
+                        "a flattened composite's children must have only leaves",
+                    )
 
     # Children before parents; a composite that ends up needing itself fails.
     order: list[dict] = []
@@ -249,6 +264,33 @@ def composite_inputs(node: dict, element: str) -> dict[str, Dependency]:
             prefix = SOURCES[child["source"]][0]
             inputs[child["source"]] = Dependency(f"{prefix}_{element}")
     return inputs
+
+
+def flattened_parts(
+    node: dict, composites: dict[str, dict]
+) -> list[tuple[str | None, str, float]]:
+    """What a ``flatten: true`` composite combines: ``(child composite, leaf,
+    weight)`` per leaf, a child composite's weight shared among its leaves as
+    their own weights say, and ``(None, leaf, weight)`` per leaf of its own. The
+    ULI's domains combine indicators, not core measures: one imbalance penalty,
+    over them. ``composites`` maps each composite's name to its node."""
+    parts: list[tuple[str | None, str, float]] = []
+    for child in node["children"]:
+        weight = float(child.get("weight", 1))
+        if not reads_composite(child):
+            parts.append((None, child["name"], weight))
+            continue
+        leaves = composites[child_name(child)]["children"]
+        total = sum(float(leaf.get("weight", 1)) for leaf in leaves)
+        parts.extend(
+            (
+                child_name(child),
+                leaf["name"],
+                weight * float(leaf.get("weight", 1)) / total,
+            )
+            for leaf in leaves
+        )
+    return parts
 
 
 def tree_leaves(composites: list[dict]) -> list[dict]:
@@ -289,9 +331,12 @@ def composite_table(
     tables: dict[str, gpd.GeoDataFrame],
     boundary: gpd.GeoDataFrame | None = None,
     calibration: dict[str, dict] | None = None,
+    parts: list[tuple[str | None, str, float]] | None = None,
 ) -> gpd.GeoDataFrame:
     """Each child's score (leaves normalised, child composites' index), then
-    the Mazziotta-Pareto composite, per element of the first input. With a
+    the Mazziotta-Pareto composite, per element of the first input. With
+    ``parts`` (``flattened_parts``), the composite combines those leaves'
+    scores, read from the child composites' tables, instead of the children's. With a
     boundary, only the elements whose representative point lies inside it, so
     the others are out of any normalisation statistics (compress: true) too.
     With a ``calibration`` (by leaf name), a leaf takes its values from it, and
@@ -313,9 +358,19 @@ def composite_table(
                 score = normalize_indicators(values, **leaf_arguments(leaf))
         result[name] = score.to_numpy()
         scores.append(score.rename(name))
+    weights = [float(child.get("weight", 1)) for child in node["children"]]
+    if parts is not None:
+        own = {score.name: score for score in scores}
+        scores = [
+            own[leaf].rename(leaf)
+            if composite is None
+            else by_id(tables[composite], leaf, ids).rename(leaf)
+            for composite, leaf, _ in parts
+        ]
+        weights = [weight for _, _, weight in parts]
     combined = build_composite(
         scores,
-        weights=[float(child.get("weight", 1)) for child in node["children"]],
+        weights=weights,
         phenomenon=node.get("phenomenon", "positive"),
         min_valid=min_valid(node),
     )
@@ -366,8 +421,9 @@ def composite_metric(
     parameters_type: type[MetricParameters],
     boundary: bool,
     calibration: bool = False,
+    parts: list[tuple[str | None, str, float]] | None = None,
 ):
-    """The Lyra metric of one composite."""
+    """The Lyra metric of one composite; ``parts`` when it is flattened."""
     children = composite_inputs(node, element)
     inputs = children | ({"boundary": Dependency(BOUNDARY)} if boundary else {})
     if calibration:
@@ -383,6 +439,7 @@ def composite_metric(
                 tables,
                 arguments.get("boundary"),
                 None if calibrated is None else calibrations.from_table(calibrated),
+                parts,
             )
 
     # Lyra binds dependencies by argument name: one per input of this composite.
@@ -478,9 +535,15 @@ def composite_metrics(
         without_sources(load_config() if config is None else config, missing)
     )
     nodes = [boundary_dataset(boundary, parameters_type)] if boundary else []
+    by_name = {node["name"]: node for node in composites}
     return nodes + [
         composite_metric(
-            node, element, parameters_type, boundary is not None, calibration
+            node,
+            element,
+            parameters_type,
+            boundary is not None,
+            calibration,
+            flattened_parts(node, by_name) if node.get("flatten") else None,
         )
         for node in composites
     ]
