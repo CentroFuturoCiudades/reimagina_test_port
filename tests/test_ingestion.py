@@ -216,7 +216,7 @@ def test_classify_land_use_from_contents() -> None:
         ("shop", "amenity", "care", "624411", 8),
         ("office", "establishment", "financial", "522110", 8),
         ("office", "establishment", "other", "541110", 3),
-        ("plant", "establishment", "manufacturing", "311830", 20),
+        ("plant", "establishment", "manufacturing_metal_machinery", "332710", 20),
         ("plant", "establishment", "food_retail", "461150", 3),
     )
     land_use, unit_size = elements.classify_land_use(
@@ -266,7 +266,7 @@ def test_crosswalk_longest_prefix_and_other() -> None:
         [("establishment", "grocery"), ("establishment", "dairy"),
          ("establishment", "convenience_store"),
          ("amenity", "primary_education"),
-         ("establishment", "tortilleria"), ("establishment", "other"),
+         ("establishment", "tortilleria"), ("establishment", "other_services"),
          ("establishment", "pharmacy"), ("establishment", "poultry"),
          ("establishment", "other_food"),
          ("establishment", "supermarket"),
@@ -279,7 +279,7 @@ def test_crosswalk_education_and_care() -> None:
     # technical schools are tertiary and a school of several levels has its own
     # category; care is 623 and 624 (daycare, residences, community food, the rest
     # of 6242 a community centre, 6241 social assistance). An industrial bakery
-    # stays manufacturing.
+    # stays manufacturing (its food subsector, 31).
     codes = pd.Series(["611112", "611182", "611132", "611162", "611312", "611211",
                        "611172", "624212", "624232", "624122", "813210", "624412",
                        "623311", "311811", "311812"])  # fmt: skip
@@ -288,7 +288,8 @@ def test_crosswalk_education_and_care() -> None:
         ["preschool", "special_education", "secondary_education",
          "upper_secondary_education", "tertiary_education", "tertiary_education",
          "multilevel_school", "community_food", "community_center",
-         "social_assistance", "religious", "daycare", "residence", "manufacturing",
+         "social_assistance", "religious", "daycare", "residence",
+         "manufacturing_food_textile",
          "bakery"],
     )  # fmt: skip
 
@@ -302,6 +303,35 @@ def test_crosswalk_health_as_uli() -> None:
         ["health_center", "clinic", "specialist_clinic", "specialist_clinic",
          "specialist_clinic", "petrol_station"],
     )  # fmt: skip
+
+
+def test_crosswalk_rest_of_each_sector() -> None:
+    # A code no finer prefix matches is the rest of its SCIAN sector; only a code
+    # that is not SCIAN is "other". A bank stays financial, the rest of 52 does not.
+    # Manufacturing and transport are split by their two digits, as the ULI's
+    # job diversity counts them.
+    codes = pd.Series(["541110", "431110", "722511", "484111", "493111", "522110",
+                       "524110", "931610", "468211", "315223", "326110", "336390",
+                       "99"])  # fmt: skip
+    expect_equal(
+        crosswalk.classify(codes)["category"].tolist(),
+        ["professional_services", "wholesale", "food_accommodation", "transport",
+         "postal_storage", "financial", "other_financial", "government",
+         "other_retail", "manufacturing_food_textile", "manufacturing_materials",
+         "manufacturing_metal_machinery", "other"],
+    )  # fmt: skip
+
+
+def test_economic_sectors_cover_every_category() -> None:
+    # Every category has a sector (or none, said so), and a category from the
+    # DENUE is in the sector of its codes.
+    categories = set(crosswalk.AMENITY_CATEGORIES) | set(
+        crosswalk.ESTABLISHMENT_CATEGORIES
+    )
+    expect_equal(set(crosswalk.ECONOMIC_SECTORS), categories)
+    for prefix, _, category in crosswalk.table():
+        sector = crosswalk.ECONOMIC_SECTORS[category]
+        expect_equal((prefix, sector), (prefix, prefix[:2]))
 
 
 def test_crosswalk_rejects_unknown_category(tmp_path: Path) -> None:

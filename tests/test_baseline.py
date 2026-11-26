@@ -600,7 +600,7 @@ def test_build(city, tmp_path):
     assert shop["scian_sector"] == "46"
     assert shop["num_workers"] == 3
     assert shop["name"] == "Tienda"
-    assert establishments.loc["denue:102", "category"] == "other"
+    assert establishments.loc["denue:102", "category"] == "other_services"
     assert establishments.loc["denue:102", "num_workers"] == 20
     assert establishments.loc["denue:102", "parent_id"] == lots.loc["1-A-7-1", "id"]
     assert establishments.loc["denue:105", "category"] == "pharmacy"

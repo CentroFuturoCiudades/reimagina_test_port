@@ -57,6 +57,26 @@ scian_prefix,element,category,note
 512130,establishment,cinema,Exhibición de películas y otros materiales audiovisuales
 713941,establishment,sports,Clubes deportivos privados
 713943,establishment,sports,Centros de acondicionamiento físico privados
-31,establishment,manufacturing,Industrias manufactureras
-32,establishment,manufacturing,Industrias manufactureras
-33,establishment,manufacturing,Industrias manufactureras
+31,establishment,manufacturing_food_textile,"Industrias manufactureras: alimentos, bebidas, tabaco, textiles, prendas y cuero"
+32,establishment,manufacturing_materials,"Industrias manufactureras: madera, papel, impresión, petróleo, química, plástico y minerales no metálicos"
+33,establishment,manufacturing_metal_machinery,"Industrias manufactureras: metales, maquinaria, equipo, electrónica, transporte y muebles"
+11,establishment,agriculture,"Agricultura, cría y explotación de animales, aprovechamiento forestal, pesca y caza (the rest of its SCIAN sector)"
+21,establishment,mining,Minería (the rest of its SCIAN sector)
+22,establishment,utilities,"Generación, transmisión, distribución y comercialización de energía eléctrica, suministro de agua y de gas natural (the rest of its SCIAN sector)"
+23,establishment,construction,Construcción (the rest of its SCIAN sector)
+43,establishment,wholesale,Comercio al por mayor (the rest of its SCIAN sector)
+46,establishment,other_retail,Comercio al por menor (the rest of its SCIAN sector)
+48,establishment,transport,Transportes (the rest of its SCIAN sector)
+49,establishment,postal_storage,"Correos, mensajería y almacenamiento (the rest of its SCIAN sector)"
+51,establishment,media,Información en medios masivos (the rest of its SCIAN sector)
+52,establishment,other_financial,Servicios financieros y de seguros (the rest of its SCIAN sector)
+53,establishment,real_estate,Servicios inmobiliarios y de alquiler de bienes muebles e intangibles (the rest of its SCIAN sector)
+54,establishment,professional_services,"Servicios profesionales, científicos y técnicos (the rest of its SCIAN sector)"
+55,establishment,corporate,Corporativos (the rest of its SCIAN sector)
+56,establishment,business_support,Servicios de apoyo a los negocios y manejo de residuos (the rest of its SCIAN sector)
+61,establishment,other_education,Servicios educativos (the rest of its SCIAN sector)
+62,establishment,other_health,Servicios de salud y de asistencia social (the rest of its SCIAN sector)
+71,establishment,other_recreation,"Servicios de esparcimiento culturales y deportivos, y otros servicios recreativos (the rest of its SCIAN sector)"
+72,establishment,food_accommodation,Servicios de alojamiento temporal y de preparación de alimentos y bebidas (the rest of its SCIAN sector)
+81,establishment,other_services,Otros servicios excepto actividades gubernamentales (the rest of its SCIAN sector)
+93,establishment,government,"Actividades legislativas, gubernamentales, de impartición de justicia y de organismos internacionales (the rest of its SCIAN sector)"
