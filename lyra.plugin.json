@@ -5187,7 +5187,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Diversity of each set of destinations within walking distance: the Shannon entropy of its subcategories, by category, among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has; and the workers of the establishments within 500 m (reachable jobs). Lots count the POIs their entries reach, walked as in reimagina_nearest_poi_distance; blocks average their lots weighted by population. And the ULI's job diversity: the entropy of the categories of the amenities and establishments of each lot, and of each block's lots, over ln of the categories there.",
+      "description": "Diversity of each set of destinations within walking distance: the Shannon entropy of its subcategories, by category, among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has; and the workers of the establishments within 500 m (reachable jobs). Lots count the POIs their entries reach, walked as in reimagina_nearest_poi_distance; blocks average their lots weighted by population. Job diversity is the ULI's instead: the entropy of the categories of the establishments of each lot, and of each block's lots, over ln of the categories there.",
       "inputs": {
         "blocks": {
           "arguments": {},
@@ -5275,7 +5275,7 @@
               "unit": "ratio"
             },
             {
-              "description": "Shannon entropy of the set's subcategories (by category) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
+              "description": "Shannon entropy of the categories of the establishments of the lot (for a block, of its lots) over ln k, k being how many categories are there (0 = one or none), as the ULI's job diversity. Null for a block without lots.",
               "name": "diversity_jobs",
               "nullable": true,
               "type": "number",
@@ -5287,13 +5287,6 @@
               "nullable": true,
               "type": "number",
               "unit": "count"
-            },
-            {
-              "description": "Shannon entropy of the categories of the amenities and establishments of the lot (for a block, of its lots) over ln k, k being how many categories are there (0 = one or none), as the ULI's job diversity. Null for a block without lots.",
-              "name": "job_diversity",
-              "nullable": true,
-              "type": "number",
-              "unit": "ratio"
             }
           ],
           "geometry": "geometry",
@@ -5358,7 +5351,7 @@
               "unit": "ratio"
             },
             {
-              "description": "Shannon entropy of the set's subcategories (by category) among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has (0 = one or none, 1 = all k equally); for a block, its lots' average weighted by population. Null without geometry or residents.",
+              "description": "Shannon entropy of the categories of the establishments of the lot (for a block, of its lots) over ln k, k being how many categories are there (0 = one or none), as the ULI's job diversity. Null for a block without lots.",
               "name": "diversity_jobs",
               "nullable": true,
               "type": "number",
@@ -5370,13 +5363,6 @@
               "nullable": true,
               "type": "number",
               "unit": "count"
-            },
-            {
-              "description": "Shannon entropy of the categories of the amenities and establishments of the lot (for a block, of its lots) over ln k, k being how many categories are there (0 = one or none), as the ULI's job diversity. Null for a block without lots.",
-              "name": "job_diversity",
-              "nullable": true,
-              "type": "number",
-              "unit": "ratio"
             }
           ],
           "geometry": "geometry",
@@ -7049,7 +7035,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Compute a scenario's diversity of each set of destinations and write it, its reachable jobs and its job diversity to Reimagina's element_state_indicator_value as diversity_<set>, reachable_jobs and job_diversity, under the same rules as reimagina_scenario_indicators. Only blocks are written.",
+      "description": "Compute a scenario's diversity of each set of destinations and write it and its reachable jobs to Reimagina's element_state_indicator_value as diversity_<set> and reachable_jobs, under the same rules as reimagina_scenario_indicators. Only blocks are written.",
       "inputs": {
         "blocks": {
           "arguments": {},

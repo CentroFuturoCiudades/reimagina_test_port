@@ -14,6 +14,13 @@ workers (reachable jobs).
 A POI is reached when the walk to it is within the radius, walked as in
 ``access_calculation``: from one of the lot's entries to one of the POI's, over the
 street network. A block averages its lots weighted by population.
+
+Job diversity is the ULI's instead (uli_mexicali_calculations_notebooks,
+``inidcadores_finales_export.ipynb``, ``add_economic_sector_diversity``): the same
+entropy among the places in the lot, not within walking distance, with k the
+categories there (``within_lots``). The notebook counts the DENUE records inside
+each block's polygon by SCIAN sector; here each place counts in its lot, where
+ingestion placed it, by category, and a block counts its lots' places.
 """
 
 from __future__ import annotations
@@ -231,3 +238,44 @@ def diversity(
     weights = population.where(by_lot.notna()).groupby(lots["parent_id"]).sum()
     by_block = (weighted / weights).reindex(blocks["id"])
     return {"lots": by_lot.to_numpy(), "blocks": by_block.to_numpy()}
+
+
+def evenness(owners: pd.Series, categories: pd.Series) -> pd.Series:
+    """D with k the categories present, by owner, over the owners with a place;
+    places without owner or category do not count."""
+    counts = (
+        pd.DataFrame({"owner": owners.to_numpy(), "category": categories.to_numpy()})
+        .dropna()
+        .groupby(["owner", "category"])
+        .size()
+    )
+    share = counts / counts.groupby(level="owner").transform("sum")
+    entropy = -(share * np.log(share)).groupby(level="owner").sum()
+    present = counts.groupby(level="owner").size()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return (entropy / np.log(present)).where(present > 1, 0.0)
+
+
+def within_lots(
+    lots: pd.DataFrame,
+    blocks: pd.DataFrame,
+    parents: pd.Series,
+    categories: pd.Series,
+) -> dict[str, np.ndarray]:
+    """By lot and by block, in order: ``evenness`` of the places of the lot, and of
+    the block's lots. ``parents`` is each place's lot id and ``categories`` its
+    category. A lot or block without places scores 0; a block without lots is
+    null."""
+    lot_ids = lots["id"].astype("string")
+    block_ids = blocks["id"].astype("string")
+    parents = pd.Series(parents.to_numpy(), dtype="string")
+    block_of = pd.Series(lots["parent_id"].astype("string").to_numpy(), index=lot_ids)
+    by_lot = evenness(parents, categories).reindex(lot_ids).fillna(0.0)
+    by_block = (
+        evenness(parents.map(block_of), categories).reindex(block_ids).fillna(0.0)
+    )
+    with_lots = block_ids.isin(block_of.dropna()).to_numpy()
+    return {
+        "lots": by_lot.to_numpy(),
+        "blocks": by_block.where(with_lots).to_numpy(),
+    }

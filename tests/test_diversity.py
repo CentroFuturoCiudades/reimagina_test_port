@@ -18,6 +18,7 @@ from reimagina_test_port.indicators.population_access.diversity_calculation impo
     poi_diversity,
     reachable,
     reached,
+    within_lots,
 )
 from reimagina_test_port.plugin import create_snapshot_plugin
 
@@ -121,6 +122,23 @@ def test_blocks_average_their_lots_weighted_by_population():
     # The lot without a value does not count; without residents, no average.
     assert block[0] == pytest.approx((10 * 0.5 + 30 * 1.0) / 40)
     assert np.isnan(block[1:]).all()
+
+
+def test_within_lots_over_the_categories_present():
+    lots = pd.DataFrame({"id": ["a", "b", "c"], "parent_id": ["X", "X", "Y"]})
+    blocks = pd.DataFrame({"id": ["X", "Y", "Z"]})
+    # Lot a holds a bakery and a pharmacy, b another bakery, c a bank. Places
+    # without lot, without category or in a lot not read do not count.
+    parents = pd.Series(["a", "a", "b", "c", None, "a", "elsewhere"])
+    categories = pd.Series(
+        ["bakery", "pharmacy", "bakery", "financial", "bakery", None, "bakery"]
+    )
+    values = within_lots(lots, blocks, parents, categories)
+    # k is the categories there: two even ones are 1, one alone is 0.
+    np.testing.assert_allclose(values["lots"], [1, 0, 0])
+    # X counts its lots' places: two bakeries and a pharmacy, k = 2. Z has no lots.
+    np.testing.assert_allclose(values["blocks"], [normalised(2, 1, k=2), 0, np.nan])
+    assert not np.signbit(values["blocks"][1])
 
 
 def test_snapshot_without_category_scores_zero():

@@ -51,7 +51,6 @@ from reimagina_test_port.indicators.accessibility.nodes import (
 from reimagina_test_port.indicators.land_use.calculation import KEYS as LAND_USE_KEYS
 from reimagina_test_port.indicators.population_access.nodes import (
     DIVERSITY_KEYS,
-    JOB_DIVERSITY_KEY,
     REACHABLE_JOBS_KEY,
     PoiType,
 )
@@ -783,10 +782,9 @@ def composites_write():
 @metric(
     name="reimagina_scenario_poi_diversity",
     description=(
-        "Compute a scenario's diversity of each set of destinations and write it, "
-        "its reachable jobs and its job diversity to Reimagina's "
-        "element_state_indicator_value as diversity_<set>, reachable_jobs and "
-        "job_diversity, under "
+        "Compute a scenario's diversity of each set of destinations and write it "
+        "and its reachable jobs to Reimagina's element_state_indicator_value as "
+        "diversity_<set> and reachable_jobs, under "
         "the same rules as reimagina_scenario_indicators. Only blocks are written."
     ),
     inputs={"blocks": Dependency("reimagina_poi_diversity_blocks")},
@@ -801,9 +799,7 @@ def scenario_poi_diversity(
     return write_group(
         parameters,
         {"block": blocks},
-        dict.fromkeys(
-            [*DIVERSITY_KEYS, REACHABLE_JOBS_KEY, JOB_DIVERSITY_KEY], "number"
-        ),
+        dict.fromkeys([*DIVERSITY_KEYS, REACHABLE_JOBS_KEY], "number"),
         node="reimagina_scenario_poi_diversity",
         log=context.logger,
     )
