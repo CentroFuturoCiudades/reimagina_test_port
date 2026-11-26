@@ -402,6 +402,14 @@ consulting rooms, other outpatient centres and laboratories (621113/4, 62121,
 62132, 62139, 62149, 62151) are `specialist_clinic`. Care is 623 and 624:
 `residence`, `daycare`, `community_food`, `community_center` and, for the rest of
 624 (6241), `social_assistance`. Petrol stations are 468411 and 468413.
+Bakeries and tortillerias are 311812 (`bakery`) and 311813 and 311830
+(`tortilleria`). Community, culture and recreation are the ULI's four groups:
+community is `religious` (81321), `civic_association` (81323) and
+`social_welfare` (93161); culture `cultural_center` (also the promoters of
+cultural events with a venue, 71131), `museum`, `library` and `cinema`; sport
+`sports` (also golf courses and bowling alleys, 713910 and 713950) and
+`sports_school` (61162); recreation `recreation_venue` (amusement and water
+parks, 71311, zoos and botanical gardens, 71213).
 Only traditional bakeries (311812) are `bakery`; the industrial 311811 stays
 `manufacturing_food_textile`. Public sports clubs and gyms, museums and libraries (51912,
 51921, codes the workbook does not list; the API's rules already read them) are

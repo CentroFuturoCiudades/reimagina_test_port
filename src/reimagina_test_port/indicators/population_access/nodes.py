@@ -289,9 +289,9 @@ DIVERSITY_M = 500
 # Each diversity set: its subcategories, each the element categories it groups
 # (crosswalk.CATEGORIES); k is how many subcategories it has. A category may sit in
 # several subcategories and counts in each (a school of several levels). As the
-# ULI's diversity groups (MX_Mexicali_2025_ULI.yml), except community, culture and
-# recreation, whose places also come from the city's own layers. The sets are not
-# poi_catalog types: that table holds destinations only.
+# ULI's diversity groups (MX_Mexicali_2025_ULI.yml); the city's own layers' places
+# count in the group of their category (a cultural centre in culture). The sets are
+# not poi_catalog types: that table holds destinations only.
 DIVERSITY_SETS = {
     "fresh_food": {
         "meat": ("butcher", "poultry", "fishmonger"),
@@ -335,11 +335,10 @@ DIVERSITY_SETS = {
         ),
     },
     "community_culture_recreation": {
-        "cultural_center": ("cultural_center",),
-        "library": ("library",),
-        "museum": ("museum",),
-        "religious": ("religious",),
-        "sports": ("sports",),
+        "community": ("religious", "civic_association", "social_welfare"),
+        "culture": ("cultural_center", "museum", "library", "cinema"),
+        "sport": ("sports", "sports_school"),
+        "recreation": ("recreation_venue",),
     },
     # Job diversity: the establishments' categories (not the SCIAN sectors of the
     # ULI's), establishments only (JOBS_ELEMENT).

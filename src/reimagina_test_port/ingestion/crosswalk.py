@@ -30,14 +30,15 @@ AMENITY_CATEGORIES = (
     "tertiary_education", "multilevel_school", "special_education", "health_center",
     "clinic", "specialist_clinic", "hospital", "residence", "daycare",
     "social_assistance", "community_food", "community_center", "religious",
-    "cultural_center", "museum", "library", "sports", "park", "police_station",
+    "civic_association", "social_welfare", "cultural_center", "museum", "library",
+    "sports", "sports_school", "recreation_venue", "park", "police_station",
     "fire_station",
 )  # fmt: skip
 ESTABLISHMENT_CATEGORIES = (
     "supermarket", "convenience_store", "grocery", "butcher", "poultry", "fishmonger",
     "greengrocer", "grains_spices", "dairy", "bakery", "tortilleria", "other_food",
     "basic_household_goods", "pharmacy", "financial", "petrol_station", "cinema", "sports",
-    "manufacturing_food_textile", "manufacturing_materials",
+    "sports_school", "manufacturing_food_textile", "manufacturing_materials",
     "manufacturing_metal_machinery", "agriculture", "mining", "utilities",
     "construction", "wholesale", "other_retail", "transport", "postal_storage", "media", "other_financial", "real_estate",
     "professional_services", "corporate", "business_support", "other_education",
@@ -59,7 +60,7 @@ ECONOMIC_SECTORS = {
     **dict.fromkeys(
         ("preschool", "primary_education", "secondary_education",
          "upper_secondary_education", "tertiary_education", "multilevel_school",
-         "special_education", "other_education"),
+         "special_education", "sports_school", "other_education"),
         "61",
     ),
     **dict.fromkeys(
@@ -69,11 +70,14 @@ ECONOMIC_SECTORS = {
         "62",
     ),
     **dict.fromkeys(
-        ("cultural_center", "museum", "sports", "other_recreation"), "71"
+        ("cultural_center", "museum", "sports", "recreation_venue", "other_recreation"),
+        "71",
     ),
     **dict.fromkeys(("library", "cinema", "media"), "51"),
-    **dict.fromkeys(("religious", "other_services"), "81"),
-    **dict.fromkeys(("police_station", "fire_station", "government"), "93"),
+    **dict.fromkeys(("religious", "civic_association", "other_services"), "81"),
+    **dict.fromkeys(
+        ("police_station", "fire_station", "social_welfare", "government"), "93"
+    ),
     **dict.fromkeys(
         ("supermarket", "convenience_store", "grocery", "butcher", "poultry",
          "fishmonger", "greengrocer", "grains_spices", "dairy", "other_food",

@@ -311,7 +311,7 @@ def test_crosswalk_rest_of_each_sector() -> None:
     # Manufacturing and transport are split by their two digits, as the ULI's
     # job diversity counts them.
     codes = pd.Series(["541110", "431110", "722511", "484111", "493111", "522110",
-                       "524110", "931610", "468211", "315223", "326110", "336390",
+                       "524110", "931210", "468211", "315223", "326110", "336390",
                        "99"])  # fmt: skip
     expect_equal(
         crosswalk.classify(codes)["category"].tolist(),
@@ -319,6 +319,23 @@ def test_crosswalk_rest_of_each_sector() -> None:
          "postal_storage", "financial", "other_financial", "government",
          "other_retail", "manufacturing_food_textile", "manufacturing_materials",
          "manufacturing_metal_machinery", "other"],
+    )  # fmt: skip
+
+
+def test_crosswalk_community_culture_recreation_as_uli() -> None:
+    # The ULI's community (religious and civil associations, social welfare),
+    # culture (cultural promoters), sport (golf, bowling, sports schools) and
+    # recreation (amusement parks, zoos); 311813 is a tortilleria.
+    codes = pd.Series(["813230", "931610", "711311", "713910", "713950", "611621",
+                       "611622", "713111", "712132", "311813"])  # fmt: skip
+    out = crosswalk.classify(codes)
+    expect_equal(
+        list(zip(out["element"], out["category"], strict=True)),
+        [("amenity", "civic_association"), ("amenity", "social_welfare"),
+         ("amenity", "cultural_center"), ("establishment", "sports"),
+         ("establishment", "sports"), ("establishment", "sports_school"),
+         ("amenity", "sports_school"), ("amenity", "recreation_venue"),
+         ("amenity", "recreation_venue"), ("establishment", "tortilleria")],
     )  # fmt: skip
 
 

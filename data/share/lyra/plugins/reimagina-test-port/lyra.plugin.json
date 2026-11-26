@@ -3274,14 +3274,14 @@
               "unit": null
             },
             {
-              "description": "distance_m_education from population_access, normalised (ampi) around 100.",
+              "description": "distance_m_primary_education from population_access, normalised (ampi) around 100.",
               "name": "education",
               "nullable": true,
               "type": "number",
               "unit": "score"
             },
             {
-              "description": "share_with_access_education from population_access, normalised (ampi) around 100.",
+              "description": "share_with_access_primary_education from population_access, normalised (ampi) around 100.",
               "name": "education_pct",
               "nullable": true,
               "type": "number",
