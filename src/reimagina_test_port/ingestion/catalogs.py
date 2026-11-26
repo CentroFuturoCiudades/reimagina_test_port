@@ -28,7 +28,6 @@ from reimagina_test_port.indicators.population_access.nodes import (
     ACCESS_KEYS,
     DISTANCE_KEYS,
     DIVERSITY_KEYS,
-    JOB_DIVERSITY_KEY,
     REACHABLE_JOBS_KEY,
 )
 from reimagina_test_port.ingestion.crosswalk import (
@@ -97,12 +96,6 @@ INDICATORS = {
     },
     "diversity_jobs": ("Diversidad de empleos a 500 m", None, "number", "diversity"),
     REACHABLE_JOBS_KEY: ("Empleos alcanzables a 500 m", None, "number", "diversity"),
-    JOB_DIVERSITY_KEY: (
-        "Diversidad de empleos por manzana",
-        None,
-        "number",
-        "diversity",
-    ),
     "net_residential_density": (
         "Densidad residencial neta",
         "viv/ha",
