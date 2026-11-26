@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 DSN_ENV_VAR = "REIMAGINA_POSTGRES_DSN"
 SCHEMA = "reimagina_urbano"
 CRS = "EPSG:4326"
+# A public space's area and canopy, for the LPUGS land-area shares (diversity node).
+AREA_KEYS = ("area_m2", "tree_coverage")
 
 _TABLES = {
     name: sql.Identifier(SCHEMA, name)
@@ -273,7 +275,7 @@ def _elements(
 def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
     """Present amenities, establishments and transit stops (bus_stop, station),
     one row per poi_catalog type whose rule they meet: id, poi_type, capacity,
-    category, element_type, num_workers, geometry."""
+    category, element_type, num_workers, area_m2, tree_coverage, geometry."""
     with psycopg.connect(resolve_dsn()) as conn, conn.cursor() as cur:
         params = {
             "scenario": scenario_id,
@@ -291,8 +293,9 @@ def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
                     "%s reads its parent's %s", poi_type, sorted(parent_keys)
                 )
         # category also gives the subcategory of the diversity sets, num_workers
-        # the reachable jobs; a transit stop has no category, only its source.
-        params["keys"] = sorted(own | {"category", "num_workers", "source"})
+        # the reachable jobs, area_m2 and tree_coverage a public space's area and
+        # canopy; a transit stop has no category, only its source.
+        params["keys"] = sorted(own | {"category", "num_workers", "source", *AREA_KEYS})
         elements, attributes = _elements(cur, params)
     rows = [
         (
@@ -301,6 +304,7 @@ def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
             values.get("category"),
             element_type,
             values.get("num_workers"),
+            *(values.get(key) for key in AREA_KEYS),
             geometry,
         )
         for element_id, element_type, geometry in elements
@@ -315,10 +319,12 @@ def read_pois(scenario_id: str) -> gpd.GeoDataFrame:
             "category",
             "element_type",
             "num_workers",
+            *AREA_KEYS,
             "geometry",
         ],
     )
-    frame["num_workers"] = pd.to_numeric(frame["num_workers"]).astype("float64")
+    for key in ("num_workers", *AREA_KEYS):
+        frame[key] = pd.to_numeric(frame[key]).astype("float64")
     frame.insert(2, "capacity", pd.Series(dtype="float64", index=frame.index))
     return gpd.GeoDataFrame(
         frame.drop(columns="geometry"), geometry=_geometry(frame["geometry"]), crs=CRS

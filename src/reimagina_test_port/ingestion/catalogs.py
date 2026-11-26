@@ -28,6 +28,9 @@ from reimagina_test_port.indicators.population_access.nodes import (
     ACCESS_KEYS,
     DISTANCE_KEYS,
     DIVERSITY_KEYS,
+    GREEN_PUBLIC_SPACE_KEY,
+    LAND_NEAR_LPUGS_KEY,
+    LPUGS_PUBLIC_SPACE_KEY,
     REACHABLE_JOBS_KEY,
 )
 from reimagina_test_port.ingestion.crosswalk import (
@@ -96,6 +99,24 @@ INDICATORS = {
     },
     "diversity_jobs": ("Diversidad de empleos a 500 m", None, "number", "diversity"),
     REACHABLE_JOBS_KEY: ("Empleos alcanzables a 500 m", None, "number", "diversity"),
+    LAND_NEAR_LPUGS_KEY: (
+        "Superficie a 500 m de un gran espacio verde publico",
+        None,
+        "number",
+        "diversity",
+    ),
+    GREEN_PUBLIC_SPACE_KEY: (
+        "Espacio publico con cobertura arborea a 500 m",
+        None,
+        "number",
+        "diversity",
+    ),
+    LPUGS_PUBLIC_SPACE_KEY: (
+        "Espacio publico que es gran espacio verde a 500 m",
+        None,
+        "number",
+        "diversity",
+    ),
     "net_residential_density": (
         "Densidad residencial neta",
         "viv/ha",

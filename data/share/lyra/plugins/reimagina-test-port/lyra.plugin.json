@@ -5187,7 +5187,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Diversity of each set of destinations within walking distance: the Shannon entropy of its subcategories, by category, among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has; and the workers of the establishments within 500 m (reachable jobs). Lots count the POIs their entries reach, walked as in reimagina_nearest_poi_distance; blocks average their lots weighted by population.",
+      "description": "Diversity of each set of destinations within walking distance: the Shannon entropy of its subcategories, by category, among the POIs within 500 m over the road network, over ln k, k being how many subcategories the set has; the workers of the establishments within 500 m (reachable jobs); and the LPUGS land-area shares: the land within 500 m of an LPUGS, and the share of the public space within 500 m that is green (canopy) and that is LPUGS. Lots count the POIs their entries reach, walked as in reimagina_nearest_poi_distance; blocks average their lots weighted by population (the land near an LPUGS, by area).",
       "inputs": {
         "blocks": {
           "arguments": {},
@@ -5287,6 +5287,27 @@
               "nullable": true,
               "type": "number",
               "unit": "count"
+            },
+            {
+              "description": "Share (0-1) of the land within 500 m over the road network of an LPUGS ('% of total land area within 500 m of LPUGS'): a lot 1 or 0; for a block, its lots' average weighted by area. Null without geometry.",
+              "name": "land_share_near_lpugs",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Share (0-1) of the public space area within 500 m over the road network covered by canopy ('% of total land area that is NDVI >= 0.2', canopy as its proxy); for a block, its lots' average weighted by population. Null without public space within reach or residents.",
+              "name": "green_share_public_space",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Share (0-1) of the public space area within 500 m over the road network that is LPUGS ('% of total land area that is LPUGS'); for a block, its lots' average weighted by population. Null without public space within reach or residents.",
+              "name": "lpugs_share_public_space",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
             }
           ],
           "geometry": "geometry",
@@ -5363,6 +5384,27 @@
               "nullable": true,
               "type": "number",
               "unit": "count"
+            },
+            {
+              "description": "Share (0-1) of the land within 500 m over the road network of an LPUGS ('% of total land area within 500 m of LPUGS'): a lot 1 or 0; for a block, its lots' average weighted by area. Null without geometry.",
+              "name": "land_share_near_lpugs",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Share (0-1) of the public space area within 500 m over the road network covered by canopy ('% of total land area that is NDVI >= 0.2', canopy as its proxy); for a block, its lots' average weighted by population. Null without public space within reach or residents.",
+              "name": "green_share_public_space",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
+            },
+            {
+              "description": "Share (0-1) of the public space area within 500 m over the road network that is LPUGS ('% of total land area that is LPUGS'); for a block, its lots' average weighted by population. Null without public space within reach or residents.",
+              "name": "lpugs_share_public_space",
+              "nullable": true,
+              "type": "number",
+              "unit": "ratio"
             }
           ],
           "geometry": "geometry",
@@ -7035,7 +7077,7 @@
       "spatial_inputs": {}
     },
     {
-      "description": "Compute a scenario's diversity of each set of destinations and write it and its reachable jobs to Reimagina's element_state_indicator_value as diversity_<set> and reachable_jobs, under the same rules as reimagina_scenario_indicators. Only blocks are written.",
+      "description": "Compute a scenario's diversity of each set of destinations and write it and its reachable jobs to Reimagina's element_state_indicator_value as diversity_<set>, reachable_jobs and the LPUGS land-area shares, under the same rules as reimagina_scenario_indicators. Only blocks are written.",
       "inputs": {
         "blocks": {
           "arguments": {},
@@ -7188,6 +7230,20 @@
               "nullable": true,
               "type": "number",
               "unit": "count"
+            },
+            {
+              "description": "The amenity's area (a park's); missing without a value.",
+              "name": "area_m2",
+              "nullable": true,
+              "type": "number",
+              "unit": "m2"
+            },
+            {
+              "description": "Canopy (0-100) of a park's lot; missing without a value.",
+              "name": "tree_coverage",
+              "nullable": true,
+              "type": "number",
+              "unit": "percent"
             }
           ],
           "geometry": "geometry",

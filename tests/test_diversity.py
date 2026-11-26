@@ -18,6 +18,14 @@ from reimagina_test_port.indicators.population_access.diversity_calculation impo
     poi_diversity,
     reachable,
     reached,
+    reached_sums,
+    weighted_by,
+)
+from reimagina_test_port.indicators.population_access.nodes import (
+    GREEN_PUBLIC_SPACE_KEY,
+    LAND_NEAR_LPUGS_KEY,
+    LPUGS_PUBLIC_SPACE_KEY,
+    lpugs_area_shares,
 )
 from reimagina_test_port.plugin import create_snapshot_plugin
 
@@ -107,6 +115,60 @@ def test_reached_adds_up_the_weights():
     np.testing.assert_array_equal(totals, [15.0, 0.0, 0.0])
     np.testing.assert_array_equal(counts, [[2, 1], [0, 1], [0, 0]])
     np.testing.assert_array_equal(measured, [True, True, False])
+
+
+def test_lpugs_land_area_shares():
+    # Three lots on one street, each in its own block: the first reaches a big
+    # green park (an LPUGS) and a small bare one, the second only the small one,
+    # the third nothing.
+    lots = gpd.GeoDataFrame(
+        {
+            "parent_id": ["a", "b", "c"],
+            "population": [10.0, 10.0, 10.0],
+            "area": [200.0, 300.0, 100.0],
+        },
+        geometry=[Point(500, 10), Point(800, 10), Point(2500, 10)],
+        crs=CRS,
+    )
+    blocks = pd.DataFrame({"id": ["a", "b", "c"]})
+    # The big park is a public_space and an lpugs row; a school is neither.
+    pois = gpd.GeoDataFrame(
+        {
+            "id": ["big", "big", "small", "school"],
+            "poi_type": ["public_space", "lpugs", "public_space", "education"],
+            "area_m2": [12_000.0, 12_000.0, 3_000.0, None],
+            "tree_coverage": [50.0, 50.0, None, None],
+        },
+        geometry=[Point(400, 5), Point(400, 5), Point(750, 5), Point(500, 5)],
+        crs=CRS,
+    )
+    values = lpugs_area_shares(
+        lots,
+        blocks,
+        pois,
+        lambda geometry, weights: reached_sums(
+            lots, geometry, weights, street(), CRS, 400
+        ),
+    )
+    # The first lot: 6,000 of 15,000 m2 green, 12,000 of 15,000 m2 LPUGS; the
+    # second, only the bare small park; the third, no public space.
+    np.testing.assert_allclose(
+        values[GREEN_PUBLIC_SPACE_KEY]["lots"], [0.4, 0.0, np.nan]
+    )
+    np.testing.assert_allclose(
+        values[LPUGS_PUBLIC_SPACE_KEY]["lots"], [0.8, 0.0, np.nan]
+    )
+    np.testing.assert_allclose(values[LAND_NEAR_LPUGS_KEY]["lots"], [1.0, 0.0, 0.0])
+    np.testing.assert_allclose(values[LAND_NEAR_LPUGS_KEY]["blocks"], [1.0, 0.0, 0.0])
+
+
+def test_blocks_average_their_lots_weighted_by_area():
+    lots = pd.DataFrame({"parent_id": ["a", "a", "b"], "area": [100.0, 300.0, 0.0]})
+    blocks = pd.DataFrame({"id": ["a", "b"]})
+    block = weighted_by(lots, blocks, np.array([1.0, 0.0, 1.0]), "area")["blocks"]
+    assert block[0] == pytest.approx(0.25)
+    # Lots of no area weigh nothing: no average.
+    assert np.isnan(block[1])
 
 
 def test_blocks_average_their_lots_weighted_by_population():

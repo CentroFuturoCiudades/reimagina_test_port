@@ -43,6 +43,7 @@ from reimagina_test_port.indicators.population_access.nodes import (
     ACCESS_KEYS,
     DISTANCE_KEYS,
     DIVERSITY_KEYS,
+    LPUGS_AREA_KEYS,
     REACHABLE_JOBS_KEY,
     SHARE_KEYS,
 )
@@ -60,7 +61,10 @@ SOURCES = {
     ),
     "land_use": ("reimagina_land_use", land_use.KEYS),
     "streets": ("reimagina_streets", streets.KEYS),
-    "diversity": ("reimagina_poi_diversity", [*DIVERSITY_KEYS, REACHABLE_JOBS_KEY]),
+    "diversity": (
+        "reimagina_poi_diversity",
+        [*DIVERSITY_KEYS, REACHABLE_JOBS_KEY, *LPUGS_AREA_KEYS],
+    ),
 }
 ELEMENTS = ("blocks", "lots")
 LEAF_KEYS = {

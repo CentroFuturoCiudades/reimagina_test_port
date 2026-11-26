@@ -43,6 +43,8 @@ from reimagina_test_port.indicators.population_access.diversity_calculation impo
     diversity,
     entropy,
     reached,
+    reached_sums,
+    weighted_by,
 )
 from reimagina_test_port.ingestion.crosswalk import ESTABLISHMENT_CATEGORIES
 
@@ -372,6 +374,81 @@ DIVERSITY_COLUMNS = [
     )
     for key in DIVERSITY_KEYS
 ]
+# The sheet's LPUGS land-area sub-variables («Subvariables», rows 24, 26 and 27),
+# which the ULI does not compute: over the public space (poi_catalog public_space)
+# within the same 500 m walk, its LPUGS (poi_catalog lpugs: a park of at least 1
+# ha with at least 20% canopy, as MX_Mexicali_2025_ULI.yml's 1 ha) and its canopy
+# (tree_coverage, the proxy of NDVI >= 0.2). A park counts its area_m2.
+PUBLIC_SPACE_TYPE = "public_space"
+LPUGS_TYPE = "lpugs"
+LAND_NEAR_LPUGS_KEY = "land_share_near_lpugs"
+GREEN_PUBLIC_SPACE_KEY = "green_share_public_space"
+LPUGS_PUBLIC_SPACE_KEY = "lpugs_share_public_space"
+LPUGS_AREA_KEYS = [LAND_NEAR_LPUGS_KEY, GREEN_PUBLIC_SPACE_KEY, LPUGS_PUBLIC_SPACE_KEY]
+LPUGS_AREA_COLUMNS = [
+    column(
+        LAND_NEAR_LPUGS_KEY,
+        "number",
+        Unit.RATIO,
+        "Share (0-1) of the land within 500 m over the road network of an LPUGS "
+        "('% of total land area within 500 m of LPUGS'): a lot 1 or 0; for a block, "
+        "its lots' average weighted by area. Null without geometry.",
+    ),
+    column(
+        GREEN_PUBLIC_SPACE_KEY,
+        "number",
+        Unit.RATIO,
+        "Share (0-1) of the public space area within 500 m over the road network "
+        "covered by canopy ('% of total land area that is NDVI >= 0.2', canopy as "
+        "its proxy); for a block, its lots' average weighted by population. Null "
+        "without public space within reach or residents.",
+    ),
+    column(
+        LPUGS_PUBLIC_SPACE_KEY,
+        "number",
+        Unit.RATIO,
+        "Share (0-1) of the public space area within 500 m over the road network "
+        "that is LPUGS ('% of total land area that is LPUGS'); for a block, its "
+        "lots' average weighted by population. Null without public space within "
+        "reach or residents.",
+    ),
+]
+
+
+def lpugs_area_shares(
+    lots: gpd.GeoDataFrame,
+    blocks: gpd.GeoDataFrame,
+    pois: gpd.GeoDataFrame,
+    walk: Callable[[gpd.GeoSeries, pd.DataFrame], tuple[np.ndarray, np.ndarray]],
+) -> dict[str, dict[str, np.ndarray]]:
+    """``LPUGS_AREA_KEYS`` by lot and by block. ``walk(geometry, weights)`` adds up
+    each column of ``weights`` over the POIs each lot reaches (``reached_sums``)."""
+    spaces = pois[pois[POI_TYPE_COLUMN] == PUBLIC_SPACE_TYPE].drop_duplicates("id")
+    lpugs = pois.loc[pois[POI_TYPE_COLUMN] == LPUGS_TYPE, "id"]
+    missing = pd.Series(np.nan, index=spaces.index)
+    area = pd.to_numeric(spaces.get("area_m2", missing)).fillna(0.0)
+    canopy = pd.to_numeric(spaces.get("tree_coverage", missing)).fillna(0.0)
+    is_lpugs = spaces["id"].isin(lpugs).astype("float64")
+    weights = pd.DataFrame(
+        {
+            "area": area,
+            "green": area * canopy.clip(0, 100) / 100,
+            "lpugs_area": area * is_lpugs,
+            "lpugs": is_lpugs,
+        }
+    )
+    sums, measured = walk(spaces.geometry, weights)
+    area_reached, green, lpugs_area, lpugs_reached = sums.T
+    has_space = measured & (area_reached > 0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        green_share = np.where(has_space, green / area_reached, np.nan)
+        lpugs_share = np.where(has_space, lpugs_area / area_reached, np.nan)
+    near = np.where(measured, (lpugs_reached > 0).astype("float64"), np.nan)
+    return {
+        LAND_NEAR_LPUGS_KEY: weighted_by(lots, blocks, near, "area"),
+        GREEN_PUBLIC_SPACE_KEY: diversity(lots, blocks, green_share),
+        LPUGS_PUBLIC_SPACE_KEY: diversity(lots, blocks, lpugs_share),
+    }
 
 
 def poi_diversity_metric(
@@ -432,6 +509,17 @@ def poi_diversity_metric(
                 values[REACHABLE_JOBS_KEY] = diversity(
                     lots, blocks, np.where(measured, totals, np.nan)
                 )
+        with timed("LPUGS land-area shares", context.logger):
+            values.update(
+                lpugs_area_shares(
+                    lots,
+                    blocks,
+                    pois,
+                    lambda geometry, weights: reached_sums(
+                        lots, geometry, weights, network, crs, DIVERSITY_M, origins
+                    ),
+                )
+            )
         return {
             f"reimagina_poi_diversity_{name}": source[IDENTITY + ["geometry"]].assign(
                 **{key: value[name] for key, value in values.items()}
@@ -441,7 +529,12 @@ def poi_diversity_metric(
 
     diversity_handler.__annotations__["parameters"] = parameters_type
     output = TableOutput(
-        columns=[*identity_columns(), *DIVERSITY_COLUMNS, REACHABLE_JOBS_COLUMN],
+        columns=[
+            *identity_columns(),
+            *DIVERSITY_COLUMNS,
+            REACHABLE_JOBS_COLUMN,
+            *LPUGS_AREA_COLUMNS,
+        ],
         geometry="geometry",
     )
     return metric(
@@ -450,10 +543,13 @@ def poi_diversity_metric(
             "Diversity of each set of destinations within walking distance: the "
             "Shannon entropy of its subcategories, by category, among the POIs "
             "within 500 m over the road network, over ln k, k being how many "
-            "subcategories the set has; and the workers of the establishments "
-            "within 500 m (reachable jobs). Lots count the POIs their entries "
-            "reach, walked as in reimagina_nearest_poi_distance; blocks average "
-            "their lots weighted by population."
+            "subcategories the set has; the workers of the establishments "
+            "within 500 m (reachable jobs); and the LPUGS land-area shares: the "
+            "land within 500 m of an LPUGS, and the share of the public space "
+            "within 500 m that is green (canopy) and that is LPUGS. Lots count "
+            "the POIs their entries reach, walked as in "
+            "reimagina_nearest_poi_distance; blocks average their lots weighted "
+            "by population (the land near an LPUGS, by area)."
         ),
         inputs={
             "lots": Dependency("reimagina_built_form_lots"),

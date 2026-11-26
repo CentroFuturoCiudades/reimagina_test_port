@@ -173,6 +173,20 @@ never 0.
   nodes joining three or more streets within 1 km, per km² of a 1 km circle
   (GHSCI divides by the buffered network and consolidates intersections within
   12 m).
+- LPUGS land-area shares, in `reimagina_poi_diversity` (its 500 m walk): the
+  sheet's «Subvariables» rows 24, 26 and 27, which neither
+  `MX_Mexicali_2025_ULI.yml` («large public open space availability has no sample
+  point form yet») nor its outputs compute. An LPUGS is the `lpugs` type of
+  `poi_catalog`, a park of at least 1 ha (the yml's, not the sheet's 1.5 ha) with
+  at least 20% canopy; public space is `public_space`, every park, each counting
+  its `area_m2` (a park without one counts none). `land_share_near_lpugs`: the
+  share of the block's lot area whose lots reach an LPUGS within 500 m, by area.
+  `green_share_public_space`: of the public space area each lot reaches within
+  500 m, the share under canopy (`tree_coverage`, the proxy of NDVI >= 0.2).
+  `lpugs_share_public_space`: of that area, the share that is LPUGS. Both are
+  null for a lot reaching no public space, and a block averages its lots by
+  population, as the ULI's blocks do. None is a composite leaf: the ULI does not
+  weigh them.
 
 Streets are read as POIs are: from their attribute values (`bands.use` or
 `streetlights`), so a street without either is not read. The keys are in

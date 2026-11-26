@@ -146,28 +146,38 @@ def reached(
     0; zeros when omitted) and ``measured`` marks the lots with an entry. Rows at
     the same place are walked once. ``origins`` is ``lot_entries`` of ``lots``,
     built here when omitted."""
+    kind, kinds = pd.factorize(np.asarray(types))
+    table = pd.DataFrame(np.eye(len(kinds))[kind], index=pois.index)
+    table["weight"] = 0.0 if weights is None else np.asarray(weights, dtype=object)
+    sums, measured = reached_sums(lots, pois, table, network, crs, radius, origins)
+    return sums[:, :-1], sums[:, -1], measured
+
+
+def reached_sums(
+    lots: gpd.GeoDataFrame,
+    pois: gpd.GeoSeries,
+    weights: pd.DataFrame,
+    network: StreetNetwork,
+    crs: str,
+    radius: float,
+    origins: pd.DataFrame | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Each column of ``weights`` (one row per POI, in order) added up over the
+    POIs each lot reaches within ``radius``: ``(sums, measured)``, ``sums`` lots x
+    columns (missing weights count 0) and ``measured`` the lots with an entry.
+    Rows at the same place are walked once. ``origins`` is ``lot_entries`` of
+    ``lots``, built here when omitted."""
     if origins is None:
         origins = lot_entries(lots, network, crs)
     measured = np.zeros(len(lots), dtype=bool)
     measured[origins["owner"].unique()] = True
-    kind, kinds = pd.factorize(np.asarray(types))
-    counts = np.zeros((len(lots), len(kinds)))
-    totals = np.zeros(len(lots))
+    sums = np.zeros((len(lots), weights.shape[1]))
     if len(pois) == 0:
-        return counts, totals, measured
+        return sums, measured
     place, places = pd.factorize(pois.to_wkb())
-    rows = pd.DataFrame(
-        {
-            "destination": place,
-            "kind": kind,
-            "weight": 0.0
-            if weights is None
-            else pd.to_numeric(pd.Series(weights), errors="coerce")
-            .fillna(0.0)
-            .to_numpy(),
-        }
-    )
-    # POIs reached by lot and type, added up a chunk of places at a time.
+    values = weights.apply(pd.to_numeric, errors="coerce").fillna(0.0).to_numpy(float)
+    rows = pd.DataFrame({"destination": place, "row": np.arange(len(place))})
+    # Weights reached by lot, added up a chunk of places at a time.
     for pairs in reachable(
         origins,
         entries(gpd.GeoSeries.from_wkb(places, crs=pois.crs).to_crs(crs), network),
@@ -176,12 +186,10 @@ def reached(
     ):
         found = pairs.merge(rows, on="destination")
         origin = found["origin"].to_numpy()
-        counts += np.bincount(
-            origin * len(kinds) + found["kind"].to_numpy(),
-            minlength=counts.size,
-        ).reshape(counts.shape)
-        totals += np.bincount(origin, found["weight"], minlength=len(lots))
-    return counts, totals, measured
+        reached_values = values[found["row"].to_numpy()]
+        for j in range(sums.shape[1]):
+            sums[:, j] += np.bincount(origin, reached_values[:, j], minlength=len(lots))
+    return sums, measured
 
 
 def entropy(counts: np.ndarray, measured: np.ndarray, k: int) -> np.ndarray:
@@ -225,9 +233,18 @@ def diversity(
     """By lot and by block, in order. ``values`` is ``poi_diversity`` of ``lots``.
     A block averages its lots weighted by population, over lots with a value;
     blocks without residents stay null."""
-    population = pd.to_numeric(lots["population"]).astype("float64")
+    return weighted_by(lots, blocks, values, "population")
+
+
+def weighted_by(
+    lots: gpd.GeoDataFrame, blocks: gpd.GeoDataFrame, values: np.ndarray, weight: str
+) -> dict[str, np.ndarray]:
+    """By lot and by block, in order: a block averages its lots' ``values``
+    weighted by their ``weight`` column, over lots with a value; blocks whose
+    lots weigh nothing stay null."""
+    weights = pd.to_numeric(lots[weight]).astype("float64")
     by_lot = pd.Series(values, index=lots.index)
-    weighted = (by_lot * population).groupby(lots["parent_id"]).sum()
-    weights = population.where(by_lot.notna()).groupby(lots["parent_id"]).sum()
-    by_block = (weighted / weights).reindex(blocks["id"])
+    weighted = (by_lot * weights).groupby(lots["parent_id"]).sum()
+    total = weights.where(by_lot.notna()).groupby(lots["parent_id"]).sum()
+    by_block = (weighted / total.where(total > 0)).reindex(blocks["id"])
     return {"lots": by_lot.to_numpy(), "blocks": by_block.to_numpy()}
