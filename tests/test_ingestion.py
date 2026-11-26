@@ -296,12 +296,16 @@ def test_crosswalk_education_and_care() -> None:
 
 def test_crosswalk_health_as_uli() -> None:
     # Primary care is general consulting rooms and their clinics; specialists,
-    # dentists and laboratories are specialist clinics. 468413 is a petrol station.
-    codes = pd.Series(["621111", "621116", "621113", "621212", "621511", "468413"])
+    # dentists and private laboratories are specialist clinics, as the ULI's; public
+    # specialists, optometry and public laboratories are the rest of health. 468413 is a petrol
+    # station.
+    codes = pd.Series(["621111", "621116", "621113", "621212", "621511", "621114",
+                       "621320", "621512", "468413"])  # fmt: skip
     expect_equal(
         crosswalk.classify(codes)["category"].tolist(),
         ["health_center", "clinic", "specialist_clinic", "specialist_clinic",
-         "specialist_clinic", "petrol_station"],
+         "specialist_clinic", "other_health", "other_health", "other_health",
+         "petrol_station"],
     )  # fmt: skip
 
 

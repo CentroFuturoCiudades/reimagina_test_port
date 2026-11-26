@@ -494,15 +494,15 @@ def test_build(city, tmp_path):
             "without_zoning": 0,
         },
         "amenities_file": {"park": 1, "primary_education": 1},
-        # One source per kind: the IMIP park, not its school; the DENUE school,
-        # not its sports club (sports come from the file).
+        # One source per kind: the IMIP park, not its school; the DENUE school and
+        # sports club (sports come from the DENUE, as the ULI's).
         "amenities": {
             "from_file": 1,
             "file_skipped": 1,
-            "from_denue": 1,
-            "denue_skipped": 1,
-            "source": 2,
-            "elements": 2,
+            "from_denue": 2,
+            "denue_skipped": 0,
+            "source": 3,
+            "elements": 3,
             "outside_every_lot": 0,
         },
         # Seven DENUE rows in the state, six of Mexicali: two amenities.
@@ -568,7 +568,7 @@ def test_build(city, tmp_path):
     # within 50 m, as a point at its center; farther ones are not loaded.
     centers = result["lots"].set_index("id").geometry.representative_point()
     amenities = result["amenities"].set_index("source_record_ref")
-    assert sorted(amenities.index) == ["IMIP:esp_pub:12", "denue:106"]
+    assert sorted(amenities.index) == ["IMIP:esp_pub:12", "denue:106", "denue:107"]
     assert amenities.crs == "EPSG:4326"
     assert not amenities.has_z.any()
     park = amenities.loc["IMIP:esp_pub:12"]
@@ -999,7 +999,7 @@ def test_baseline_metric(city, monkeypatch):
     )
     assert len(tables["reimagina_baseline_elements_lots"]) == 5
     assert len(tables["reimagina_baseline_elements_blocks"]) == 2
-    assert len(tables["reimagina_baseline_elements_amenities"]) == 2
+    assert len(tables["reimagina_baseline_elements_amenities"]) == 3
     assert len(tables["reimagina_baseline_elements_establishments"]) == 3
     assert len(tables["reimagina_baseline_elements_right_of_way"]) == 3
     stops = tables["reimagina_baseline_elements_transit_stops"]
@@ -1023,9 +1023,7 @@ def test_mexicali_yaml():
     assert city.floor_share_by_land_use["mixed_use"] == 80
     assert city.amenities_uri.endswith("imip/equipamiento")
     assert city.amenities_normalizer == "imip"
-    assert city.amenity_file_categories == (
-        "park", "sports", "cultural_center", "police_station", "fire_station",
-    )  # fmt: skip
+    assert city.amenity_file_categories == ("park", "police_station", "fire_station")
     assert str(city.existing_land_use_uri).endswith(
         "uso_de_suelo/usos_de_suelo_finales.geojson"
     )

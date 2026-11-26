@@ -13,13 +13,9 @@ scian_prefix,element,category,note
 61151,amenity,tertiary_education,Escuelas de oficios (the ULI's tertiary and vocational education)
 621111,amenity,health_center,Consultorios de medicina general privados
 621112,amenity,health_center,Consultorios de medicina general públicos
-621113,amenity,specialist_clinic,Consultorios de medicina especializada privados
-621114,amenity,specialist_clinic,Consultorios de medicina especializada públicos
+621113,amenity,specialist_clinic,"Consultorios de medicina especializada privados (the ULI's specialist and diagnostic clinics, as its denue_medical_clinic: 621113, 62121, 621511)"
 62121,amenity,specialist_clinic,Consultorios dentales
-62132,amenity,specialist_clinic,Consultorios de optometría
-62139,amenity,specialist_clinic,"Otros consultorios (nutriólogos, dietistas y otros)"
-62149,amenity,specialist_clinic,Otros centros para pacientes que no requieren hospitalización
-62151,amenity,specialist_clinic,Laboratorios médicos y de diagnóstico (the ULI's specialist and diagnostic clinics)
+621511,amenity,specialist_clinic,Laboratorios médicos y de diagnóstico privados
 621115,amenity,clinic,Clínicas de consultorios médicos privadas
 621116,amenity,clinic,Clínicas de consultorios médicos públicas
 622,amenity,hospital,Hospitales

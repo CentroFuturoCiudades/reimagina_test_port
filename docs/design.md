@@ -397,9 +397,10 @@ destinations), so both measure the same places. Media superior (61115–61116) i
 universities (6112, 6113), commercial and secretarial schools (61141) and trades
 schools (61151); schools of several levels (61117) are `multilevel_school`, which
 counts in each level. Primary care is `health_center` (general consulting rooms,
-621111/2) and `clinic` (their clinics, 621115/6); specialist, dental and optometry
-consulting rooms, other outpatient centres and laboratories (621113/4, 62121,
-62132, 62139, 62149, 62151) are `specialist_clinic`. Care is 623 and 624:
+621111/2) and `clinic` (their clinics, 621115/6); private specialist and dental
+consulting rooms and private laboratories (621113, 62121, 621511, the ULI's
+`denue_medical_clinic`) are `specialist_clinic`, and the rest of 62 (public
+specialists, optometry, other outpatient centres) is `other_health`. Care is 623 and 624:
 `residence`, `daycare`, `community_food`, `community_center` and, for the rest of
 624 (6241), `social_assistance`. Petrol stations are 468411 and 468413.
 Bakeries and tortillerias are 311812 (`bakery`) and 311813 and 311830
@@ -447,11 +448,12 @@ Each amenity category comes from one source only, as exe_reimagina did, so no
 amenity is loaded twice: the categories in `sources.amenities.params.categories`
 come only from the amenities file, every other one only from the DENUE; the
 report counts the rows each source left to the other (`file_skipped`,
-`denue_skipped`). Mexicali takes `park`, `sports` and
-`cultural_center` from IMIP (366 sports and 339 culture places, against the
-DENUE's 18 and 47) and schools from the DENUE (with their SCIAN level and
-workers). Matched within 100 m, about 214 IMIP schools have no DENUE school of
-the same level nearby, and about 40 DENUE sports and culture places no IMIP one.
+`denue_skipped`). Mexicali takes `park`, `police_station` and `fire_station` from
+IMIP and everything else from the DENUE, as the ULI's destinations do: schools
+(with their SCIAN level and workers), and sports and culture too, although IMIP
+has far more of them (366 sports and 339 culture places, against the DENUE's 18
+and 47). Matched within 100 m, about 214 IMIP schools have no DENUE school of the
+same level nearby.
 
 Mexicali's normalizer, `imip`, reads IMIP's equipment layers
 (`az://cleaned/por_estado/02_baja_california/002_mexicali/imip/equipamiento/`)
