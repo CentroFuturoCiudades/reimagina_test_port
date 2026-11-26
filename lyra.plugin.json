@@ -5296,7 +5296,7 @@
               "unit": "ratio"
             },
             {
-              "description": "Share (0-1) of the public space area within 500 m over the road network covered by canopy ('% of total land area that is NDVI >= 0.2', canopy as its proxy); for a block, its lots' average weighted by population. Null without public space within reach or residents.",
+              "description": "Share (0-1) of the public space area within 500 m over the road network in green spaces, of at least 15% canopy ('% of total land area that is NDVI >= 0.2', canopy as its proxy); for a block, its lots' average weighted by population. Null without public space within reach or residents.",
               "name": "green_share_public_space",
               "nullable": true,
               "type": "number",
@@ -5393,7 +5393,7 @@
               "unit": "ratio"
             },
             {
-              "description": "Share (0-1) of the public space area within 500 m over the road network covered by canopy ('% of total land area that is NDVI >= 0.2', canopy as its proxy); for a block, its lots' average weighted by population. Null without public space within reach or residents.",
+              "description": "Share (0-1) of the public space area within 500 m over the road network in green spaces, of at least 15% canopy ('% of total land area that is NDVI >= 0.2', canopy as its proxy); for a block, its lots' average weighted by population. Null without public space within reach or residents.",
               "name": "green_share_public_space",
               "nullable": true,
               "type": "number",

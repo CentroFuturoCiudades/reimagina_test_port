@@ -118,9 +118,9 @@ def test_reached_adds_up_the_weights():
 
 
 def test_lpugs_land_area_shares():
-    # Three lots on one street, each in its own block: the first reaches a big
-    # green park (an LPUGS) and a small bare one, the second only the small one,
-    # the third nothing.
+    # Three lots on one street, each in its own block. The first reaches a big
+    # green park (an LPUGS) and a small bare one; the second, the small one and a
+    # green grove; the third, nothing.
     lots = gpd.GeoDataFrame(
         {
             "parent_id": ["a", "b", "c"],
@@ -131,17 +131,21 @@ def test_lpugs_land_area_shares():
         crs=CRS,
     )
     blocks = pd.DataFrame({"id": ["a", "b", "c"]})
-    # The big park is a public_space and an lpugs row; a school is neither.
+    # The big park is a public_space and an lpugs row; a school is neither. Green
+    # is at least 15% canopy: the grove's 20%, not the small park's 10%.
     pois = gpd.GeoDataFrame(
         {
-            "id": ["big", "big", "small", "school"],
-            "poi_type": ["public_space", "lpugs", "public_space", "education"],
-            "area_m2": [12_000.0, 12_000.0, 3_000.0, None],
-            "tree_coverage": [50.0, 50.0, None, None],
+            "id": ["big", "big", "small", "grove", "school"],
+            "poi_type": [
+                "public_space", "lpugs", "public_space", "public_space", "education",
+            ],
+            "area_m2": [20_000.0, 20_000.0, 5_000.0, 5_000.0, None],
+            "tree_coverage": [50.0, 50.0, 10.0, 20.0, None],
         },
-        geometry=[Point(400, 5), Point(400, 5), Point(750, 5), Point(500, 5)],
+        geometry=[Point(400, 5), Point(400, 5), Point(750, 5), Point(900, 5),
+                  Point(500, 5)],
         crs=CRS,
-    )
+    )  # fmt: skip
     values = lpugs_area_shares(
         lots,
         blocks,
@@ -150,10 +154,10 @@ def test_lpugs_land_area_shares():
             lots, geometry, weights, street(), CRS, 400
         ),
     )
-    # The first lot: 6,000 of 15,000 m2 green, 12,000 of 15,000 m2 LPUGS; the
-    # second, only the bare small park; the third, no public space.
+    # The first lot: 20,000 of 25,000 m2 green and LPUGS; the second, 5,000 of
+    # 10,000 m2 green and none LPUGS; the third, no public space.
     np.testing.assert_allclose(
-        values[GREEN_PUBLIC_SPACE_KEY]["lots"], [0.4, 0.0, np.nan]
+        values[GREEN_PUBLIC_SPACE_KEY]["lots"], [0.8, 0.5, np.nan]
     )
     np.testing.assert_allclose(
         values[LPUGS_PUBLIC_SPACE_KEY]["lots"], [0.8, 0.0, np.nan]

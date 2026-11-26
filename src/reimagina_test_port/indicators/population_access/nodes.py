@@ -376,11 +376,13 @@ DIVERSITY_COLUMNS = [
 ]
 # The sheet's LPUGS land-area sub-variables («Subvariables», rows 24, 26 and 27),
 # which the ULI does not compute: over the public space (poi_catalog public_space)
-# within the same 500 m walk, its LPUGS (poi_catalog lpugs: a park of at least 1
-# ha with at least 20% canopy, as MX_Mexicali_2025_ULI.yml's 1 ha) and its canopy
-# (tree_coverage, the proxy of NDVI >= 0.2). A park counts its area_m2.
+# within the same 500 m walk, its green spaces and its LPUGS (poi_catalog lpugs: a
+# green park of more than 1.5 ha). A space is green with at least 15% canopy
+# (tree_coverage), the cut that best reproduces mean NDVI >= 0.2 over IMIP's
+# public spaces (analysis/ndvi_vs_canopy.py, 2025). A park counts its area_m2.
 PUBLIC_SPACE_TYPE = "public_space"
 LPUGS_TYPE = "lpugs"
+GREEN_CANOPY_MIN = 15.0
 LAND_NEAR_LPUGS_KEY = "land_share_near_lpugs"
 GREEN_PUBLIC_SPACE_KEY = "green_share_public_space"
 LPUGS_PUBLIC_SPACE_KEY = "lpugs_share_public_space"
@@ -399,9 +401,10 @@ LPUGS_AREA_COLUMNS = [
         "number",
         Unit.RATIO,
         "Share (0-1) of the public space area within 500 m over the road network "
-        "covered by canopy ('% of total land area that is NDVI >= 0.2', canopy as "
-        "its proxy); for a block, its lots' average weighted by population. Null "
-        "without public space within reach or residents.",
+        "in green spaces, of at least 15% canopy ('% of total land area that is "
+        "NDVI >= 0.2', canopy as its proxy); for a block, its lots' average "
+        "weighted by population. Null without public space within reach or "
+        "residents.",
     ),
     column(
         LPUGS_PUBLIC_SPACE_KEY,
@@ -432,7 +435,7 @@ def lpugs_area_shares(
     weights = pd.DataFrame(
         {
             "area": area,
-            "green": area * canopy.clip(0, 100) / 100,
+            "green": area * (canopy >= GREEN_CANOPY_MIN),
             "lpugs_area": area * is_lpugs,
             "lpugs": is_lpugs,
         }
