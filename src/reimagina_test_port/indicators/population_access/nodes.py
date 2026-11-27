@@ -428,8 +428,11 @@ def poi_diversity_metric(
                     lots, blocks, np.where(measured, totals, np.nan)
                 )
                 # Its diversity is the ULI's: within the lots, not the walk's.
+                jobs = (element_types == JOBS_ELEMENT) & categories.isin(
+                    list(subcategories)
+                )
                 values[JOBS_KEY] = within_lots(
-                    lots, blocks, parents[found], subcategory[found]
+                    lots, blocks, parents[jobs], categories[jobs]
                 )
         return {
             f"reimagina_poi_diversity_{name}": source[IDENTITY + ["geometry"]].assign(
