@@ -51,6 +51,7 @@ from reimagina_test_port.indicators.accessibility.nodes import (
 from reimagina_test_port.indicators.land_use.calculation import KEYS as LAND_USE_KEYS
 from reimagina_test_port.indicators.population_access.nodes import (
     DIVERSITY_KEYS,
+    LPUGS_AREA_KEYS,
     REACHABLE_JOBS_KEY,
     PoiType,
 )
@@ -60,8 +61,9 @@ from reimagina_test_port.scenario import source, writer
 
 logger = logging.getLogger(__name__)
 
-# The destinations, plus the category that gives their diversity subcategory and
-# the element type and workers of the reachable jobs.
+# The destinations, plus the category that gives their diversity subcategory, the
+# element type and workers of the reachable jobs, and a public space's area and
+# canopy (the LPUGS land-area shares).
 SCENARIO_POIS_DECLARATION = TableOutput(
     columns=[
         *POIS_DECLARATION.columns,
@@ -82,6 +84,18 @@ SCENARIO_POIS_DECLARATION = TableOutput(
             "number",
             Unit.COUNT,
             "The element's workers; missing without a value.",
+        ),
+        column(
+            "area_m2",
+            "number",
+            Unit.SQUARE_METRE,
+            "The amenity's area (a park's); missing without a value.",
+        ),
+        column(
+            "tree_coverage",
+            "number",
+            Unit.PERCENT,
+            "Canopy (0-100) of a park's lot; missing without a value.",
         ),
     ],
     geometry="geometry",
@@ -783,7 +797,7 @@ def composites_write():
     description=(
         "Compute a scenario's diversity of each set of destinations and write it "
         "and its reachable jobs to Reimagina's element_state_indicator_value as "
-        "diversity_<set> and reachable_jobs, under "
+        "diversity_<set>, reachable_jobs and the LPUGS land-area shares, under "
         "the same rules as reimagina_scenario_indicators. Only blocks are written."
     ),
     inputs={"blocks": Dependency("reimagina_poi_diversity_blocks")},
@@ -798,7 +812,9 @@ def scenario_poi_diversity(
     return write_group(
         parameters,
         {"block": blocks},
-        dict.fromkeys([*DIVERSITY_KEYS, REACHABLE_JOBS_KEY], "number"),
+        dict.fromkeys(
+            [*DIVERSITY_KEYS, REACHABLE_JOBS_KEY, *LPUGS_AREA_KEYS], "number"
+        ),
         node="reimagina_scenario_poi_diversity",
         log=context.logger,
     )

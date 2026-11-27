@@ -488,8 +488,9 @@ trees:
             children:
               # ULI lpugs: access to a large public green space within 500 m.
               # GHSCI's is public open space of at least 1 ha with mean NDVI of
-              # at least 0.2; here a park of at least 1 ha whose lot has at least
-              # 20% tree canopy (the lpugs type of poi_catalog).
+              # at least 0.2; here, as the sheet, a park of more than 1.5 ha whose
+              # lot has at least 15% tree canopy, the cut that best reproduces
+              # NDVI >= 0.2 (the lpugs type of poi_catalog).
               - name: lpugs_500m
                 weight: 0.5
                 source: population_access
