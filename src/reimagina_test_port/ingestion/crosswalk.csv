@@ -3,29 +3,40 @@ scian_prefix,element,category,note
 61112,amenity,primary_education,Primaria
 61113,amenity,secondary_education,Secundaria general
 61114,amenity,secondary_education,Secundaria técnica
-61115,amenity,tertiary_education,Media técnica terminal (the workbook's Tertiary/vocational education)
-61116,amenity,tertiary_education,Media superior (the workbook's Tertiary/vocational education)
+61115,amenity,upper_secondary_education,Media técnica terminal (the ULI's secondary and upper secondary)
+61116,amenity,upper_secondary_education,Media superior (the ULI's secondary and upper secondary)
+61117,amenity,multilevel_school,"Escuelas que combinan diversos niveles de educación (the ULI counts them in each level)"
 61118,amenity,special_education,Educación para necesidades especiales
+6112,amenity,tertiary_education,Técnica superior (the ULI's tertiary and vocational education)
+6113,amenity,tertiary_education,Educación superior (universidades)
+61141,amenity,tertiary_education,Escuelas comerciales y secretariales (the ULI's tertiary and vocational education)
+61151,amenity,tertiary_education,Escuelas de oficios (the ULI's tertiary and vocational education)
 621111,amenity,health_center,Consultorios de medicina general privados
 621112,amenity,health_center,Consultorios de medicina general públicos
-62121,amenity,health_center,Consultorios dentales
-62132,amenity,health_center,Consultorios de optometría
-62139,amenity,health_center,"Otros consultorios (nutriólogos, dietistas y otros)"
-62149,amenity,health_center,Otros centros para pacientes que no requieren hospitalización
+621113,amenity,specialist_clinic,"Consultorios de medicina especializada privados (the ULI's specialist and diagnostic clinics, as its denue_medical_clinic: 621113, 62121, 621511)"
+62121,amenity,specialist_clinic,Consultorios dentales
+621511,amenity,specialist_clinic,Laboratorios médicos y de diagnóstico privados
 621115,amenity,clinic,Clínicas de consultorios médicos privadas
 621116,amenity,clinic,Clínicas de consultorios médicos públicas
 622,amenity,hospital,Hospitales
 623,amenity,residence,Residencias de asistencia social y para el cuidado de la salud
 6244,amenity,daycare,Guarderías
+6241,amenity,social_assistance,Orientación y trabajo social (the rest of the ULI's 624)
 62421,amenity,community_food,Servicios de alimentación comunitarios
 6242,amenity,community_center,"Alimentación, refugio y emergencia comunitarios"
 6243,amenity,community_center,Capacitación para el trabajo de personas desempleadas
 81321,amenity,religious,Asociaciones y organizaciones religiosas
+81323,amenity,civic_association,"Asociaciones y organizaciones civiles (the ULI's community facilities)"
+93161,amenity,social_welfare,Actividades administrativas de instituciones de bienestar social (the ULI's community facilities)
 71211,amenity,museum,Museos
+71213,amenity,recreation_venue,Zoológicos y jardines botánicos (the ULI's public recreation venues)
+71311,amenity,recreation_venue,"Parques de diversiones, temáticos y acuáticos (the ULI's public recreation venues)"
+71131,amenity,cultural_center,"Promotores de espectáculos artísticos, culturales y similares con instalaciones (the ULI's cultural facilities)"
 51912,amenity,library,Bibliotecas y archivos (SCIAN 2018; not in the workbook)
 51921,amenity,library,Bibliotecas y archivos (SCIAN 2023; not in the workbook)
 713942,amenity,sports,Clubes deportivos públicos
 713944,amenity,sports,Centros de acondicionamiento físico públicos
+611622,amenity,sports_school,Escuelas de deporte públicas (the ULI's sports and active recreation)
 46111,establishment,grocery,"Abarrotes, ultramarinos y misceláneas"
 4611,establishment,other_food,"Dulces, paletas y otros alimentos"
 461121,establishment,butcher,Carnes rojas
@@ -38,7 +49,9 @@ scian_prefix,element,category,note
 462112,establishment,convenience_store,Minisupers (the sheet's convenience stores and minimarts)
 311812,establishment,bakery,Panificación tradicional (panaderías; the industrial 311811 stays manufacturing)
 311830,establishment,tortilleria,Tortillas de maíz y molienda de nixtamal
+311813,establishment,tortilleria,Tortillas de harina de trigo (the ULI's bakeries and tortillerias)
 468411,establishment,petrol_station,Gasolina y diésel
+468413,establishment,petrol_station,Otros combustibles (the ULI's petrol stations)
 466111,establishment,basic_household_goods,Muebles para el hogar
 466112,establishment,basic_household_goods,Electrodomésticos menores y aparatos de línea blanca
 466114,establishment,basic_household_goods,"Cristalería, loza y utensilios de cocina"
@@ -47,6 +60,29 @@ scian_prefix,element,category,note
 512130,establishment,cinema,Exhibición de películas y otros materiales audiovisuales
 713941,establishment,sports,Clubes deportivos privados
 713943,establishment,sports,Centros de acondicionamiento físico privados
-31,establishment,manufacturing,Industrias manufactureras
-32,establishment,manufacturing,Industrias manufactureras
-33,establishment,manufacturing,Industrias manufactureras
+713910,establishment,sports,Campos de golf (the ULI's sports and active recreation)
+713950,establishment,sports,Boliches (the ULI's sports and active recreation)
+611621,establishment,sports_school,Escuelas de deporte privadas (the ULI's sports and active recreation)
+31,establishment,manufacturing_food_textile,"Industrias manufactureras: alimentos, bebidas, tabaco, textiles, prendas y cuero"
+32,establishment,manufacturing_materials,"Industrias manufactureras: madera, papel, impresión, petróleo, química, plástico y minerales no metálicos"
+33,establishment,manufacturing_metal_machinery,"Industrias manufactureras: metales, maquinaria, equipo, electrónica, transporte y muebles"
+11,establishment,agriculture,"Agricultura, cría y explotación de animales, aprovechamiento forestal, pesca y caza (the rest of its SCIAN sector)"
+21,establishment,mining,Minería (the rest of its SCIAN sector)
+22,establishment,utilities,"Generación, transmisión, distribución y comercialización de energía eléctrica, suministro de agua y de gas natural (the rest of its SCIAN sector)"
+23,establishment,construction,Construcción (the rest of its SCIAN sector)
+43,establishment,wholesale,Comercio al por mayor (the rest of its SCIAN sector)
+46,establishment,other_retail,Comercio al por menor (the rest of its SCIAN sector)
+48,establishment,transport,Transportes (the rest of its SCIAN sector)
+49,establishment,postal_storage,"Correos, mensajería y almacenamiento (the rest of its SCIAN sector)"
+51,establishment,media,Información en medios masivos (the rest of its SCIAN sector)
+52,establishment,other_financial,Servicios financieros y de seguros (the rest of its SCIAN sector)
+53,establishment,real_estate,Servicios inmobiliarios y de alquiler de bienes muebles e intangibles (the rest of its SCIAN sector)
+54,establishment,professional_services,"Servicios profesionales, científicos y técnicos (the rest of its SCIAN sector)"
+55,establishment,corporate,Corporativos (the rest of its SCIAN sector)
+56,establishment,business_support,Servicios de apoyo a los negocios y manejo de residuos (the rest of its SCIAN sector)
+61,establishment,other_education,Servicios educativos (the rest of its SCIAN sector)
+62,establishment,other_health,Servicios de salud y de asistencia social (the rest of its SCIAN sector)
+71,establishment,other_recreation,"Servicios de esparcimiento culturales y deportivos, y otros servicios recreativos (the rest of its SCIAN sector)"
+72,establishment,food_accommodation,Servicios de alojamiento temporal y de preparación de alimentos y bebidas (the rest of its SCIAN sector)
+81,establishment,other_services,Otros servicios excepto actividades gubernamentales (the rest of its SCIAN sector)
+93,establishment,government,"Actividades legislativas, gubernamentales, de impartición de justicia y de organismos internacionales (the rest of its SCIAN sector)"

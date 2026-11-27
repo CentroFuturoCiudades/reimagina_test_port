@@ -129,7 +129,7 @@ IMIP_LAYERS = {
         ),
         name_column="NOM_ESC",
     ),
-    "med_sup": Layer((Rule("tertiary_education"),), name_column="NOM_ESC"),
+    "med_sup": Layer((Rule("upper_secondary_education"),), name_column="NOM_ESC"),
     "deporte": Layer((Rule("sports"),), name_column="NOMBRE"),
     "cult_rec": Layer((Rule("cultural_center"),), name_column="NOMBRE"),
     # No name column; Sup_M2 is the space's area (SUP_HA and Shape_Area are the
@@ -189,7 +189,7 @@ SIGCDMX_LAYERS = {
         (
             Rule("hospital", ("Hospital",)),
             Rule("health_center", ("Centro de Salud", "Centro de Rehabilitación")),
-            Rule("tertiary_education", ("Medio Superior",)),
+            Rule("upper_secondary_education", ("Medio Superior",)),
             Rule("park", ("Parque", "Áreas Verdes", "Jardín")),
             Rule("sports", SPORTS_TIPOS),
             Rule("cultural_center", CULTURE_TIPOS),

@@ -287,47 +287,58 @@ def population_access_metrics(
 CATEGORY_COLUMN = "category"
 DIVERSITY_M = 500
 # Each diversity set: its subcategories, each the element categories it groups
-# (crosswalk.CATEGORIES); k is how many subcategories it has. From the sheet's
-# «Subvariables» (indicadores_por_completar.xlsx, 2026-11-18), leaving out the kinds
-# with no data yet (markets; youth and activity centres). The sets are not
-# poi_catalog types: that table holds destinations only.
+# (crosswalk.CATEGORIES); k is how many subcategories it has. A category may sit in
+# several subcategories and counts in each (a school of several levels). As the
+# ULI's diversity groups (MX_Mexicali_2025_ULI.yml); the city's own layers' places
+# count in the group of their category (a cultural centre in culture). The sets are
+# not poi_catalog types: that table holds destinations only.
 DIVERSITY_SETS = {
     "fresh_food": {
-        "supermarket": ("supermarket",),
-        "grocery": ("grocery",),
-        "bakery": ("bakery",),
-        "tortilleria": ("tortilleria",),
-        "poultry": ("poultry",),
-        "butcher": ("butcher",),
+        "meat": ("butcher", "poultry", "fishmonger"),
         "greengrocer": ("greengrocer",),
+        "grains_spices": ("grains_spices",),
+        "dairy": ("dairy",),
+        "supermarket": ("supermarket",),
+        "convenience_store": ("convenience_store",),
+        "bakery_tortilleria": ("bakery", "tortilleria"),
     },
     "education": {
-        "preschool": ("preschool",),
-        "primary": ("primary_education",),
-        "secondary": ("secondary_education",),
+        "preschool": ("preschool", "multilevel_school"),
+        "primary": ("primary_education", "multilevel_school"),
+        "secondary": (
+            "secondary_education",
+            "upper_secondary_education",
+            "multilevel_school",
+        ),
         "tertiary": ("tertiary_education",),
     },
     "health": {
-        "health_center": ("health_center",),
-        "clinic": ("clinic",),
+        "primary_care": ("health_center", "clinic"),
+        "specialist_clinic": ("specialist_clinic",),
         "hospital": ("hospital",),
         "pharmacy": ("pharmacy",),
+        "care": (
+            "residence",
+            "daycare",
+            "social_assistance",
+            "community_food",
+            "community_center",
+        ),
     },
     "care": {
-        "preschool": ("preschool",),
-        "special_education": ("special_education",),
         "daycare": ("daycare",),
-        "community_food": ("community_food",),
         "residence": ("residence",),
+        "social_assistance": (
+            "social_assistance",
+            "community_food",
+            "community_center",
+        ),
     },
     "community_culture_recreation": {
-        "cultural_center": ("cultural_center",),
-        "library": ("library",),
-        "museum": ("museum",),
-        "recreational_area": ("park",),
-        "religious": ("religious",),
-        "sports": ("sports",),
-        "community_center": ("community_center",),
+        "community": ("religious", "civic_association", "social_welfare"),
+        "culture": ("cultural_center", "museum", "library", "cinema"),
+        "sport": ("sports", "sports_school"),
+        "recreation": ("recreation_venue",),
     },
     # Job diversity: the establishments' categories (not the SCIAN sectors of the
     # ULI's), establishments only (JOBS_ELEMENT).
@@ -385,30 +396,34 @@ def poi_diversity_metric(
         with timed("road network", context.logger):
             network = street_network(nodes, edges)
         origins = owned_by(entries, lots)
-        # One row per POI, whatever its poi_types: its category gives its subcategory.
-        places = pois.drop_duplicates("id")
+        # One row per POI, whatever its poi_types: its category gives its
+        # subcategories, one row each.
+        places = pois.drop_duplicates("id").reset_index(drop=True)
         categories = places.get(CATEGORY_COLUMN, pd.Series(None, index=places.index))
         missing = pd.Series(None, index=places.index)
         element_types = places.get(ELEMENT_TYPE_COLUMN, missing)
         workers = places.get(WORKERS_COLUMN, missing)
         values = {}
         for name, subcategories in DIVERSITY_SETS.items():
-            subcategory = categories.map(
-                {cat: sub for sub, group in subcategories.items() for cat in group}
-            )
-            found = subcategory.notna()
+            groups = {}
+            for sub, group in subcategories.items():
+                for cat in group:
+                    groups.setdefault(cat, []).append(sub)
+            subcategory = categories.map(groups).explode().dropna()
             if name == JOBS_SET:
-                found &= element_types == JOBS_ELEMENT
+                is_job = element_types.loc[subcategory.index] == JOBS_ELEMENT
+                subcategory = subcategory[is_job.to_numpy()]
+            rows = subcategory.index
             with timed(f"{name} diversity", context.logger):
                 counts, totals, measured = reached(
                     lots,
-                    places.geometry[found],
-                    subcategory[found],
+                    places.geometry.loc[rows],
+                    subcategory,
                     network,
                     crs,
                     DIVERSITY_M,
                     origins,
-                    workers[found] if name == JOBS_SET else None,
+                    workers.loc[rows] if name == JOBS_SET else None,
                 )
                 values[f"diversity_{name}"] = diversity(
                     lots, blocks, entropy(counts, measured, len(subcategories))

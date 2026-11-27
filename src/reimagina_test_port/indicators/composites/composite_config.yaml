@@ -131,7 +131,9 @@ trees:
                 method: ampi
                 reference: 0.751
                 goalposts: {min: 0, max: 1}
-              # ULI convenience: convenience stores within 300 m.
+              # ULI denue_food_retail: food retail of any kind (4611 and 4621:
+              # abarrotes, fresh food, supermarkets, minisupers) within 300 m;
+              # the poi_catalog type keeps the name convenience_store.
               - name: convenience
                 weight: 0.5
                 source: population_access
@@ -186,12 +188,12 @@ trees:
             phenomenon: positive
             weight: 6
             children:
-              # ULI primary_school, over every level: the sheet's «Access to
-              # educational services» (preschool to tertiary) within 300 m.
+              # ULI primary_school: primary schools (and schools of several
+              # levels) within 300 m.
               - name: education
                 weight: 0.5
                 source: population_access
-                variable: distance_m_education
+                variable: distance_m_primary_education
                 transform: {soft_threshold: 300}
                 polarity: positive
                 method: ampi
@@ -201,7 +203,7 @@ trees:
               - name: education_pct
                 weight: 0.5
                 source: population_access
-                variable: share_with_access_education
+                variable: share_with_access_primary_education
                 polarity: positive
                 method: ampi
                 reference: 0.250

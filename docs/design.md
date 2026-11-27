@@ -364,8 +364,9 @@ Amenities and establishments are elements of their own (`ingestion/points.py`),
 placed as `urban_fabric.md` says. Every record of the raw INEGI DENUE CSV whose
 `municipio` is the city's is an amenity or an establishment, never both, by the
 SCIAN crosswalk (`ingestion/crosswalk.csv`: a prefix, an element type and a
-category, the longest prefix winning; no match is an establishment of category
-`other`). It is the team's DENUE crosswalk (`denue_crosswalk.xlsx`, November
+category, the longest prefix winning; the rest of each SCIAN sector is an
+establishment of that sector's category, and a code that is not SCIAN one of
+category `other`). It is the team's DENUE crosswalk (`denue_crosswalk.xlsx`, November
 2026): the codes of each group's *What does this include specifically?*
 column, split into the platform's categories, the longest prefix winning.
 
@@ -373,12 +374,13 @@ A category is the finest kind of place the platform tells apart (a bakery, a
 daycare, a library), and the only attribute that says what a place is: there is
 no separate subcategory. `poi_catalog` rules and the diversity sets
 (`population_access/nodes.py`) group categories, and a place counts in every
-group that lists its category: a preschool is both education and care.
+group that lists its category, and in every diversity subcategory that lists it:
+a school of several levels counts as preschool, primary and secondary.
 
 Each name comes from a source: the workbook's functional categories where one is
 a single kind of place (`primary_education`, `secondary_education`,
-`tertiary_education`, `hospital`, `basic_household_goods`, `financial`,
-`manufacturing`), else the kinds the indicators sheet lists («Subvariables»,
+`upper_secondary_education`, `tertiary_education`, `hospital`,
+`basic_household_goods`, `financial`), else the kinds the indicators sheet lists («Subvariables»,
 column H): `supermarket`, `grocery` (abarroterías), `butcher`, `poultry`,
 `fishmonger`, `greengrocer` (fruterías and verdulerías, both 461130), `bakery`,
 `tortilleria`, `convenience_store`, `petrol_station`, `preschool`, `health_center`,
@@ -389,13 +391,50 @@ kinds the workbook's descriptions name: `special_education`, `daycare`,
 `dairy` (46114, 46115, in its fresh food) and `cinema` (512130, in its cultural
 facilities). `other_food` is the rest of its food retail (4611).
 
-Media superior (61115–61116) is `tertiary_education`, the workbook's
-*Tertiary/vocational education*; neither it nor the sheet counts universities.
+The categories follow the ULI's (`MX_Mexicali_2025_ULI.yml`, its DENUE
+destinations), so both measure the same places. Media superior (61115–61116) is
+`upper_secondary_education`; `tertiary_education` is higher technical schools and
+universities (6112, 6113), commercial and secretarial schools (61141) and trades
+schools (61151); schools of several levels (61117) are `multilevel_school`, which
+counts in each level. Primary care is `health_center` (general consulting rooms,
+621111/2) and `clinic` (their clinics, 621115/6); private specialist and dental
+consulting rooms and private laboratories (621113, 62121, 621511, the ULI's
+`denue_medical_clinic`) are `specialist_clinic`, and the rest of 62 (public
+specialists, optometry, other outpatient centres) is `other_health`. Care is 623 and 624:
+`residence`, `daycare`, `community_food`, `community_center` and, for the rest of
+624 (6241), `social_assistance`. Petrol stations are 468411 and 468413.
+Bakeries and tortillerias are 311812 (`bakery`) and 311813 and 311830
+(`tortilleria`). Community, culture and recreation are the ULI's four groups:
+community is `religious` (81321), `civic_association` (81323) and
+`social_welfare` (93161); culture `cultural_center` (also the promoters of
+cultural events with a venue, 71131), `museum`, `library` and `cinema`; sport
+`sports` (also golf courses and bowling alleys, 713910 and 713950) and
+`sports_school` (61162); recreation `recreation_venue` (amusement and water
+parks, 71311, zoos and botanical gardens, 71213).
 Only traditional bakeries (311812) are `bakery`; the industrial 311811 stays
-`manufacturing`. Public sports clubs and gyms, museums and libraries (51912,
+`manufacturing_food_textile`. Public sports clubs and gyms, museums and libraries (51912,
 51921, codes the workbook does not list; the API's rules already read them) are
 amenities; private sports clubs and gyms, and cinemas, establishments.
 `police_station` and `fire_station` have no source yet.
+
+The rest of each SCIAN sector (two digits) is an establishment category of its
+own, so no DENUE record loses its sector: `agriculture` (11), `mining` (21),
+`utilities` (22), `construction` (23), `wholesale` (43), `other_retail` (46),
+`transport` (48), `postal_storage` (49), `media` (51), `other_financial` (52),
+`real_estate` (53), `professional_services` (54), `corporate` (55),
+`business_support` (56), `other_education` (61), `other_health` (62),
+`other_recreation` (71), `food_accommodation` (72), `other_services` (81) and
+`government` (93). Manufacturing is split the same way:
+`manufacturing_food_textile` (31), `manufacturing_materials` (32) and
+`manufacturing_metal_machinery` (33); a lot mostly of them, by workers, is
+industrial. `crosswalk.ECONOMIC_SECTORS` gives every category its sector (its two
+digits), as the ULI's job diversity counts the DENUE
+(`uli_mexicali_calculations_notebooks`, `add_economic_sector_diversity`, which
+counts 31, 32 and 33, and 48 and 49, apart): a DENUE category the sector of its
+codes, a city layer's where the DENUE would place it (a cultural centre 71, a
+police station 93), a park and `other` none. The sector follows the category,
+not the record's SCIAN code, so a place whose category a scenario changes
+changes sector.
 
 The other amenities come from each city's own layers, in two steps. The
 `raw_amenities` step (`ingestion/raw_amenities.py`) reads the raw layers of
@@ -409,18 +448,19 @@ Each amenity category comes from one source only, as exe_reimagina did, so no
 amenity is loaded twice: the categories in `sources.amenities.params.categories`
 come only from the amenities file, every other one only from the DENUE; the
 report counts the rows each source left to the other (`file_skipped`,
-`denue_skipped`). Mexicali takes `park`, `sports` and
-`cultural_center` from IMIP (366 sports and 339 culture places, against the
-DENUE's 18 and 47) and schools from the DENUE (with their SCIAN level and
-workers). Matched within 100 m, about 214 IMIP schools have no DENUE school of
-the same level nearby, and about 40 DENUE sports and culture places no IMIP one.
+`denue_skipped`). Mexicali takes `park`, `police_station` and `fire_station` from
+IMIP and everything else from the DENUE, as the ULI's destinations do: schools
+(with their SCIAN level and workers), and sports and culture too, although IMIP
+has far more of them (366 sports and 339 culture places, against the DENUE's 18
+and 47). Matched within 100 m, about 214 IMIP schools have no DENUE school of the
+same level nearby.
 
 Mexicali's normalizer, `imip`, reads IMIP's equipment layers
 (`az://cleaned/por_estado/02_baja_california/002_mexicali/imip/equipamiento/`)
 with exe_reimagina's `2_equip_for_exe.ipynb` rules: five of its 15 layers,
 `edu_basica` split by `TIPO` (primary `primary_education`, preschool `preschool`,
 general and technical secondary `secondary_education`; CENDI and telesecundaria
-left out), `med_sup` `tertiary_education` (`edu_sup`, universities, is left out),
+left out), `med_sup` `upper_secondary_education` (`edu_sup`, universities, is left out),
 `deporte`
 `sports`, `cult_rec` `cultural_center`, and `esp_pub` filtered to
 neighbourhood gardens and parks (`park`) and sports spaces

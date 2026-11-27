@@ -19,6 +19,7 @@ from shapely.geometry.base import BaseGeometry
 
 from reimagina_test_port.common.rules import MIN_BUILT_M2
 from reimagina_test_port.ingestion.cadastral import stable_element_uuid
+from reimagina_test_port.ingestion.crosswalk import MANUFACTURING_CATEGORIES
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,9 @@ def _contents_by_lot(contents: pd.DataFrame) -> pd.DataFrame:
     """Per lot: amenities, establishments and their manufacturing share of workers."""
     establishments = contents[contents["element_type"] == "establishment"]
     workers = establishments["num_workers"].astype(float)
-    manufacturing = workers.where(establishments["category"] == "manufacturing", 0.0)
+    manufacturing = workers.where(
+        establishments["category"].isin(MANUFACTURING_CATEGORIES), 0.0
+    )
     grouped = pd.DataFrame(
         {
             "lot_id": establishments["lot_id"],
