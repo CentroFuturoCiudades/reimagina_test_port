@@ -60,8 +60,8 @@ from reimagina_test_port.scenario import source, writer
 
 logger = logging.getLogger(__name__)
 
-# The destinations, plus the category that gives their diversity subcategory and
-# the element type and workers of the reachable jobs.
+# The destinations, plus the category that gives their diversity subcategory, the
+# element type and workers of the reachable jobs, and the lot of the job diversity.
 SCENARIO_POIS_DECLARATION = TableOutput(
     columns=[
         *POIS_DECLARATION.columns,
@@ -83,6 +83,7 @@ SCENARIO_POIS_DECLARATION = TableOutput(
             Unit.COUNT,
             "The element's workers; missing without a value.",
         ),
+        column("parent_id", "string", None, "The element's lot; missing without one."),
     ],
     geometry="geometry",
 )

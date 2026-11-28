@@ -437,14 +437,15 @@ trees:
                 method: ampi
                 reference: 342.1
                 goalposts: {min: 0, max: 2000}
-              # Job diversity: entropy of the establishments' categories within
-              # 500 m (the crosswalk's 20, not the ULI's SCIAN sectors).
+              # Job diversity, as the ULI's: entropy of the establishments'
+              # categories (the crosswalk's 20, not the ULI's SCIAN sectors) in
+              # the block's lots, over ln of the categories there.
               - name: job_diversity
                 source: diversity
                 variable: diversity_jobs
                 polarity: positive
                 method: ampi
-                reference: 0.321
+                reference: 0.190
                 goalposts: {min: 0, max: 1}
 
       # -- Ambient environment --------------------------------------------------

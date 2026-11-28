@@ -57,6 +57,9 @@ GONE = "b0000000-0000-0000-0000-000000000005"
 CLINIC = "f0000000-0000-0000-0000-000000000001"
 PHARMACY = "f0000000-0000-0000-0000-000000000002"
 PARK = "f0000000-0000-0000-0000-000000000003"
+GROCERY = "f0000000-0000-0000-0000-000000000004"
+GROCERY_2 = "f0000000-0000-0000-0000-000000000005"
+BAKERY = "f0000000-0000-0000-0000-000000000006"
 SQUARE = "POLYGON((0 0, 0 0.001, 0.001 0.001, 0.001 0, 0 0))"
 SMALL = "POLYGON((0 0, 0 0.0001, 0.0001 0.0001, 0.0001 0, 0 0))"
 
@@ -502,6 +505,8 @@ def test_pois_fall_back_to_baseline(dsn):
         "establishment",
     ]
     assert baseline["num_workers"].isna().all()
+    # And its lot.
+    assert baseline["parent_id"].tolist() == [FLATS, GONE, GONE]
     assert baseline.crs == "EPSG:4326"
     # Fork: SHOP gains a park, the clinic is hidden by all-NULL rows and the
     # pharmacy is deleted. "park" (no outputs) and inactive types are ignored.
@@ -509,6 +514,7 @@ def test_pois_fall_back_to_baseline(dsn):
     assert fork["poi_type"].to_dict() == {PARK: "public_space"}
     assert fork["capacity"].isna().all()
     assert fork["category"].tolist() == ["park"]
+    assert fork["parent_id"].tolist() == [SHOP]
 
 
 def test_road_network_uri(dsn, network_uri):
@@ -719,6 +725,42 @@ def test_write_diversity(dsn, monkeypatch):
     # The fork keeps only the park, in no subcategory: 0 where the house now is.
     write(FORK)
     assert stored(dsn, FORK)[(BLOCK_2, key)][0] == 0
+
+
+def test_write_diversity_jobs(dsn):
+    # The house also holds two groceries and a bakery: its block has them and the
+    # clinic, an amenity, which does not count.
+    with psycopg.connect(dsn) as conn:
+        conn.execute("SET search_path = reimagina_urbano, public")
+        for element_id, category in (
+            (GROCERY, "grocery"),
+            (GROCERY_2, "grocery"),
+            (BAKERY, "bakery"),
+        ):
+            add_point(
+                conn,
+                BASELINE,
+                element_id,
+                "establishment",
+                HOUSE,
+                {"category": category},
+            )
+    write(BASELINE)
+    values = stored(dsn, BASELINE)
+    key = population_access_nodes.JOBS_KEY
+    # Two groceries and a bakery, k = 2 categories there.
+    share = np.array([2, 1]) / 3
+    expected = -(share * np.log(share)).sum() / np.log(2)
+    assert values[(BLOCK, key)][0] == pytest.approx(expected, abs=1e-4)
+    # The pharmacy alone: 0. Only blocks are written.
+    assert values[(BLOCK_2, key)][0] == 0
+    assert (HOUSE, key) not in values
+    # The fork moves the house, groceries and all, to the second block (the
+    # pharmacy is deleted); the first keeps the park and the clinic, amenities.
+    write(FORK)
+    fork = stored(dsn, FORK)
+    assert fork[(BLOCK, key)][0] == 0
+    assert fork[(BLOCK_2, key)][0] == pytest.approx(expected, abs=1e-4)
 
 
 def test_accessibility_tolerance_keeps_the_baseline_value(dsn):

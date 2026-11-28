@@ -173,6 +173,16 @@ never 0.
   nodes joining three or more streets within 1 km, per km² of a 1 km circle
   (GHSCI divides by the buffered network and consolidates intersections within
   12 m).
+- `diversity_jobs` (ULI "Job diversity", the notebook's
+  `add_economic_sector_diversity`), in `reimagina_poi_diversity` with the other
+  diversities and on their establishments and categories, but as the notebook:
+  the entropy of the categories of the establishments of the block's lots over
+  the log of the categories present (one or none is 0), not within 500 m. The
+  notebook counts the DENUE records inside the block's polygon by SCIAN sector,
+  and loses about half of them (Mexicali): the DENUE places them on the block's
+  front, outside it. Here each place counts in its lot (its `parent_id`, from
+  `read_pois`), where ingestion placed it. A lot scores its own places; a block
+  without lots is null.
 
 Streets are read as POIs are: from their attribute values (`bands.use` or
 `streetlights`), so a street without either is not read. The keys are in
